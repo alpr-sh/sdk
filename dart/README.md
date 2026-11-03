@@ -1,0 +1,110 @@
+# Alpr.sh SDK para Dart
+
+SDK oficial da API da Alpr.sh para Dart 3.8+ e Flutter (Android, iOS, desktop e web), só com `http` e `crypto`, os pacotes da equipe do Dart. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+dart pub add alpr_sdk     # ou: flutter pub add alpr_sdk
+```
+
+```dart
+import 'dart:io';
+
+import 'package:alpr_sdk/alpr_sdk.dart';
+
+final alpr = Alpr(Platform.environment['ALPR_API_KEY']!); // alpr_live_…
+
+// Ler uma foto: a placa, a confiança e a caixa em pixels.
+final photo = await File('carro.jpg').readAsBytes(); // Uint8List
+final result = await alpr.photos.recognize(PhotosRecognizeParams(image: photo));
+for (final plate in result.plates) {
+  print('${plate.plate} ${plate.conf}');
+}
+print('créditos restantes: ${result.creditsRemaining}');
+
+// As leituras do espaço, da mais nova para a mais antiga, página a página.
+await for (final reading in alpr.recognitions.listIter(plate: 'BRA')) {
+  print('${reading.capturedAt} ${reading.plate}');
+}
+
+// As câmeras do espaço.
+final cameras = await alpr.cameras.list();
+
+// O link temporário da imagem de uma leitura.
+final image = await alpr.detections.image('det_1');
+print('${image.imageUrl} (vale ${image.expiresIn} s)');
+
+alpr.close();
+```
+
+A chave da API é do espaço de trabalho (`alpr_live_` e 64 caracteres hexadecimais) e não há ambiente de teste. Use o SDK no servidor. Num app Flutter, chame o seu backend em vez de embutir a chave.
+
+## A foto
+
+`photos.recognize`, `photos.detect` e `photos.ocr` recebem a foto como `Uint8List` (os bytes do arquivo, `image:`) e a enviam como `multipart/form-data`. O nome e o tipo do arquivo saem dos primeiros bytes: JPEG (`FF D8 FF`) vai como `photo.jpg` e `image/jpeg`, PNG como `photo.png` e `image/png`, e qualquer outra coisa como `photo` e `application/octet-stream`, para a API recusar. `lprConfidence:` e `minOcrConfidence:` (de 0 a 1) são opcionais: o que fica nulo não é enviado.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+| `alpr.cameras` | `list` |
+| `alpr.detections` | `image` |
+| `alpr.photos` | `detect`, `ocr`, `recognize` |
+| `alpr.recognitions` | `list`, `listIter` |
+
+Os modelos são classes imutáveis com campos em camelCase (`plate.coordinateLeft`) e `fromJson`/`toJson` com os nomes da API; um campo que a API pode deixar de enviar ou enviar como `null` é nulo. `cameras.list` devolve a lista de câmeras. `recognitions.list` devolve uma `Page` (`items` e `next`, o cursor da próxima página, nulo na última) e aceita `before:` (o cursor), `plate:`, `camera:` e `source:`. `recognitions.listIter` devolve um `Stream` que começa no cursor dado (nenhum é a leitura mais nova), entrega todas as leituras, segue o `next` até o fim, para se o cursor não anda e termina no primeiro erro. Todas as chamadas aceitam `apiKey:` para usar a chave de outro espaço numa chamada. `Alpr(…, baseUrl:, httpClient:, timeout:)` troca o endereço, o `http.Client` (por exemplo, um `MockClient` nos testes) e o limite de 30 segundos.
+
+O endereço base tem de ser `https` (ou `http` só para `localhost`, `127.0.0.0/8` e `::1`), e o cliente nunca segue um redirecionamento, para a chave não viajar: um 3xx é um erro. Não há repetição automática de chamadas.
+
+## Erros
+
+Uma recusa da API lança `AlprException`, com `status`, `code`, `message`, `fields` (vazio, a menos que a resposta traga um objeto `fields`) e, num 429, `retryAfter` em segundos (o cabeçalho `Retry-After`). Uma resposta de erro que não é JSON também vira `AlprException`, só com o status. Os códigos:
+
+| Status | `code` |
+|---|---|
+| 400 | `missing image`, `invalid_image`, `invalid_option` |
+| 401 | `invalid_api_key` |
+| 402 | `insufficient_credits` |
+| 403 | `insufficient_scope` |
+| 404 | `not_found`, `image_unavailable` |
+| 413 | `image_too_large` |
+| 422 | `no_plate` |
+| 429 | `rate_limited` |
+| 503 | `engine_unavailable`, `storage_unavailable` |
+
+## Webhooks
+
+```dart
+import 'package:alpr_sdk/alpr_sdk.dart';
+
+final event = verifyWebhook(
+  Platform.environment['ALPR_WEBHOOK_SECRET']!,
+  request.headers, // Map<String, String>, ou valores List<String>
+  await request.readAsString(), // o corpo cru, String ou bytes
+);
+switch (event) {
+  case RecognitionCreatedWebhookEvent(:final plate, :final capturedAt):
+    print('$plate $capturedAt');
+  case AlertTriggeredWebhookEvent(:final ruleName, :final plate):
+    print('$ruleName $plate');
+  case UnknownWebhookEvent(:final event, :final body):
+    print('evento novo: $event $body');
+  case _:
+    break;
+}
+```
+
+Cada entrega traz os cabeçalhos `X-Alprsh-Delivery-Id`, `X-Alprsh-Timestamp` (segundos Unix) e `X-Alprsh-Signature`, em qualquer caixa. A assinatura é `sha256=` e o HMAC-SHA256 em hexadecimal de `timestamp.delivery-id.corpo`, com o segredo do endpoint como ele é, `whsec_…` incluído (não é base64). Leia o corpo cru e verifique antes de interpretar.
+
+Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, separadas por vírgula ou em linhas repetidas do cabeçalho (passe uma lista de valores); basta uma conferir, mas mais de 6 ou qualquer uma malformada recusa a entrega. O `X-Alprsh-Timestamp` só tem dígitos ASCII e fica a no máximo `webhookTolerance` (5 minutos) do relógio. Uma assinatura que não confere lança `WebhookVerificationException`; um segredo vazio é um erro de configuração (`ArgumentError`), e um corpo que não é um evento, um `FormatException`. `verifyWebhookSignature` só confere a assinatura.
+
+O evento é tipado, plano e sem `data`: um tipo para cada carga do webhook, com os campos dela.
+
+| Evento | Tipo |
+|---|---|
+| `alert.triggered` | `AlertTriggeredWebhookEvent` |
+| `recognition.created` | `RecognitionCreatedWebhookEvent` |
+| `webhook.test` | `WebhookTestWebhookEvent` |
+
+Um evento que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com `event`, `id` (se o corpo tem um) e o `body` inteiro; não é um erro. Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`: o `id` do corpo é o da leitura ou do alerta, não o da entrega.
+
+Versão do SDK: 0.1.0 · contrato da API: 1.0.0
