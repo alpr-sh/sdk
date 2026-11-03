@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Iterator
 
 from . import models
 from ._core import Requester, segment
 from ._pagination import Page, iterate
+from ._upload import Form
 {{range $service := .Services}}
 
 class {{pascal .Name}}Service:
@@ -17,26 +19,50 @@ class {{pascal .Name}}Service:
 {{- range .Methods}}
 {{- if .Paginated}}
 
-    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}, *, page: int | None = None, limit: int | None = None{{range .Query}}, {{pyName .Name}}: str | None = None{{end}}, api_key: str | None = None) -> Page[models.{{.Item}}]:
-        """{{pyText .Summary}}. One page; ``{{snake .Name}}_iter`` walks every page."""
-        data = self._client.request({{quote .HTTPMethod}}, {{template "path" .}}, query={"page": page, "limit": limit{{range .Query}}, {{quote .Name}}: {{pyName .Name}}{{end}}}, api_key=api_key)
-        return Page.from_dict(data, models.{{.Item}}.from_dict)
+    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}, *, {{pyField .Cursor}}: str | None = None{{range .Query}}, {{pyField .Name}}: str | None = None{{end}}, api_key: str | None = None) -> Page[models.{{.Item}}]:
+        """{{pyText .Summary}}. One page; ``{{snake .Name}}_iter`` walks every page.
 
-    def {{snake .Name}}_iter(self{{range .PathParams}}, {{pyName .}}: str{{end}}, *, page: int | None = None, limit: int | None = None{{range .Query}}, {{pyName .Name}}: str | None = None{{end}}, api_key: str | None = None) -> Iterator[models.{{.Item}}]:
-        """Walks every page of {{.OperationID}}, item by item."""
-        return iterate(lambda at: self.{{snake .Name}}({{range .PathParams}}{{pyName .}}, {{end}}page=at, limit=limit{{range .Query}}, {{pyName .Name}}={{pyName .Name}}{{end}}, api_key=api_key), page)
+        ``{{pyField .Cursor}}`` is the cursor the previous page answered as ``next``; None asks for the newest page.
+        """
+        data = self._client.request({{quote .HTTPMethod}}, {{template "path" .}}, query={ {{- quote .Cursor}}: {{pyField .Cursor}}{{range .Query}}, {{quote .Name}}: {{pyField .Name}}{{end}}}, api_key=api_key)
+        return Page.from_dict(data, models.{{.Item}}.from_dict, {{quote .Next}})
+
+    def {{snake .Name}}_iter(self{{range .PathParams}}, {{pyName .}}: str{{end}}, *, {{pyField .Cursor}}: str | None = None{{range .Query}}, {{pyField .Name}}: str | None = None{{end}}, api_key: str | None = None) -> Iterator[models.{{.Item}}]:
+        """Walks every page of {{.OperationID}}, item by item, from ``{{pyField .Cursor}}`` (the newest when None)."""
+        return iterate(lambda cursor: self.{{snake .Name}}({{range .PathParams}}{{pyName .}}, {{end}}{{pyField .Cursor}}=cursor{{range .Query}}, {{pyField .Name}}={{pyField .Name}}{{end}}, api_key=api_key), {{pyField .Cursor}})
+{{- else if .List}}
+
+    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}, *, api_key: str | None = None) -> builtins.list[models.{{.Item}}]:
+        """{{pyText .Summary}}."""
+        data = self._client.request({{quote .HTTPMethod}}, {{template "path" .}}, api_key=api_key)
+        return [models.{{.Item}}.from_dict(item) for item in data.get("data") or []]
 {{- else if .NoContent}}
 
-    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}{{if .Body}}, params: models.{{.Body.Name}}{{end}}, *{{if .Write}}, idempotency_key: str | None = None{{end}}, api_key: str | None = None) -> None:
+    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}{{if .Body}}, params: models.{{.Body.Name}}{{end}}, *, api_key: str | None = None) -> None:
         """{{pyText .Summary}}. The API answers 204, so there is nothing to return."""
-        self._client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, body=params{{end}}{{if .Write}}, idempotency_key=idempotency_key{{end}}, api_key=api_key)
+{{- template "form" .}}
+        self._client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Multipart}}, form=form{{end}}, api_key=api_key)
 {{- else}}
 
-    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}{{if .Body}}, params: models.{{.Body.Name}}{{end}}, *{{if .Write}}, idempotency_key: str | None = None{{end}}, api_key: str | None = None) -> models.{{.Response}}:
+    def {{snake .Name}}(self{{range .PathParams}}, {{pyName .}}: str{{end}}{{if .Body}}, params: models.{{.Body.Name}}{{end}}, *, api_key: str | None = None) -> models.{{.Response}}:
         """{{pyText .Summary}}."""
-        data = self._client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, body=params{{end}}{{if .Write}}, idempotency_key=idempotency_key{{end}}, api_key=api_key)
+{{- template "form" .}}
+        data = self._client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Multipart}}, form=form{{end}}, api_key=api_key)
         return models.{{.Response}}.from_dict(data)
 {{- end}}
 {{- end}}
 {{end}}
-{{- define "path"}}{{if hasPath .}}f"{{range pathParts .Path}}{{if .Param}}{segment({{pyName .Param}})}{{else}}{{.Literal}}{{end}}{{end}}"{{else}}"{{.Path}}"{{end}}{{end}}
+{{- define "path"}}{{range $i, $part := pathParts .Path}}{{if $i}} + {{end}}{{if $part.Param}}segment({{pyName $part.Param}}){{else}}{{quote $part.Literal}}{{end}}{{end}}{{end}}
+{{- define "form"}}{{if .Multipart}}
+        form = Form()
+{{- range .Body.Fields}}
+{{- if eq .Type.Kind "binary"}}
+        form.file({{quote .Wire}}, params[{{quote .Wire}}])
+{{- else if .Required}}
+        form.text({{quote .Wire}}, params[{{quote .Wire}}])
+{{- else}}
+        if params.get({{quote .Wire}}) is not None:
+            form.text({{quote .Wire}}, params[{{quote .Wire}}])
+{{- end}}
+{{- end}}
+{{- end}}{{end}}

@@ -1,12 +1,16 @@
 package generator
 
 import (
+	"strconv"
 	"strings"
 	"text/template"
 )
 
 // pyKeywords are names a Python parameter cannot take.
-var pyKeywords = map[string]bool{"from": true, "class": true, "def": true, "global": true, "import": true, "in": true, "is": true, "lambda": true, "pass": true, "return": true, "with": true, "yield": true}
+var pyKeywords = map[string]bool{"and": true, "as": true, "assert": true, "async": true, "await": true, "break": true, "class": true, "continue": true,
+	"def": true, "del": true, "elif": true, "else": true, "except": true, "finally": true, "for": true, "from": true, "global": true, "if": true,
+	"import": true, "in": true, "is": true, "lambda": true, "nonlocal": true, "not": true, "or": true, "pass": true, "raise": true, "return": true,
+	"try": true, "while": true, "with": true, "yield": true}
 
 func init() {
 	register(Language{Name: "python", Funcs: template.FuncMap{
@@ -24,13 +28,10 @@ func init() {
 			}
 			return expr
 		},
-		"pyName": func(name string) string {
-			name = strings.ReplaceAll(name, "-", "_")
-			if pyKeywords[name] {
-				return name + "_"
-			}
-			return name
-		},
+		"pyName": pyName,
+		// pyField is a wire name as a Python attribute or parameter:
+		// detectionId is detection_id.
+		"pyField": func(wire string) string { return pyName(strings.ToLower(strings.Join(words(wire), "_"))) },
 		// pyDoc writes a description as the docstring line under a field, or
 		// nothing.
 		"pyDoc": func(indent, text string) string {
@@ -41,6 +42,14 @@ func init() {
 			return "\n" + indent + `"""` + pyText(text) + `"""`
 		},
 	}})
+}
+
+func pyName(name string) string {
+	name = strings.ReplaceAll(name, "-", "_")
+	if pyKeywords[name] {
+		return name + "_"
+	}
+	return name
 }
 
 // pyType is a field's Python annotation; a string with allowed values is
@@ -68,6 +77,8 @@ func pyType(t *TypeRef) string {
 		return "list[" + pyType(t.Items) + "]"
 	case "map":
 		return "dict[str, " + pyType(t.Items) + "]"
+	case "binary":
+		return "bytes"
 	case "any":
 		return "Any"
 	}
@@ -90,18 +101,26 @@ func pyRead(f *Field) string {
 	return "data.get(" + pythonQuote(f.Wire) + ")"
 }
 
-// pyConvert builds expr into t, or is empty when nothing is to be built.
-func pyConvert(t *TypeRef, expr string) string {
+// pyConvert builds expr into t, or is empty when nothing is to be built. A
+// number is read as a float, so a whole number the API writes without a point
+// is still one.
+func pyConvert(t *TypeRef, expr string) string { return pyConvertAt(t, expr, 0) }
+
+func pyConvertAt(t *TypeRef, expr string, depth int) string {
 	switch t.Kind {
 	case "model":
 		return t.Model + ".from_dict(" + expr + ")"
+	case "number":
+		return "float(" + expr + ")"
 	case "array":
-		if inner := pyConvert(t.Items, "item"); inner != "" {
-			return "[" + inner + " for item in " + expr + "]"
+		name := "item" + strconv.Itoa(depth)
+		if inner := pyConvertAt(t.Items, name, depth+1); inner != "" {
+			return "[" + inner + " for " + name + " in " + expr + "]"
 		}
 	case "map":
-		if inner := pyConvert(t.Items, "value"); inner != "" {
-			return "{key: " + inner + " for key, value in " + expr + ".items()}"
+		name := "value" + strconv.Itoa(depth)
+		if inner := pyConvertAt(t.Items, name, depth+1); inner != "" {
+			return "{key" + strconv.Itoa(depth) + ": " + inner + " for key" + strconv.Itoa(depth) + ", " + name + " in " + expr + ".items()}"
 		}
 	}
 	return ""

@@ -4,29 +4,31 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
-from .models import Pagination
-
 T = TypeVar("T")
 
 
 @dataclass(frozen=True)
 class Page(Generic[T]):
-    """One page of a list, and where the list ends."""
+    """One page of a list: its items, and the cursor of the next page."""
 
     items: list[T]
-    pagination: Pagination
+    next: str | None
+    """The cursor to ask the next page with; None on the last page."""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], item: Callable[[dict[str, Any]], T]) -> Page[T]:
-        return cls(items=[item(each) for each in data.get("items") or []], pagination=Pagination.from_dict(data["pagination"]))
+    def from_dict(cls, data: dict[str, Any], item: Callable[[dict[str, Any]], T], next_field: str) -> Page[T]:
+        cursor = data.get(next_field)
+        return cls(items=[item(each) for each in data.get("data") or []], next=cursor if isinstance(cursor, str) and cursor else None)
 
 
-def iterate(fetch: Callable[[int], Page[T]], first: int | None = None) -> Iterator[T]:
-    """Walks pages from ``first`` until the last one, as Polar's SDKs do, yielding every item."""
-    page = max(first or 1, 1)
+def iterate(fetch: Callable[[str | None], Page[T]], first: str | None = None) -> Iterator[T]:
+    """Walks pages from the cursor ``first`` (the newest page when None) until the last one,
+    yielding every item. It ends at the first error, which it raises, and when the next cursor
+    is the one just used: a cursor that does not move would ask for the same page forever."""
+    cursor = first
     while True:
-        result = fetch(page)
+        result = fetch(cursor)
         yield from result.items
-        if page >= result.pagination.max_page:
+        if not result.next or result.next == cursor:
             return
-        page += 1
+        cursor = result.next

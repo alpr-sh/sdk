@@ -11,8 +11,8 @@ from .webhooks import (
     WEBHOOK_TOLERANCE_SECONDS,
 {{- range .Webhooks}}
     {{.Name}}WebhookEvent,
-    {{.Name}}WebhookEventType,
 {{- end}}
+    HeadersLike,
     UnknownWebhookEvent,
     WebhookEvent,
     WebhookVerificationError,
@@ -25,9 +25,10 @@ __all__ = [
     "DEFAULT_BASE_URL",
     "VERSION",
     "WEBHOOK_TOLERANCE_SECONDS",
-    "Page",
     "Alpr",
     "AlprError",
+    "HeadersLike",
+    "Page",
     "Transport",
     "UnknownWebhookEvent",
     "WebhookEvent",
@@ -37,7 +38,6 @@ __all__ = [
     "verify_webhook_signature",
 {{- range .Webhooks}}
     "{{.Name}}WebhookEvent",
-    "{{.Name}}WebhookEventType",
 {{- end}}
 {{- range .Services}}
     "{{pascal .Name}}Service",

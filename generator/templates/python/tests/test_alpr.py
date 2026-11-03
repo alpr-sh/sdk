@@ -2,223 +2,452 @@ import json
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from alpr import (
-    IdentifiersWebhookEvent,
-    OrderWebhookEvent,
     Alpr,
     AlprError,
+    AlertTriggeredWebhookEvent,
+    RecognitionCreatedWebhookEvent,
     UnknownWebhookEvent,
+    WebhookTestWebhookEvent,
     WebhookVerificationError,
     verify_webhook,
     verify_webhook_signature,
 )
+from alpr._client import _check_base_url
+from alpr.webhooks import WEBHOOK_TOLERANCE_SECONDS, _verify_webhook_at, _verify_webhook_signature_at
 
-# The webhook vectors every SDK checks: Standard Webhooks' own example, and
-# Alpr.sh events signed under two secrets, as while one is rotated.
-REFERENCE_SECRET = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
-OLD_SECRET = "whsec_cGVyYXRhLXNkay1vbGQta2V5LTAxMjM0NTY3ODlhYmM="
-NEW_SECRET = "whsec_cGVyYXRhLXNkay1uZXcta2V5LTAxMjM0NTY3ODlhYmM="
-ORDER_PAID = b'{"id":"msg_2","type":"order.paid","timestamp":"2026-10-22T12:00:00Z","data":{"id":"ord_1","customer_id":"cus_1","product_id":"prod_1","price_id":"price_1","amount_cents":12000,"currency":"BRL","status":"succeeded","paid_at":"2026-10-22T12:00:00Z","installments":3,"installment_interest_cents":360}}'
-USAGE_RECORDED = b'{"id":"msg_3","type":"usage_event.recorded","timestamp":"2026-10-22T12:00:00Z","data":{"event_id":"ue_1","aggregate":"usage_event","aggregate_id":"ue_1","merchant_id":"mer_1","environment":"test"}}'
-PAYOUT_SENT = b'{"id":"msg_4","type":"payout.sent","timestamp":"2026-10-22T12:00:00Z","data":{"payout_id":"po_1","amount_cents":5000}}'
-SIGNED_AT = 1792670400
+KEY = "alpr_live_" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+# A JPEG and a PNG start with the bytes the API tells them by.
+JPEG = bytes([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]) + b"JFIF\x00\x01"
+PNG = bytes([0x89]) + b"PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR"
 
-def webhook_headers(webhook_id, at, signature):
-    return {"Webhook-Id": webhook_id, "webhook-timestamp": str(at), "webhook-signature": signature}
+RECOGNIZED = '{"creditsRemaining":41,"imageHeight":720,"imageWidth":1280,"plates":[{"charConfs":"0.99,0.98,0.97,0.96,0.97,0.96,0.96","conf":97.3,"coordinateBottom":361,"coordinateLeft":120,"coordinateRight":300,"coordinateTop":301,"createdAt":"2026-10-22T12:00:00-03:00","plate":"BRA2E19","plateType":"mercosul","time":"2026-10-22T12:00:00-03:00"}],"processingTimeMs":84}'
 
 
-def product(identifier):
-    return {"id": identifier, "name": "Curso", "description": "", "status": "active", "created_at": "2026-10-17T00:00:00Z"}
+class Seen:
+    """One request the fake server received."""
+
+    def __init__(self, method: str, target: str, headers: Any, body: bytes) -> None:
+        self.method = method
+        self.target = target
+        self.url = urlparse(target)
+        self.headers = headers
+        self.body = body
+
+    @property
+    def query(self) -> dict[str, list[str]]:
+        return parse_qs(self.url.query, keep_blank_values=True)
 
 
-class Recorder:
-    def __init__(self, answer):
-        self.answer = answer
-        self.seen = []
+class Fake:
+    """A local HTTP server that answers what ``answer`` says and keeps what it was asked."""
 
-    def __call__(self, method, url, headers, body, timeout):
-        request = {"method": method, "url": urlparse(url), "headers": headers, "body": body}
-        self.seen.append(request)
-        status, payload, extra = self.answer(request)
-        return status, extra, b"" if payload is None else json.dumps(payload).encode()
+    def __init__(self, answer: Any) -> None:
+        self.seen: list[Seen] = []
+        fake = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def serve(self) -> None:
+                body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                request = Seen(self.command, self.path, self.headers, body)
+                fake.seen.append(request)
+                status, headers, payload = answer(request)
+                self.send_response(status)
+                for name, value in headers.items():
+                    self.send_header(name, value)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            do_GET = serve
+            do_POST = serve
+
+            def log_message(self, *args: Any) -> None:
+                pass
+
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+        threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
 
 
-def client(answer):
-    recorder = Recorder(answer)
-    return Alpr("prk_test_key", base_url="https://alpr.test/", transport=recorder), recorder
+def ok(text: str) -> tuple[int, dict[str, str], bytes]:
+    return 200, {"Content-Type": "application/json"}, text.encode()
 
 
-class AlprTest(unittest.TestCase):
-    def test_a_call_carries_the_key_and_unwraps_the_data(self):
-        alpr, recorder = client(lambda request: (200, {"data": product("prod_1")}, {}))
-        got = alpr.products.get("prod_1")
-        self.assertEqual(got.id, "prod_1")
-        self.assertEqual(got.status, "active")
-        seen = recorder.seen[0]
-        self.assertEqual(seen["method"], "GET")
-        self.assertEqual(seen["url"].path, "/api/v1/products/prod_1")
-        self.assertEqual(seen["headers"]["Authorization"], "Bearer prk_test_key")
+class Case(unittest.TestCase):
+    def serve(self, answer: Any) -> tuple[Alpr, Fake]:
+        fake = Fake(answer)
+        self.addCleanup(fake.close)
+        return Alpr(KEY, base_url=fake.url), fake
 
-    def test_a_write_sends_its_body_and_idempotency_key(self):
-        alpr, recorder = client(lambda request: (201, {"data": product("prod_1")}, {}))
-        alpr.products.create({"name": "Curso"}, idempotency_key="create-1")
-        seen = recorder.seen[0]
-        self.assertEqual(seen["method"], "POST")
-        self.assertEqual(seen["headers"]["Idempotency-Key"], "create-1")
-        self.assertEqual(json.loads(seen["body"]), {"name": "Curso"})
 
-    def test_a_base_url_must_be_https_unless_it_is_loopback(self):
-        for base_url in ["https://alpr.sh", "http://localhost:8080", "http://LOCALHOST", "http://127.0.0.1:1", "http://127.255.0.3", "http://[::1]:8080"]:
-            Alpr("k", base_url=base_url)
-        for base_url in ["http://alpr.sh", "http://localhost.evil.test", "http://127.0.0.1.evil.test", "http://10.0.0.1", "ftp://localhost", "alpr.sh", "", "http://[::2]"]:
-            with self.assertRaisesRegex(ValueError, "must be https", msg=base_url):
-                Alpr("k", base_url=base_url)
+def parts_of(seen: Seen) -> dict[str, tuple[dict[str, str], bytes]]:
+    """The parts of a multipart body, by field name: (headers, content)."""
+    content_type = seen.headers["Content-Type"]
+    assert content_type.startswith("multipart/form-data; boundary="), content_type
+    boundary = content_type.split("boundary=", 1)[1].encode()
+    chunks = seen.body.split(b"--" + boundary)
+    assert chunks[0] == b"" and chunks[-1] == b"--\r\n", chunks
+    out: dict[str, tuple[dict[str, str], bytes]] = {}
+    for chunk in chunks[1:-1]:
+        assert chunk.startswith(b"\r\n") and chunk.endswith(b"\r\n"), chunk
+        head, _, content = chunk[2:-2].partition(b"\r\n\r\n")
+        headers = {}
+        for line in head.decode().split("\r\n"):
+            name, _, value = line.partition(": ")
+            headers[name.lower()] = value
+        name = headers["content-disposition"].split('name="', 1)[1].split('"', 1)[0]
+        out[name] = (headers, content)
+    return out
 
-    def test_a_discount_goes_through_create_get_list_and_delete(self):
-        def discount(identifier):
-            return json.loads("{\"id\":\"__ID__\",\"name\":\"Black\",\"code\":null,\"type\":\"percentage\",\"basis_points\":1000,\"amount_cents\":0,\"currency\":\"BRL\",\"duration\":\"once\",\"duration_in_months\":0,\"max_redemptions\":null,\"max_redemptions_per_customer\":null,\"redemptions_count\":0,\"starts_at\":\"2026-10-17T00:00:00Z\",\"ends_at\":null,\"status\":\"active\",\"product_ids\":[\"prod_1\"],\"created_at\":\"2026-10-17T00:00:00Z\",\"modified_at\":\"2026-10-17T00:00:00Z\"}".replace("__ID__", identifier))
 
-        def answer(request):
-            if request["method"] == "POST":
-                return 201, {"data": discount("disc_1")}, {}
-            if request["method"] == "DELETE":
-                return 204, None, {}
-            if request["url"].path == "/api/v1/discounts":
-                page = parse_qs(request["url"].query)["page"][0]
-                return 200, {"data": {"items": [discount(f"disc_{page}")], "pagination": {"total_count": 2, "max_page": 2}}}, {}
-            return 200, {"data": discount("disc_1")}, {}
+class ClientTest(Case):
+    def test_a_call_carries_the_key_and_no_idempotency_key(self) -> None:
+        def answer(request: Seen) -> tuple[int, dict[str, str], bytes]:
+            return ok(
+                '{"data":[{"createdAt":"2026-10-01T09:00:00-03:00","enabled":true,"id":"cam_1","location":"Portaria","name":"Portão","protocol":"rtsp","readingArea":null},'
+                '{"createdAt":"2026-10-01T09:00:00-03:00","enabled":false,"id":"cam_2","location":"","name":"Garagem","protocol":"rtsp",'
+                '"readingArea":{"box":{"height":0.5,"width":0.5,"x":0.1,"y":0.2},"points":[[0.1,0.2],[0.6,0.2],[0.6,0.7]]}}]}'
+            )
 
-        alpr, recorder = client(answer)
-        created = alpr.discounts.create({"name": "Black", "type": "percentage", "duration": "once", "basis_points": 1000})
-        self.assertEqual((created.id, created.code, created.product_ids), ("disc_1", None, ["prod_1"]))
-        self.assertEqual(alpr.discounts.get("disc_1").name, "Black")
-        self.assertEqual([each.id for each in alpr.discounts.list_iter(limit=1)], ["disc_1", "disc_2"])
-        self.assertIsNone(alpr.discounts.delete("disc_1"))
-        self.assertEqual(
-            [(seen["method"], seen["url"].path) for seen in recorder.seen],
-            [("POST", "/api/v1/discounts"), ("GET", "/api/v1/discounts/disc_1"), ("GET", "/api/v1/discounts"), ("GET", "/api/v1/discounts"), ("DELETE", "/api/v1/discounts/disc_1")],
+        alpr, fake = self.serve(answer)
+        cameras = alpr.cameras.list()
+        request = fake.seen[0]
+        self.assertEqual((request.method, request.url.path), ("GET", "/api/v1/cameras"))
+        self.assertEqual(request.headers["Authorization"], "Bearer " + KEY)
+        self.assertTrue(request.headers["User-Agent"].startswith("alpr-python/"))
+        self.assertEqual(request.headers["Accept"], "application/json")
+        self.assertIsNone(request.headers.get("Idempotency-Key"))
+        self.assertEqual(len(cameras), 2)
+        self.assertEqual((cameras[0].id, cameras[0].enabled, cameras[0].reading_area), ("cam_1", True, None))
+        area = cameras[1].reading_area
+        assert area is not None and area.box is not None and area.points is not None
+        self.assertEqual((area.box.x, len(area.points), area.points[1][0]), (0.1, 3, 0.6))
+
+    def test_a_photo_goes_as_multipart(self) -> None:
+        alpr, fake = self.serve(lambda request: ok(RECOGNIZED))
+        result = alpr.photos.recognize({"image": JPEG, "lpr_confidence": 0.5})
+        request = fake.seen[0]
+        self.assertEqual((request.method, request.url.path), ("POST", "/api/v1/recognize"))
+        parts = parts_of(request)
+        headers, sent = parts["image"]
+        self.assertEqual(sent, JPEG)
+        self.assertIn('filename="photo.jpg"', headers["content-disposition"])
+        self.assertEqual(headers["content-type"], "image/jpeg")
+        self.assertEqual(parts["lpr_confidence"][1], b"0.5")
+        self.assertNotIn("min_ocr_confidence", parts, "an option left out was sent")
+        self.assertEqual(result.credits_remaining, 41)
+        self.assertEqual(len(result.plates), 1)
+        plate = result.plates[0]
+        self.assertEqual((plate.plate, plate.conf, plate.coordinate_left, plate.char_confs[:4]), ("BRA2E19", 97.3, 120, "0.99"))
+        self.assertEqual((result.image_height, result.processing_time_ms), (720, 84))
+
+    def test_a_photo_is_named_by_its_bytes(self) -> None:
+        cases = {
+            "jpeg": (JPEG, "photo.jpg", "image/jpeg"),
+            "png": (PNG, "photo.png", "image/png"),
+            "other": (b"not an image", "photo", "application/octet-stream"),
+        }
+        for name, (data, filename, kind) in cases.items():
+            with self.subTest(name):
+                alpr, fake = self.serve(lambda request: ok('{"imageHeight":10,"imageWidth":20,"plates":[],"processingTimeMs":3}'))
+                result = alpr.photos.detect({"image": data, "min_ocr_confidence": 1.0})
+                headers, sent = parts_of(fake.seen[0])["image"]
+                self.assertEqual(sent, data)
+                self.assertIn(f'filename="{filename}"', headers["content-disposition"])
+                self.assertEqual(headers["content-type"], kind)
+                self.assertEqual(parts_of(fake.seen[0])["min_ocr_confidence"][1], b"1")
+                self.assertEqual((result.image_width, result.plates), (20, []))
+
+    def test_a_plate_image_is_read_by_ocr(self) -> None:
+        alpr, fake = self.serve(lambda request: ok('{"confidence":0.91,"creditsRemaining":40,"detectionId":null,"latencyMs":12,"plate":"ABC1234"}'))
+        result = alpr.photos.ocr({"image": PNG})
+        self.assertEqual(fake.seen[0].url.path, "/api/v1/ocr")
+        self.assertEqual((result.plate, result.detection_id, result.confidence), ("ABC1234", None, 0.91))
+        self.assertEqual(set(parts_of(fake.seen[0])), {"image"})
+
+    def test_a_detection_image_is_a_link(self) -> None:
+        alpr, fake = self.serve(
+            lambda request: ok('{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}')
         )
-        self.assertEqual(json.loads(recorder.seen[0]["body"]), {"name": "Black", "type": "percentage", "duration": "once", "basis_points": 1000})
+        image = alpr.detections.image("a/b")
+        self.assertEqual(fake.seen[0].url.path, "/api/v1/detections/a%2Fb/image")
+        self.assertEqual((image.expires_in, image.detection_id), (300, "a/b"))
+        self.assertTrue(image.image_url.startswith("https://alpr.sh/"))
 
-    def test_a_free_form_value_decodes_nested(self):
-        state = {"id": "cus_1", "name": "Ana", "email": "ana@example.com", "external_id": "", "status": "active", "created_at": "2026-10-17T00:00:00Z", "active_subscriptions": [], "granted_benefits": [{"id": "gr_1", "granted_at": "2026-10-17T00:00:00Z", "benefit_id": "ben_1", "benefit_type": "feature_flag", "benefit_metadata": {"flags": {"beta": True, "limits": {"seats": 5, "tiers": ["a", 2, None, 1.5]}}}, "properties": {"links": [{"url": "https://example.com", "expires": None}]}}]}
-        alpr, _ = client(lambda request: (200, {"data": state}, {}))
-        grant = alpr.customers.get_state("cus_1").granted_benefits[0]
-        self.assertEqual(grant.benefit_metadata, {"flags": {"beta": True, "limits": {"seats": 5, "tiers": ["a", 2, None, 1.5]}}})
-        self.assertEqual(grant.properties, {"links": [{"url": "https://example.com", "expires": None}]})
 
-    def test_a_post_without_a_key_is_sent_with_its_own_a_get_with_none(self):
-        alpr, recorder = client(lambda request: (201, {"data": product("prod_1")}, {}))
-        alpr.products.create({"name": "Curso"})
-        alpr.products.create({"name": "Curso"})
-        alpr.products.create({"name": "Curso"}, idempotency_key="mine")
-        alpr.products.get("prod_1")
-        keys = [seen["headers"].get("Idempotency-Key") for seen in recorder.seen]
-        uuid = r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        self.assertRegex(keys[0], uuid)
-        self.assertRegex(keys[1], uuid)
-        self.assertNotEqual(keys[0], keys[1])
-        self.assertEqual(keys[2:], ["mine", None])
+def reading(identifier: str, camera: str | None = None) -> str:
+    return json.dumps({"cameraId": camera, "capturedAt": "2026-10-22T12:00:00-03:00", "conf": 90, "id": identifier, "plate": "BRA2E19", "source": "api"})
 
-    def test_iterating_walks_every_page(self):
-        def answer(request):
-            page = parse_qs(request["url"].query)["page"][0]
-            return 200, {"data": {"items": [product(f"prod_{page}")], "pagination": {"total_count": 3, "max_page": 3}}}, {}
 
-        alpr, recorder = client(answer)
-        self.assertEqual([item.id for item in alpr.products.list_iter(limit=1)], ["prod_1", "prod_2", "prod_3"])
-        self.assertEqual(parse_qs(recorder.seen[0]["url"].query)["limit"], ["1"])
+class PaginationTest(Case):
+    def test_iterating_walks_every_page_by_cursor(self) -> None:
+        def answer(request: Seen) -> tuple[int, dict[str, str], bytes]:
+            before = request.query.get("before", [""])[0]
+            if before == "":
+                return ok('{"data":[%s,%s],"next":"c2"}' % (reading("r3"), reading("r2")))
+            if before == "c2":
+                return ok('{"data":[%s],"next":null}' % reading("r1"))
+            return 500, {}, b"{}"
 
-    def test_a_refusal_is_a_typed_error(self):
-        def answer(request):
-            if request["url"].path == "/api/v1/customers":
-                return 422, {"error": "invalid_request", "fields": {"email": ["send an e-mail"]}}, {}
-            return 429, None, {"retry-after": "7"}
+        alpr, fake = self.serve(answer)
+        ids = [item.id for item in alpr.recognitions.list_iter(plate="BRA", source="api")]
+        self.assertEqual(ids, ["r3", "r2", "r1"])
+        self.assertEqual(len(fake.seen), 2)
+        self.assertNotIn("before", fake.seen[0].query, "the first request carries no cursor")
+        self.assertEqual(fake.seen[1].query["before"], ["c2"])
+        for request in fake.seen:
+            self.assertEqual((request.query["plate"], request.query["source"]), (["BRA"], ["api"]))
+            self.assertNotIn("camera", request.query)
+        page = alpr.recognitions.list(before="c2")
+        self.assertEqual((len(page.items), page.next, page.items[0].camera_id), (1, None, None))
+        self.assertEqual(fake.seen[2].query["before"], ["c2"])
 
-        alpr, _ = client(answer)
-        with self.assertRaises(AlprError) as refused:
-            alpr.customers.create({"name": "x", "email": "x"})
-        self.assertEqual((refused.exception.status, refused.exception.code), (422, "invalid_request"))
-        self.assertEqual(refused.exception.fields["email"], ["send an e-mail"])
-        with self.assertRaises(AlprError) as limited:
-            alpr.products.list()
-        self.assertEqual((limited.exception.status, limited.exception.retry_after), (429, 7))
+    def test_iterating_can_start_from_a_cursor(self) -> None:
+        alpr, fake = self.serve(lambda request: ok('{"data":[%s],"next":null}' % reading("r1", "cam_1")))
+        items = list(alpr.recognitions.list_iter(before="start"))
+        self.assertEqual((len(items), items[0].camera_id, fake.seen[0].query["before"]), (1, "cam_1", ["start"]))
 
-    def test_a_redirect_is_refused_and_the_key_never_follows_it(self):
-        elsewhere = []
+    def test_a_cursor_that_does_not_move_ends_the_walk(self) -> None:
+        alpr, fake = self.serve(lambda request: ok('{"data":[%s],"next":"same"}' % reading("r1", "cam_1")))
+        self.assertEqual(len(list(alpr.recognitions.list_iter())), 2)
+        self.assertEqual(len(fake.seen), 2)
 
-        class Other(BaseHTTPRequestHandler):
-            def do_GET(self):
-                elsewhere.append(self.headers.get("Authorization"))
-                self.send_response(200)
-                self.end_headers()
+    def test_the_walk_ends_at_the_first_error(self) -> None:
+        calls = []
 
-            def log_message(self, *args):
-                pass
+        def answer(request: Seen) -> tuple[int, dict[str, str], bytes]:
+            calls.append(request)
+            if len(calls) == 1:
+                return ok('{"data":[%s],"next":"c2"}' % reading("r1"))
+            return 503, {}, b'{"error":"storage_unavailable","message":"later"}'
 
-        other = HTTPServer(("127.0.0.1", 0), Other)
+        alpr, _ = self.serve(answer)
+        walked = []
+        with self.assertRaises(AlprError) as raised:
+            for item in alpr.recognitions.list_iter():
+                walked.append(item.id)
+        self.assertEqual((walked, raised.exception.status, raised.exception.code), (["r1"], 503, "storage_unavailable"))
 
-        class First(BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(302)
-                self.send_header("Location", f"http://127.0.0.1:{other.server_port}/steal")
-                self.end_headers()
 
-            def log_message(self, *args):
-                pass
+class ErrorTest(Case):
+    def test_a_refusal_is_a_typed_error(self) -> None:
+        def answer(request: Seen) -> tuple[int, dict[str, str], bytes]:
+            if request.url.path == "/api/v1/recognize":
+                return 402, {}, b'{"error":"insufficient_credits","message":"This workspace has no credits left."}'
+            if request.url.path == "/api/v1/ocr":
+                return 502, {}, b"<html>bad gateway</html>"
+            return 429, {"Retry-After": "7"}, b'{"error":"rate_limited","message":"Too many requests."}'
 
-        first = HTTPServer(("127.0.0.1", 0), First)
-        for server in (first, other):
-            threading.Thread(target=server.serve_forever, daemon=True).start()
-        try:
-            alpr = Alpr("prk_test_key", base_url=f"http://127.0.0.1:{first.server_port}")
-            with self.assertRaises(AlprError) as refused:
-                alpr.products.get("prod_1")
-            self.assertEqual((refused.exception.status, refused.exception.code), (302, "redirect_refused"))
-            self.assertEqual(elsewhere, [])
-        finally:
-            for server in (first, other):
-                server.shutdown()
-                server.server_close()
+        alpr, _ = self.serve(answer)
+        with self.assertRaises(AlprError) as raised:
+            alpr.photos.recognize({"image": JPEG})
+        error = raised.exception
+        self.assertEqual((error.status, error.code, error.message, error.fields, error.retry_after), (402, "insufficient_credits", "This workspace has no credits left.", {}, None))
+        with self.assertRaises(AlprError) as raised:
+            alpr.cameras.list()
+        error = raised.exception
+        self.assertEqual((error.status, error.code, error.retry_after), (429, "rate_limited", 7))
+        with self.assertRaises(AlprError) as raised:
+            alpr.photos.ocr({"image": PNG})
+        self.assertEqual((raised.exception.status, raised.exception.code, raised.exception.retry_after), (502, "", None))
 
-    def test_the_standard_webhooks_vector_verifies(self):
-        body = b'{"test": 2432232314}'
-        headers = webhook_headers("msg_p5jXN8AQM9LWM0D4loKWxJek", 1614265330, "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=")
-        verify_webhook_signature(REFERENCE_SECRET, headers, body, now=1614265330)
-        for secret, payload, now in [
-            (REFERENCE_SECRET, body + b" ", 1614265330),
-            (REFERENCE_SECRET, body, 1614265330 + 301),
-            (NEW_SECRET, body, 1614265330),
-        ]:
-            with self.assertRaises(WebhookVerificationError):
-                verify_webhook_signature(secret, headers, payload, now=now)
+    def test_a_call_can_use_another_key(self) -> None:
+        alpr, fake = self.serve(lambda request: ok('{"data":[]}'))
+        self.assertEqual(alpr.cameras.list(api_key="alpr_live_other"), [])
+        self.assertEqual(fake.seen[0].headers["Authorization"], "Bearer alpr_live_other")
+        alpr.cameras.list()
+        self.assertEqual(fake.seen[1].headers["Authorization"], "Bearer " + KEY)
 
-    def test_a_timestamp_that_is_not_plain_digits_is_refused(self):
-        body = b'{"test": 2432232314}'
-        for stamp, signature in [("+1614265330", "JQsSpSSK1m9NI2FueDRZN3FL/jU9336idQcq6VmF+c8="), ("²", "PEggIsKE32VQ8J4ZIk9apRhPy7w+a20bxGpjk1K4/HY="), ("", "x"), ("1_6", "x")]:
-            headers = {"Webhook-Id": "msg_p5jXN8AQM9LWM0D4loKWxJek", "webhook-timestamp": stamp, "webhook-signature": "v1," + signature}
-            with self.assertRaises(WebhookVerificationError, msg=stamp):
-                verify_webhook_signature(REFERENCE_SECRET, headers, body, now=1614265330)
+    def test_a_redirect_is_refused_and_the_key_never_follows_it(self) -> None:
+        other = Fake(lambda request: ok("{}"))
+        self.addCleanup(other.close)
+        alpr, _ = self.serve(lambda request: (302, {"Location": other.url + "/steal"}, b""))
+        with self.assertRaises(AlprError) as raised:
+            alpr.cameras.list()
+        self.assertEqual(raised.exception.status, 302)
+        self.assertEqual(other.seen, [], "the redirect target was called")
 
-    def test_a_webhook_answers_its_typed_event(self):
-        now = SIGNED_AT + 120
-        headers = webhook_headers("msg_2", SIGNED_AT, "v1,wYfYi9j4EexjSjLLsUssBYbtAFSwF9KVQBJ2o+qD6Jw= v1,0rD3K6HM83kGY+mZMPVidXSW2zXHHDvy3bMt2QzM8Ak=")
-        for secret in (NEW_SECRET, OLD_SECRET):
-            event = verify_webhook(secret, headers, ORDER_PAID, now=now)
-            self.assertIsInstance(event, OrderWebhookEvent)
-            assert isinstance(event, OrderWebhookEvent)
-            self.assertEqual((event.type, event.data.id, event.data.installments, event.data.installment_interest_cents), ("order.paid", "ord_1", 3, 360))
+    def test_a_custom_transport_sends_the_request(self) -> None:
+        seen: list[tuple[str, str, dict[str, str], bytes | None, float]] = []
+
+        def transport(method: str, url: str, headers: dict[str, str], body: bytes | None, timeout: float) -> tuple[int, dict[str, str], bytes]:
+            seen.append((method, url, headers, body, timeout))
+            return 200, {}, b'{"data":[]}'
+
+        alpr = Alpr(KEY, transport=transport, timeout=5)
+        self.assertEqual(alpr.cameras.list(), [])
+        self.assertEqual((seen[0][0], seen[0][1], seen[0][4]), ("GET", "https://alpr.sh/api/v1/cameras", 5))
+
+    def test_a_base_url_must_be_https_unless_it_is_loopback(self) -> None:
+        accepted = {
+            "https://alpr.sh": True,
+            "http://localhost:8080": True,
+            "http://LOCALHOST": True,
+            "http://127.0.0.1:1": True,
+            "http://127.255.0.3": True,
+            "http://[::1]:8080": True,
+            "http://alpr.sh": False,
+            "http://localhost.evil.test": False,
+            "http://127.0.0.1.evil.test": False,
+            "http://10.0.0.1": False,
+            "ftp://localhost": False,
+            "alpr.sh": False,
+            "": False,
+            "http://[::2]": False,
+        }
+        for base, want in accepted.items():
+            try:
+                _check_base_url(base)
+                got = True
+            except ValueError:
+                got = False
+            self.assertEqual(got, want, base)
+        with self.assertRaises(ValueError):
+            Alpr(KEY, base_url="http://alpr.test")
+
+
+# The webhook vectors every SDK checks (generator/testdata/webhook-vectors.json):
+# Alpr.sh events signed under two secrets, as while one is rotated.
+NEW_SECRET = "whsec_SDK-test-secret-new-0123456789"
+OLD_SECRET = "whsec_SDK-test-secret-old-0123456789"
+OTHER_SECRET = "whsec_SDK-test-secret-other-012345678"
+SIGNED_AT = "1792670400"
+NOW = 1792670400 + 120
+
+RECOGNITION_BODY = '{"event":"recognition.created","id":"rec_1","tenant_id":"ws_1","source":"camera","camera_id":"cam_1","plate":"BRA2E19","confidence":0.97,"captured_at":"2026-10-22T11:59:58Z"}'
+RECOGNITION_NEW = "sha256=97deaf1c8a9348f3a7d64ce68943f4e6b4cc44590df4caea4c16d6373fa7d623"
+RECOGNITION_OLD = "sha256=12b70f2a8838157260e3b9470befa2627c16c42fe5e4b1d80fb841e206f8c781"
+ALERT_BODY = '{"event":"alert.triggered","id":"alt_1","tenant_id":"ws_1","rule_id":"rule_1","rule_name":"Veículo bloqueado","recognition_id":"rec_1","plate":"BRA2E19","camera_id":"cam_1","confidence":0.97,"captured_at":"2026-10-22T11:59:58Z"}'
+ALERT_NEW = "sha256=0b84627fa4564b006237b52feca68ca3c8dfebc54d4e271e881105f75e2a962a"
+TEST_BODY = '{"event":"webhook.test","id":"evt_1","tenant_id":"ws_1","sent_at":"2026-10-22T12:00:00Z"}'
+TEST_NEW = "sha256=f3064f502ba3ffe3e409d9186c89ce7e425ad1dcad34b73edbeb1ad8e0633245"
+UNKNOWN_BODY = '{"event":"payout.sent","id":"po_1","tenant_id":"ws_1"}'
+UNKNOWN_NEW = "sha256=cb5b4f83462c974ea9706723b97a28de5d591d2093aa62e8dc8e388997daa0d6"
+PLUS_SIGNATURE = "sha256=ceef0f02180106de386c85b403f2b448142e897911c1e6075725b7e8d2912771"
+
+
+def webhook_headers(delivery_id: str, stamp: str, *signatures: str) -> list[tuple[str, str]]:
+    """Header lines, so that a signature may be repeated."""
+    return [("x-alprsh-delivery-id", delivery_id), ("X-Alprsh-Timestamp", stamp)] + [("X-Alprsh-Signature", each) for each in signatures]
+
+
+class WebhookTest(unittest.TestCase):
+    def refused(self, secret: str, headers: Any, body: str, now: float = NOW) -> None:
         with self.assertRaises(WebhookVerificationError):
-            verify_webhook(REFERENCE_SECRET, headers, ORDER_PAID, now=now)
-        usage = verify_webhook(NEW_SECRET, webhook_headers("msg_3", SIGNED_AT, "v1,Z3E2vTbczigiySfkzakxuZotPn9FlBY1KAET6hPEZoU="), USAGE_RECORDED, now=now)
-        self.assertIsInstance(usage, IdentifiersWebhookEvent)
-        self.assertEqual((usage.id, usage.data["merchant_id"]), ("msg_3", "mer_1"))
-        unknown = verify_webhook(NEW_SECRET, webhook_headers("msg_4", SIGNED_AT, "v1,Sa/yofA3h/58pFR+rIiWdIc8qXfcuqvyJSjxn4oJ1ZY="), PAYOUT_SENT.decode(), now=now)
-        self.assertIsInstance(unknown, UnknownWebhookEvent)
-        self.assertEqual((unknown.type, unknown.data), ("payout.sent", {"payout_id": "po_1", "amount_cents": 5000}))
+            _verify_webhook_signature_at(secret, headers, body, now)
+
+    def test_the_webhook_vector_verifies(self) -> None:
+        headers = webhook_headers("del_0001", SIGNED_AT, RECOGNITION_NEW)
+        _verify_webhook_signature_at(NEW_SECRET, headers, RECOGNITION_BODY, NOW)
+        _verify_webhook_signature_at(NEW_SECRET, headers, RECOGNITION_BODY.encode(), NOW)
+        self.refused(NEW_SECRET, headers, RECOGNITION_BODY + " ")
+        self.refused(NEW_SECRET, webhook_headers("del_0009", SIGNED_AT, RECOGNITION_NEW), RECOGNITION_BODY)
+        self.refused(NEW_SECRET, headers, RECOGNITION_BODY, 1792670400 + 301)
+        self.refused(NEW_SECRET, headers, RECOGNITION_BODY, 1792670400 - 301)
+        _verify_webhook_signature_at(NEW_SECRET, headers, RECOGNITION_BODY, 1792670400 + 300)
+        self.refused(OTHER_SECRET, headers, RECOGNITION_BODY)
+        self.refused(NEW_SECRET, [], RECOGNITION_BODY)
+        self.assertEqual(WEBHOOK_TOLERANCE_SECONDS, 300)
+
+    def test_headers_are_found_whatever_their_case_and_container(self) -> None:
+        mapping = {
+            "X-ALPRSH-DELIVERY-ID": "del_0001",
+            "x-alprsh-timestamp": SIGNED_AT,
+            "X-Alprsh-Signature": RECOGNITION_NEW,
+        }
+        _verify_webhook_signature_at(NEW_SECRET, mapping, RECOGNITION_BODY, NOW)
+
+    def test_an_empty_secret_is_a_configuration_error(self) -> None:
+        headers = webhook_headers("del_0001", SIGNED_AT, RECOGNITION_NEW)
+        with self.assertRaises(ValueError) as raised:
+            _verify_webhook_signature_at("", headers, RECOGNITION_BODY, NOW)
+        self.assertNotIsInstance(raised.exception, WebhookVerificationError)
+        with self.assertRaises(ValueError) as raised:
+            verify_webhook("", headers, RECOGNITION_BODY)
+        self.assertNotIsInstance(raised.exception, WebhookVerificationError)
+
+    def test_a_timestamp_that_is_not_plain_digits_is_refused(self) -> None:
+        for stamp in ["+1792670400", "²", "", "1_7", " 1792670400", "1792670400 ", "١٧٩٢٦٧٠٤٠٠", "1" * 5000]:
+            with self.subTest(stamp=stamp):
+                self.refused(NEW_SECRET, webhook_headers("del_0001", stamp, PLUS_SIGNATURE), RECOGNITION_BODY)
+
+    def test_more_than_one_signature_verifies_during_a_rotation(self) -> None:
+        forms = {
+            "one value": webhook_headers("del_0001", SIGNED_AT, RECOGNITION_OLD + "," + RECOGNITION_NEW),
+            "two lines": webhook_headers("del_0001", SIGNED_AT, RECOGNITION_OLD, RECOGNITION_NEW),
+            "with spaces": webhook_headers("del_0001", SIGNED_AT, RECOGNITION_OLD + ", " + RECOGNITION_NEW),
+        }
+        for name, headers in forms.items():
+            with self.subTest(name):
+                for secret in (NEW_SECRET, OLD_SECRET):
+                    _verify_webhook_signature_at(secret, headers, RECOGNITION_BODY, NOW)
+                self.refused(OTHER_SECRET, headers, RECOGNITION_BODY)
+        bad = {
+            "a malformed one beside a good one": "sha256=zz," + RECOGNITION_NEW,
+            "no prefix": RECOGNITION_NEW.removeprefix("sha256="),
+            "a short one": "sha256=97de",
+            "too many": (RECOGNITION_OLD + ",") * 6 + RECOGNITION_NEW,
+            "empty": "",
+        }
+        for name, signature in bad.items():
+            with self.subTest(name):
+                self.refused(NEW_SECRET, webhook_headers("del_0001", SIGNED_AT, signature), RECOGNITION_BODY)
+        # Six entries are the most a request may list.
+        six = ",".join([RECOGNITION_OLD] * 5 + [RECOGNITION_NEW])
+        _verify_webhook_signature_at(NEW_SECRET, webhook_headers("del_0001", SIGNED_AT, six), RECOGNITION_BODY, NOW)
+
+    def test_a_webhook_answers_its_typed_event(self) -> None:
+        event = _verify_webhook_at(NEW_SECRET, webhook_headers("del_0001", SIGNED_AT, RECOGNITION_NEW), RECOGNITION_BODY.encode(), NOW)
+        assert isinstance(event, RecognitionCreatedWebhookEvent)
+        self.assertEqual(
+            (event.event, event.id, event.plate, event.confidence, event.camera_id, event.source, event.tenant_id, event.captured_at),
+            ("recognition.created", "rec_1", "BRA2E19", 0.97, "cam_1", "camera", "ws_1", "2026-10-22T11:59:58Z"),
+        )
+        event = _verify_webhook_at(NEW_SECRET, webhook_headers("del_0002", SIGNED_AT, ALERT_NEW), ALERT_BODY.encode(), NOW)
+        assert isinstance(event, AlertTriggeredWebhookEvent)
+        self.assertEqual((event.rule_name, event.recognition_id, event.rule_id), ("Veículo bloqueado", "rec_1", "rule_1"))
+        event = _verify_webhook_at(NEW_SECRET, webhook_headers("del_0003", SIGNED_AT, TEST_NEW), TEST_BODY.encode(), NOW)
+        assert isinstance(event, WebhookTestWebhookEvent)
+        self.assertEqual((event.event, event.sent_at), ("webhook.test", "2026-10-22T12:00:00Z"))
+        event = _verify_webhook_at(NEW_SECRET, webhook_headers("del_0004", SIGNED_AT, UNKNOWN_NEW), UNKNOWN_BODY.encode(), NOW)
+        assert isinstance(event, UnknownWebhookEvent)
+        self.assertEqual((event.event, event.id, event.body), ("payout.sent", "po_1", json.loads(UNKNOWN_BODY)))
+        match event:
+            case UnknownWebhookEvent(event="payout.sent"):
+                pass
+            case _:
+                self.fail("the match did not reach the unknown event")
+        self.refused(NEW_SECRET, webhook_headers("del_0005", SIGNED_AT, "sha256=" + "0" * 64), '{"id":"x"}')
+
+    def test_the_clock_is_read_by_the_public_functions(self) -> None:
+        # The vectors are signed for 2026-10-22; today the timestamp is outside the tolerance (or not yet
+        # inside it), so the public functions refuse it like the injected clock does.
+        import time
+
+        headers = webhook_headers("del_0001", SIGNED_AT, RECOGNITION_NEW)
+        if abs(time.time() - int(SIGNED_AT)) > WEBHOOK_TOLERANCE_SECONDS:
+            with self.assertRaises(WebhookVerificationError):
+                verify_webhook(NEW_SECRET, headers, RECOGNITION_BODY)
+            with self.assertRaises(WebhookVerificationError):
+                verify_webhook_signature(NEW_SECRET, headers, RECOGNITION_BODY)
+
+    def test_a_verified_body_that_is_not_an_event_is_refused(self) -> None:
+        from alpr.webhooks import _event
+
+        for body in [b"[1]", b'{"id":"x"}', b'{"event":3}', b'{"event":""}', b"not json", b"\xff\xfe", b'{"event":"alert.triggered"}']:
+            with self.subTest(body=body):
+                with self.assertRaises(ValueError) as raised:
+                    _event(body)
+                self.assertNotIsInstance(raised.exception, WebhookVerificationError)
 
 
 if __name__ == "__main__":

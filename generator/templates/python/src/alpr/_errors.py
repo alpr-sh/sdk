@@ -8,10 +8,12 @@ from typing import Any
 class AlprError(Exception):
     """A request the API refused.
 
-    ``code`` is the API's: invalid_credential, forbidden, not_found,
-    invalid_request, conflict, idempotency_conflict, body_too_large or
-    unavailable. ``fields`` says, for invalid_request, what is wrong with each
-    field. ``retry_after`` is how many seconds to wait on a 429.
+    ``code`` is the API's: invalid_api_key, insufficient_scope,
+    insufficient_credits, missing image, invalid_image, invalid_option,
+    image_too_large, no_plate, not_found, image_unavailable, rate_limited,
+    engine_unavailable or storage_unavailable. ``fields`` says, when the API
+    names them, what is wrong with each field. ``retry_after`` is how many
+    seconds to wait on a 429.
     """
 
     def __init__(self, status: int, code: str, message: str = "", fields: dict[str, list[str]] | None = None, retry_after: int | None = None) -> None:
@@ -31,5 +33,12 @@ class AlprError(Exception):
                 data = loaded
         except ValueError:
             pass  # A refusal without a JSON body is still a refusal.
-        retry_after = headers.get("retry-after", "")
-        return cls(status, data.get("error", ""), data.get("message", ""), data.get("fields") or {}, int(retry_after) if retry_after.isdigit() else None)
+        code, message, fields = data.get("error"), data.get("message"), data.get("fields")
+        retry_after = headers.get("retry-after", "").strip()
+        return cls(
+            status,
+            code if isinstance(code, str) else "",
+            message if isinstance(message, str) else "",
+            fields if isinstance(fields, dict) else None,
+            int(retry_after) if retry_after.isascii() and retry_after.isdigit() and len(retry_after) < 10 else None,
+        )
