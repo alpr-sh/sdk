@@ -15,6 +15,12 @@ func init() {
 		"phpShape": phpShape,
 		"phpProp":  phpProp,
 		"phpName":  phpName,
+		// phpComment writes text as a docblock, or nothing.
+		"phpComment": phpComment,
+		// modelOf is the model called name.
+		"modelOf": modelOf,
+		// phpRequired lists the model's required wire names as PHP strings.
+		"phpRequired": phpRequired,
 	}})
 }
 
@@ -64,6 +70,8 @@ func phpDoc(t *TypeRef) string {
 		return "float"
 	case "boolean":
 		return "bool"
+	case "binary":
+		return "string"
 	case "model":
 		return t.Model
 	case "array":
@@ -127,10 +135,7 @@ func phpShape(m *Model) string {
 // phpProp is the docblock over a promoted property: its description and,
 // when the declared type says less, its phpdoc type.
 func phpProp(f *Field) string {
-	var lines []string
-	if text := strings.TrimSpace(f.Description); text != "" {
-		lines = append(lines, text)
-	}
+	lines := commentLines(f.Description)
 	if f.Type.Kind == "array" || f.Type.Kind == "map" || len(f.Type.Enum) > 0 {
 		typ := phpDoc(f.Type)
 		if f.Nullable || !f.Required {
@@ -138,14 +143,61 @@ func phpProp(f *Field) string {
 		}
 		lines = append(lines, "@var "+typ)
 	}
-	const indent = "        "
+	return docblock("        ", lines)
+}
+
+// phpComment writes text as a docblock indented by indent: what a contract
+// says is free text, so every line stays inside the comment (the text was
+// cleaned when the contract was read, and a line that starts with @ is kept
+// from becoming a tag).
+func phpComment(indent, text string) string {
+	return docblock(indent, commentLines(text))
+}
+
+func commentLines(text string) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		line = strings.TrimRight(line, " \t")
+		if strings.HasPrefix(strings.TrimSpace(line), "@") {
+			line = "\\" + strings.TrimSpace(line)
+		}
+		lines[i] = line
+	}
+	return lines
+}
+
+func docblock(indent string, lines []string) string {
 	switch len(lines) {
 	case 0:
 		return ""
 	case 1:
 		return indent + "/** " + lines[0] + " */\n"
 	}
-	return indent + "/**\n" + indent + " * " + strings.Join(lines, "\n"+indent+" * ") + "\n" + indent + " */\n"
+	var b strings.Builder
+	b.WriteString(indent + "/**\n")
+	for _, line := range lines {
+		if line == "" {
+			b.WriteString(indent + " *\n")
+		} else {
+			b.WriteString(indent + " * " + line + "\n")
+		}
+	}
+	b.WriteString(indent + " */\n")
+	return b.String()
+}
+
+// modelOf is the model called name, or nil.
+func modelOf(models []*Model, name string) *Model {
+	for _, model := range models {
+		if model.Name == name {
+			return model
+		}
+	}
+	return nil
 }
 
 // phpName writes customer_id as customerId: PHP's camel case keeps an
@@ -158,4 +210,15 @@ func phpName(wire string) string {
 		}
 	}
 	return strings.Join(parts, "")
+}
+
+// phpRequired is the model's required wire names, quoted and separated by commas.
+func phpRequired(m *Model) string {
+	var names []string
+	for _, f := range m.Fields {
+		if f.Required {
+			names = append(names, phpQuote(f.Wire))
+		}
+	}
+	return strings.Join(names, ", ")
 }
