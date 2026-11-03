@@ -34,7 +34,7 @@ func init() {
 		"javaType":   javaType,
 		"javaBoxed":  func(t *TypeRef) string { return javaRef(t, true) },
 		"javaRead":   javaRead,
-		"javaWrite":  javaWrite,
+		"javaForm":   javaForm,
 		"javaConst":  func(field, value string) string { return constName(field) + "_" + constName(value) },
 		"javaDoc":    javaDoc,
 		"javaText":   javaText,
@@ -119,6 +119,8 @@ func javaRef(t *TypeRef, boxed bool) string {
 		return "List<" + javaRef(t.Items, true) + ">"
 	case "map":
 		return "Map<String, " + javaRef(t.Items, true) + ">"
+	case "binary":
+		return "byte[]"
 	case "any":
 		return "Object"
 	}
@@ -160,14 +162,21 @@ func javaRead(f *Field) string {
 	return `Json.optional(data, "` + f.Wire + `", ` + javaConvert(f.Type) + ")"
 }
 
-// javaWrite is the JSON value of a request field held in expr. The request
-// bodies are scalars, lists and maps of them; a nested model in one stops the
-// generator rather than writing a body Java cannot encode.
-func javaWrite(t *TypeRef, expr string) (string, error) {
-	if inputHoldsModel(t) {
-		return "", fmt.Errorf("generator: java: a request body holding the model %s is not supported", t.Model)
+// javaForm is the Java expression that writes the value of a multipart text
+// field held in expr. A request field is a scalar; a list, a map or a nested
+// model stops the generator rather than writing a body Java cannot encode.
+func javaForm(t *TypeRef, expr string) (string, error) {
+	switch t.Kind {
+	case "string":
+		return expr, nil
+	case "integer":
+		return "Long.toString(" + expr + ")", nil
+	case "number":
+		return "Multipart.number(" + expr + ")", nil
+	case "boolean":
+		return "Boolean.toString(" + expr + ")", nil
 	}
-	return expr, nil
+	return "", fmt.Errorf("generator: java: a multipart field of kind %s is not supported", t.Kind)
 }
 
 func inputHoldsModel(t *TypeRef) bool {

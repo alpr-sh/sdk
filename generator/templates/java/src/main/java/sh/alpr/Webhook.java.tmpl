@@ -8,34 +8,43 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-/** Verifying the webhooks Alpr.sh sends, as Standard Webhooks signs them. */
+/**
+ * Verifying the webhooks Alpr.sh sends. Alpr.sh signs the headers
+ * {@code X-Alprsh-Timestamp} and {@code X-Alprsh-Delivery-Id} and the body:
+ * {@code X-Alprsh-Signature} carries {@code sha256=} and the hex HMAC-SHA256
+ * of {@code {timestamp}.{delivery-id}.{body}} under the endpoint's secret (the
+ * whole whsec_… text, as it is), and more than one signature while a secret
+ * is rotated; one matching is enough. Read the body raw and verify before
+ * parsing it, and deduplicate by the {@code X-Alprsh-Delivery-Id} header.
+ */
 public final class Webhook {
     /** How far from now a webhook's timestamp may be. */
     public static final Duration TOLERANCE = Duration.ofMinutes(5);
+
+    /** How many signatures a request may list: the secret in use and those still signing during a rotation. */
+    private static final int MAX_SIGNATURES = 6;
 
     private Webhook() {
     }
 
     /**
-     * Checks a webhook Alpr.sh sent and answers its event. The signature is an
-     * HMAC-SHA256 of "{webhook-id}.{webhook-timestamp}.{body}" under the key
-     * the endpoint's whsec_ secret encodes, one of the signatures in the
-     * webhook-signature header, which carries more than one while a secret is
-     * rotated. Pass the body exactly as it arrived, before parsing it.
+     * Checks a webhook Alpr.sh sent and answers its event. Pass the body
+     * exactly as it arrived, before parsing it.
      *
-     * @param secret the endpoint's secret, whsec_ and a base64 key
+     * @param secret the endpoint's secret, the whole whsec_… text
      * @param headers the request's headers, by any case; a value is a string or a collection of them
      * @param body the raw body
      * @return the event
      * @throws WebhookVerificationException when Alpr.sh did not sign the request, or signed it too long ago
-     * @throws IllegalArgumentException when the secret is not whsec_ and a base64 key
+     * @throws IllegalArgumentException when the secret is empty, or the verified body is not an event
      */
     public static WebhookEvent verify(String secret, Map<String, ?> headers, byte[] body) {
         return verify(secret, headers, body, Instant.now());
@@ -44,7 +53,7 @@ public final class Webhook {
     /**
      * {@link #verify(String, Map, byte[])} with the body as text, encoded in UTF-8.
      *
-     * @param secret the endpoint's secret, whsec_ and a base64 key
+     * @param secret the endpoint's secret, the whole whsec_… text
      * @param headers the request's headers, by any case
      * @param body the raw body
      * @return the event
@@ -54,17 +63,7 @@ public final class Webhook {
         return verify(secret, headers, body.getBytes(StandardCharsets.UTF_8), Instant.now());
     }
 
-    /**
-     * {@link #verify(String, Map, byte[])} at another moment than now.
-     *
-     * @param secret the endpoint's secret, whsec_ and a base64 key
-     * @param headers the request's headers, by any case
-     * @param body the raw body
-     * @param now the moment the timestamp is checked against
-     * @return the event
-     * @throws WebhookVerificationException when Alpr.sh did not sign the request, or signed it too long ago
-     */
-    public static WebhookEvent verify(String secret, Map<String, ?> headers, byte[] body, Instant now) {
+    static WebhookEvent verify(String secret, Map<String, ?> headers, byte[] body, Instant now) {
         verifySignature(secret, headers, body, now);
         return event(body);
     }
@@ -72,36 +71,25 @@ public final class Webhook {
     /**
      * Checks a webhook's signature as {@link #verify(String, Map, byte[])} does, without reading its body.
      *
-     * @param secret the endpoint's secret, whsec_ and a base64 key
+     * @param secret the endpoint's secret, the whole whsec_… text
      * @param headers the request's headers, by any case
      * @param body the raw body
      * @throws WebhookVerificationException when Alpr.sh did not sign the request, or signed it too long ago
+     * @throws IllegalArgumentException when the secret is empty
      */
     public static void verifySignature(String secret, Map<String, ?> headers, byte[] body) {
         verifySignature(secret, headers, body, Instant.now());
     }
 
-    /**
-     * {@link #verifySignature(String, Map, byte[])} at another moment than now.
-     *
-     * @param secret the endpoint's secret, whsec_ and a base64 key
-     * @param headers the request's headers, by any case
-     * @param body the raw body
-     * @param now the moment the timestamp is checked against
-     * @throws WebhookVerificationException when Alpr.sh did not sign the request, or signed it too long ago
-     */
-    public static void verifySignature(String secret, Map<String, ?> headers, byte[] body, Instant now) {
-        byte[] key;
-        try {
-            key = Base64.getDecoder().decode(secret.startsWith("whsec_") ? secret.substring(6) : secret);
-        } catch (IllegalArgumentException e) {
-            key = new byte[0];
+    static void verifySignature(String secret, Map<String, ?> headers, byte[] body, Instant now) {
+        if (secret == null || secret.isEmpty()) {
+            throw new IllegalArgumentException("alpr: the webhook secret is empty");
         }
-        if (key.length == 0) {
-            throw new IllegalArgumentException("alpr: the webhook secret is whsec_ and a base64 key");
-        }
-        String id = header(headers, "webhook-id");
-        String stamp = header(headers, "webhook-timestamp");
+        List<String> ids = header(headers, "X-Alprsh-Delivery-Id");
+        List<String> stamps = header(headers, "X-Alprsh-Timestamp");
+        String id = ids.isEmpty() ? "" : ids.get(0);
+        String stamp = stamps.isEmpty() ? "" : stamps.get(0);
+        // Only ASCII digits: a sign, a space or a Unicode digit is not what the signer sends.
         if (id.isEmpty() || stamp.isEmpty() || stamp.length() > 18 || !stamp.chars().allMatch(c -> c >= '0' && c <= '9')) {
             throw new WebhookVerificationException();
         }
@@ -111,65 +99,96 @@ public final class Webhook {
         byte[] expected;
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(key, "HmacSHA256"));
-            mac.update((id + "." + stamp + ".").getBytes(StandardCharsets.UTF_8));
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            mac.update((stamp + "." + id + ".").getBytes(StandardCharsets.UTF_8));
             expected = mac.doFinal(body);
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IllegalStateException("alpr: HMAC-SHA256 is unavailable", e);
         }
-        for (String signature : header(headers, "webhook-signature").trim().split("\\s+")) {
-            int comma = signature.indexOf(',');
-            if (comma < 0 || !signature.substring(0, comma).equals("v1")) {
-                continue;
+        String[] listed = String.join(",", header(headers, "X-Alprsh-Signature")).split(",", -1);
+        if (listed.length > MAX_SIGNATURES) {
+            throw new WebhookVerificationException();
+        }
+        boolean matched = false;
+        for (String signature : listed) {
+            String entry = signature.trim();
+            // One malformed signature refuses the request, and every listed
+            // signature is compared, in constant time.
+            if (!entry.startsWith("sha256=")) {
+                throw new WebhookVerificationException();
             }
-            byte[] decoded;
-            try {
-                decoded = Base64.getDecoder().decode(signature.substring(comma + 1));
-            } catch (IllegalArgumentException e) {
-                continue;
+            byte[] decoded = hex(entry.substring("sha256=".length()));
+            if (decoded.length != expected.length) {
+                throw new WebhookVerificationException();
             }
             if (MessageDigest.isEqual(decoded, expected)) {
-                return;
+                matched = true;
             }
         }
-        throw new WebhookVerificationException();
+        if (!matched) {
+            throw new WebhookVerificationException();
+        }
     }
 
-    private static WebhookEvent event(byte[] body) {
-        Map<String, Object> event = Json.asObject(Json.parse(new String(body, StandardCharsets.UTF_8)));
-        String id = Json.required(event, "id", Json::asString);
-        String type = Json.required(event, "type", Json::asString);
-        String timestamp = Json.required(event, "timestamp", Json::asString);
-        Map<String, Object> data = Json.optional(event, "data", Json::asObject);
-        if (data == null) {
-            data = Map.of();
+    /** Reads a verified body into the event its name says. */
+    static WebhookEvent event(byte[] body) {
+        String text = new String(body, StandardCharsets.UTF_8);
+        Object parsed;
+        try {
+            parsed = Json.parse(text);
+        } catch (IllegalStateException e) {
+            throw new IllegalArgumentException("alpr: the webhook body is not an event: " + e.getMessage(), e);
         }
+        if (!(parsed instanceof Map) || !(Json.asObject(parsed).get("event") instanceof String) || ((String) Json.asObject(parsed).get("event")).isEmpty()) {
+            throw new IllegalArgumentException("alpr: the webhook body is not an event");
+        }
+        Map<String, Object> data = Json.asObject(parsed);
+        String name = (String) data.get("event");
+        try {
 {{- range .Webhooks}}
-        if ({{.Name}}WebhookEvent.TYPES.contains(type)) {
-            return {{.Name}}WebhookEvent.fromJson(id, type, timestamp, data);
-        }
+            if ({{.Name}}WebhookEvent.EVENTS.contains(name)) {
+                return {{.Name}}WebhookEvent.fromJson(data);
+            }
 {{- end}}
-        return new UnknownWebhookEvent(id, type, timestamp, data);
+        } catch (IllegalStateException e) {
+            throw new IllegalArgumentException("alpr: the webhook body is not a " + name + " event: " + e.getMessage(), e);
+        }
+        return new UnknownWebhookEvent(name, data.get("id") instanceof String ? (String) data.get("id") : "", data, text);
     }
 
-    private static String header(Map<String, ?> headers, String name) {
+    /** Decodes hex digits; anything else, or an odd length, answers an array that cannot match. */
+    private static byte[] hex(String text) {
+        if (text.length() % 2 != 0) {
+            return new byte[0];
+        }
+        byte[] out = new byte[text.length() / 2];
+        for (int i = 0; i < out.length; i++) {
+            int high = Character.digit(text.charAt(2 * i), 16);
+            int low = Character.digit(text.charAt(2 * i + 1), 16);
+            if (high < 0 || low < 0 || text.charAt(2 * i) > 'f' || text.charAt(2 * i + 1) > 'f') {
+                return new byte[0];
+            }
+            out[i] = (byte) (high << 4 | low);
+        }
+        return out;
+    }
+
+    /** Every line of a header, by any case of its name; a value may be a string or a collection of them. */
+    private static List<String> header(Map<String, ?> headers, String name) {
+        List<String> out = new ArrayList<>();
         for (Map.Entry<String, ?> header : headers.entrySet()) {
-            if (header.getKey() == null || !header.getKey().toLowerCase(Locale.ROOT).equals(name)) {
+            if (header.getKey() == null || !header.getKey().toLowerCase(Locale.ROOT).equals(name.toLowerCase(Locale.ROOT))) {
                 continue;
             }
             Object value = header.getValue();
             if (value instanceof Collection) {
-                StringBuilder joined = new StringBuilder();
                 for (Object each : (Collection<?>) value) {
-                    if (joined.length() > 0) {
-                        joined.append(' ');
-                    }
-                    joined.append(each);
+                    out.add(String.valueOf(each));
                 }
-                return joined.toString();
+            } else if (value != null) {
+                out.add(value.toString());
             }
-            return value == null ? "" : value.toString();
         }
-        return "";
+        return out;
     }
 }

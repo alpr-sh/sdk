@@ -9,10 +9,11 @@ import java.util.Map;
 
 /**
  * A request the API refused. {@link #getCode()} is the API's:
- * invalid_credential, forbidden, not_found, invalid_request, conflict,
- * idempotency_conflict, body_too_large or unavailable. {@link #getFields()}
- * says, for invalid_request, what is wrong with each field.
- * {@link #getRetryAfter()} is how many seconds to wait on a 429.
+ * invalid_api_key, insufficient_scope, insufficient_credits, missing image,
+ * invalid_image, invalid_option, image_too_large, no_plate, not_found,
+ * image_unavailable, rate_limited, engine_unavailable or storage_unavailable.
+ * {@link #getFields()} says, when the API names them, what is wrong with each
+ * field. {@link #getRetryAfter()} is how many seconds to wait on a 429.
  */
 public class AlprException extends RuntimeException {
     private static final long serialVersionUID = 1L;
@@ -51,7 +52,7 @@ public class AlprException extends RuntimeException {
         return status;
     }
 
-    /** @return the API's error code: invalid_request, not_found… */
+    /** @return the API's error code: invalid_api_key, rate_limited… */
     public String getCode() {
         return code;
     }
@@ -61,7 +62,7 @@ public class AlprException extends RuntimeException {
         return apiMessage;
     }
 
-    /** @return for invalid_request, what is wrong with each field */
+    /** @return what is wrong with each field, empty unless the API names them */
     public Map<String, List<String>> getFields() {
         return fields;
     }
