@@ -15,14 +15,14 @@ func TestEveryLanguageWritesItsSDK(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string][]string{
-		"go":         {"go.mod", "client.go", "services.go", "models.go", "webhooks.go"},
-		"typescript": {"package.json", "src/client.ts", "src/services.ts", "src/webhooks.ts", "test/alpr.test.ts"},
+		"go":         {"go.mod", "client.go", "upload.go", "services.go", "models.go", "webhooks.go"},
+		"typescript": {"package.json", "src/client.ts", "src/services.ts", "src/webhooks.ts", "src/monitor/store.ts", "src/react/index.ts", "src/vue/index.ts", "src/svelte/AlprMonitor.svelte", "src/next/index.ts", "src/htmx/routes.ts", "test/api.test.ts", "test/frameworks.test.ts"},
 		"python":     {"pyproject.toml", "src/alpr/__init__.py", "src/alpr/py.typed", "src/alpr/webhooks.py", "tests/test_alpr.py"},
-		"php":        {"composer.json", "src/Alpr.php", "src/Models/Product.php", "src/Services/ProductsService.php", "src/OrderWebhookEvent.php", "src/Webhook.php"},
+		"php":        {"composer.json", "src/Alpr.php", "src/Models/Camera.php", "src/Services/CamerasService.php", "src/RecognitionCreatedWebhookEvent.php", "src/Webhook.php"},
 		"ruby":       {"alpr-sdk.gemspec", "lib/alpr.rb", "lib/alpr/services.rb", "lib/alpr/webhooks.rb", "test/alpr_test.rb"},
 		"elixir":     {"mix.exs", "lib/alpr.ex", "lib/alpr/services.ex", "lib/alpr/webhook.ex", "test/alpr_test.exs"},
-		"java":       {"pom.xml", "src/main/java/sh/alpr/Alpr.java", "src/main/java/sh/alpr/Product.java", "src/main/java/sh/alpr/ProductsService.java", "src/main/java/sh/alpr/OrderWebhookEvent.java"},
-		"csharp":     {"Alpr.slnx", "src/Alpr/AlprClient.cs", "src/Alpr/Models/Product.cs", "src/Alpr/Services/ProductsService.cs", "src/Alpr/WebhookEvents.cs"},
+		"java":       {"pom.xml", "src/main/java/sh/alpr/Alpr.java", "src/main/java/sh/alpr/Camera.java", "src/main/java/sh/alpr/CamerasService.java", "src/main/java/sh/alpr/RecognitionCreatedWebhookEvent.java"},
+		"csharp":     {"Alpr.slnx", "src/Alpr/AlprClient.cs", "src/Alpr/Models/Camera.cs", "src/Alpr/Services/CamerasService.cs", "src/Alpr/WebhookEvents.cs"},
 		"dart":       {"pubspec.yaml", "lib/alpr_sdk.dart", "lib/src/models.dart", "lib/src/webhooks.dart", "test/alpr_test.dart"},
 		"rust":       {"Cargo.toml", "src/lib.rs", "src/models.rs", "src/webhooks.rs", "tests/alpr.rs"},
 		"swift":      {"Package.swift", "Sources/Alpr/AlprClient.swift", "Sources/Alpr/Models.swift", "Sources/Alpr/Webhooks.swift", "Tests/AlprTests/AlprTests.swift"},

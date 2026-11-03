@@ -17,7 +17,7 @@ func TestTheContractReadsIntoTheIR(t *testing.T) {
 		}
 	}
 	recognize := services["photos"]["recognize"]
-	if recognize == nil || !recognize.Multipart || recognize.Kind != KindObject || recognize.Response != "RecognizeResult" || recognize.Path != "/api/v1/recognize" || recognize.HTTPMethod != "POST" {
+	if recognize == nil || !recognize.Multipart || recognize.Kind != KindObject || recognize.Response != "PhotoRecognition" || recognize.Path != "/api/v1/recognize" || recognize.HTTPMethod != "POST" {
 		t.Fatalf("photos.recognize = %+v", recognize)
 	}
 	if recognize.Body == nil || recognize.Body.Name != "PhotosRecognizeParams" || !recognize.Body.Input {
@@ -30,7 +30,7 @@ func TestTheContractReadsIntoTheIR(t *testing.T) {
 	if fields["image"] == nil || fields["image"].Type.Kind != "binary" || !fields["image"].Required || fields["lpr_confidence"] == nil || fields["lpr_confidence"].Required {
 		t.Fatalf("photos.recognize fields = %+v", fields)
 	}
-	if ocr := services["photos"]["ocr"]; ocr == nil || ocr.Response != "OcrResult" {
+	if ocr := services["photos"]["ocr"]; ocr == nil || ocr.Response != "PlateReading" {
 		t.Fatalf("photos.ocr = %+v", ocr)
 	}
 	list := services["recognitions"]["list"]
@@ -44,21 +44,26 @@ func TestTheContractReadsIntoTheIR(t *testing.T) {
 	if cameras == nil || cameras.Kind != KindList || !cameras.List || cameras.Item != "Camera" || cameras.Paginated {
 		t.Fatalf("cameras.list = %+v", cameras)
 	}
-	image := services["detections"]["image"]
-	if image == nil || len(image.PathParams) != 1 || image.PathParams[0] != "id" || image.Response != "DetectionImage" {
-		t.Fatalf("detections.image = %+v", image)
+	image := services["recognitions"]["image"]
+	if image == nil || len(image.PathParams) != 1 || image.PathParams[0] != "id" || image.Response != "DetectionImageLink" {
+		t.Fatalf("recognitions.image = %+v", image)
 	}
 	models := map[string]*Model{}
 	for _, model := range ir.Models {
 		models[model.Name] = model
 	}
-	for _, name := range []string{"Camera", "Recognition", "RecognizeResult", "RecognizedPlate", "ReadingArea", "RecognitionCreated", "AlertTriggered", "WebhookTest"} {
+	for _, name := range []string{"Camera", "Recognition", "PhotoRecognition", "RecognizedPlate", "ReadingArea", "WebhookRecognitionCreated", "WebhookAlertTriggered", "WebhookTest"} {
 		if models[name] == nil {
 			t.Fatalf("model %s missing", name)
 		}
 	}
-	if models["Error"] != nil || models["CameraList"] != nil || models["RecognitionList"] != nil {
+	if models["Error"] != nil || models["CameraList"] != nil || models["RecognitionPage"] != nil {
 		t.Fatal("the error body or a list wrapper became a model")
+	}
+	for _, name := range []string{"PartnerCamera", "WebhookLegacyRecognition", "PartnerDeliveryRecognition", "PhotoForm", "PhotoRequest"} {
+		if models[name] != nil {
+			t.Fatalf("%s, which no service or signed webhook reaches, became a model", name)
+		}
 	}
 	for _, field := range models["Camera"].Fields {
 		if field.Wire == "readingArea" && (field.Type.Kind != "model" || field.Type.Model != "ReadingArea") {
@@ -91,7 +96,7 @@ func TestAnOperationWithoutAnOperationIDIsNamedByItsRoute(t *testing.T) {
 			found[service.Name+":"+method.Name] = true
 		}
 	}
-	for _, want := range []string{"recognize:create", "photos:detect", "photos:ocr", "recognitions:list", "cameras:list", "detections:image"} {
+	for _, want := range []string{"recognize:create", "photos:detect", "photos:ocr", "recognitions:list", "cameras:list", "recognitions:image"} {
 		if !found[want] {
 			t.Errorf("%s is missing from %v", want, found)
 		}
@@ -121,7 +126,12 @@ func TestTheWebhooksReadIntoGroups(t *testing.T) {
 			t.Errorf("%s is not a webhook event", event)
 		}
 	}
-	if created := groups["RecognitionCreated"]; created == nil || created.Model != "RecognitionCreated" || !contains(created.Types, "recognition.created") {
+	for _, event := range []string{"legacy.recognition.created", "partner.recognition.created", "partner.camera.updated"} {
+		if seen[event] {
+			t.Errorf("%s, another delivery with another signature, is a webhook event of the SDK", event)
+		}
+	}
+	if created := groups["RecognitionCreated"]; created == nil || created.Model != "WebhookRecognitionCreated" || !contains(created.Types, "recognition.created") {
 		t.Fatalf("RecognitionCreated group = %+v", created)
 	}
 	if ir.WebhookField != "event" {

@@ -442,13 +442,12 @@ var httpMethods = map[string]bool{"get": true, "post": true, "put": true, "patch
 // documentation generator names them after, for a contract whose operations
 // carry no "service:method" operationId.
 var routeNames = map[string]string{
-	"api.recognize":         "photos:recognize",
-	"api.detect":            "photos:detect",
-	"api.ocr":               "photos:ocr",
-	"api.recognitions":      "recognitions:list",
-	"api.cameras":           "cameras:list",
-	"api.detections.image":  "detections:image",
-	"api.recognitions.show": "recognitions:get",
+	"api.recognize":        "photos:recognize",
+	"api.detect":           "photos:detect",
+	"api.ocr":              "photos:ocr",
+	"api.recognitions":     "recognitions:list",
+	"api.cameras":          "cameras:list",
+	"api.detections.image": "recognitions:image",
 }
 
 // namesOf is an operation's service and method: the operationId

@@ -38,6 +38,9 @@ func tsType(t *TypeRef) string {
 		return "number"
 	case "boolean":
 		return "boolean"
+	case "binary":
+		// A photo: the bytes, or a Blob (a File too).
+		return "Photo"
 	case "model":
 		return t.Model
 	case "array":
