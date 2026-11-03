@@ -6,7 +6,8 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** {{if .Model.Description}}{{.Model.Description}}{{else}}{{.Model.Name}} is a resource of Alpr.sh's API.{{end}} */
+{{if .Model.Description}}{{phpComment "" .Model.Description}}{{else}}/** {{.Model.Name}} is a resource of Alpr.sh's API. */
+{{end -}}
 final class {{.Model.Name}}
 {
     public function __construct(

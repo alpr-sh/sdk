@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Alpr;
 
 /**
- * A request the API refused. $errorCode is the API's: invalid_credential,
- * forbidden, not_found, invalid_request, conflict, idempotency_conflict,
- * body_too_large or unavailable. $fields says, for invalid_request, what is
- * wrong with each field. $retryAfter is how many seconds to wait on a 429.
+ * A request the API refused. $errorCode is the API's: invalid_api_key,
+ * insufficient_scope, insufficient_credits, missing image, invalid_image,
+ * invalid_option, image_too_large, no_plate, not_found, image_unavailable,
+ * rate_limited, engine_unavailable or storage_unavailable. $fields says, when
+ * the API names them, what is wrong with each field. $retryAfter is how many
+ * seconds to wait on a 429.
  */
 final class AlprException extends \RuntimeException
 {
@@ -35,12 +37,14 @@ final class AlprException extends \RuntimeException
             $data = []; // A refusal without a JSON body is still a refusal.
         }
         $retryAfter = $headers['retry-after'] ?? '';
+        /** @var array<string, list<string>> $fields */
+        $fields = is_array($data['fields'] ?? null) ? $data['fields'] : [];
         return new self(
             $status,
             is_string($data['error'] ?? null) ? $data['error'] : '',
             is_string($data['message'] ?? null) ? $data['message'] : '',
-            is_array($data['fields'] ?? null) ? $data['fields'] : [],
-            ctype_digit($retryAfter) ? (int) $retryAfter : null,
+            $fields,
+            preg_match('/\A[0-9]+\z/', $retryAfter) === 1 ? (int) $retryAfter : null,
         );
     }
 }

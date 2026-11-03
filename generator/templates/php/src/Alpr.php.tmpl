@@ -7,13 +7,12 @@ declare(strict_types=1);
 namespace Alpr;
 
 /**
- * Alpr.sh's API with one organization's API key. The key says the
- * organization and the environment: prk_test_… is the test environment,
- * prk_live_… the live one.
+ * Alpr.sh's API with one workspace's API key (alpr_live_…), which says the
+ * workspace and the scopes the calls may use.
  *
  *     $alpr = new Alpr\Alpr(getenv('ALPR_API_KEY'));
- *     $product = $alpr->products->create(['name' => 'Curso']);
- *     foreach ($alpr->products->listIter() as $product) { … }
+ *     $result = $alpr->photos->recognize(['image' => file_get_contents('car.jpg')]);
+ *     foreach ($alpr->recognitions->listIter() as $reading) { … }
  */
 final class Alpr implements Requester
 {
@@ -31,7 +30,8 @@ final class Alpr implements Requester
      * 127.0.0.0/8 and ::1, and any other throws InvalidArgumentException.
      *
      * @param (callable(string, string, array<string, string>, ?string, float): array{0: int, 1: array<string, string>, 2: string})|null $transport
-     *        sends one request: (method, url, headers, body, timeout) to (status, headers in lower case, body)
+     *        sends one request: (method, url, headers, body, timeout) to (status, headers in lower case, body).
+     *        The default is the curl extension's, which never follows a redirect: the API key must not travel.
      */
     public function __construct(
         private readonly string $apiKey,
@@ -48,18 +48,18 @@ final class Alpr implements Requester
     }
 
     /**
-     * Calls the API and answers what it wrapped in "data"; a refusal throws AlprException.
+     * Calls the API and answers the JSON it returned, decoded; a refusal
+     * (any status from 300 up, a redirect included) throws AlprException.
      *
      * @param array<string, mixed> $query
-     * @param array<string, mixed>|null $body
      * @return array<string, mixed>
      */
-    public function request(string $method, string $path, array $query = [], ?array $body = null, ?string $idempotencyKey = null, ?string $apiKey = null): array
+    public function request(string $method, string $path, array $query = [], ?Form $form = null, ?string $apiKey = null): array
     {
         $url = $this->baseUrl . $path;
         $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
         if ($query !== []) {
-            $url .= '?' . http_build_query($query);
+            $url .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         }
         $headers = [
             'Authorization' => 'Bearer ' . ($apiKey ?? $this->apiKey),
@@ -67,26 +67,21 @@ final class Alpr implements Requester
             'User-Agent' => 'alpr-php/' . Version::SDK,
         ];
         $payload = null;
-        if ($body !== null) {
-            $payload = json_encode((object) $body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            $headers['Content-Type'] = 'application/json';
-        }
-        if (($idempotencyKey === null || $idempotencyKey === '') && $method === 'POST') {
-            // A POST is sent with a key of its own, one a call, unless the caller gave one.
-            $idempotencyKey = self::uuid();
-        }
-        if ($idempotencyKey !== null && $idempotencyKey !== '') {
-            $headers['Idempotency-Key'] = $idempotencyKey;
+        if ($form !== null) {
+            [$payload, $headers['Content-Type']] = $form->encode();
         }
         [$status, $responseHeaders, $raw] = ($this->transport)($method, $url, $headers, $payload, $this->timeout);
         if ($status >= 300) {
             throw AlprException::fromResponse($status, $responseHeaders, $raw);
         }
-        if ($status === 204) {
+        if ($status === 204 || $raw === '') {
             return [];
         }
         $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        return $decoded['data'];
+        if (!is_array($decoded)) {
+            throw new \UnexpectedValueException('alpr: the answer is not a JSON object or list');
+        }
+        return $decoded;
     }
 
     /** Throws unless the base URL is https, or http to localhost, 127.0.0.0/8 or ::1. */
@@ -103,34 +98,30 @@ final class Alpr implements Requester
         }
     }
 
-    /** A random UUID (version 4). */
-    private static function uuid(): string
-    {
-        $bytes = random_bytes(16);
-        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
-        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
-    }
-
     /**
-     * The curl extension's HTTP.
+     * The curl extension's HTTP. Redirects are never followed.
      *
      * @param array<string, string> $headers
      * @return array{0: int, 1: array<string, string>, 2: string}
      */
     public static function curlTransport(string $method, string $url, array $headers, ?string $body, float $timeout): array
     {
-        $lines = [];
+        // "Expect:" keeps curl from waiting for a 100 Continue before it sends a large photo.
+        $lines = ['Expect:'];
         foreach ($headers as $name => $value) {
             $lines[] = "{$name}: {$value}";
         }
         $responseHeaders = [];
         $curl = curl_init($url);
+        if ($curl === false) {
+            throw new \RuntimeException('alpr: curl could not start');
+        }
         curl_setopt_array($curl, [
             CURLOPT_CUSTOMREQUEST => $method !== '' ? $method : 'GET',
             CURLOPT_HTTPHEADER => $lines,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT_MS => (int) ($timeout * 1000),
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_TIMEOUT_MS => max(1, (int) ($timeout * 1000)),
             CURLOPT_HEADERFUNCTION => static function ($curl, string $line) use (&$responseHeaders): int {
                 $parts = explode(':', $line, 2);
                 if (count($parts) === 2) {

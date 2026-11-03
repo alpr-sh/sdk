@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace Alpr\Services;
 
+use Alpr\Form;
 use Alpr\Models;
 use Alpr\Page;
 use Alpr\Requester;
@@ -22,24 +23,52 @@ final class {{pascal .Service.Name}}Service
     /**
      * {{.Summary}}. One page; {{camel .Name}}Iter() walks every page.
      *
-     * @param array{page?: int, limit?: int{{range .Query}}, {{.Name}}?: string{{end}}} $params
+     * @param array{ {{- .Cursor}}?: string|null{{range .Query}}, {{.Name}}?: string{{end}}} $params {{.Cursor}} is the cursor the previous page answered as next; none asks for the newest page
      * @return Page<Models\{{.Item}}>
      */
     public function {{camel .Name}}({{range .PathParams}}string ${{phpName .}}, {{end}}array $params = [], ?string $apiKey = null): Page
     {
-        $data = $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}, query: $params, apiKey: $apiKey);
-        return Page::fromArray($data, Models\{{.Item}}::fromArray(...));
+        $data = $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}, query: [
+            {{quote .Cursor}} => $params[{{quote .Cursor}}] ?? null,
+{{- range .Query}}
+            {{quote .Name}} => $params[{{quote .Name}}] ?? null,
+{{- end}}
+        ], apiKey: $apiKey);
+        return Page::fromArray($data, Models\{{.Item}}::fromArray(...), {{quote .Next}});
     }
 
     /**
-     * Walks every page of {{.OperationID}}, item by item.
+     * Walks every page of {{.OperationID}}, item by item, from the cursor in $params (the newest page when none)
+     * until the last one. A cursor that does not move ends the walk, and so does the first error, which is thrown.
      *
-     * @param array{page?: int, limit?: int{{range .Query}}, {{.Name}}?: string{{end}}} $params
+     * @param array{ {{- .Cursor}}?: string|null{{range .Query}}, {{.Name}}?: string{{end}}} $params
      * @return \Generator<int, Models\{{.Item}}>
      */
     public function {{camel .Name}}Iter({{range .PathParams}}string ${{phpName .}}, {{end}}array $params = [], ?string $apiKey = null): \Generator
     {
-        return Page::iterate(fn (int $page): Page => $this->{{camel .Name}}({{range .PathParams}}${{phpName .}}, {{end}}['page' => $page] + $params, $apiKey), $params['page'] ?? 1);
+        return Page::iterate(
+            fn (?string $cursor): Page => $this->{{camel .Name}}({{range .PathParams}}${{phpName .}}, {{end}}[{{quote .Cursor}} => $cursor] + $params, $apiKey),
+            $params[{{quote .Cursor}}] ?? null,
+        );
+    }
+{{- else if .List}}
+
+    /**
+     * {{.Summary}}.
+     *
+     * @return list<Models\{{.Item}}>
+     */
+    public function {{camel .Name}}({{range .PathParams}}string ${{phpName .}}, {{end}}?string $apiKey = null): array
+    {
+        $data = $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}, apiKey: $apiKey);
+        $items = [];
+        $listed = $data['data'] ?? [];
+        foreach (is_array($listed) ? $listed : [] as $each) {
+            if (is_array($each)) {
+                $items[] = Models\{{.Item}}::fromArray($each);
+            }
+        }
+        return $items;
     }
 {{- else if .NoContent}}
 
@@ -50,9 +79,10 @@ final class {{pascal .Service.Name}}Service
      * @param {{phpShape .Body}} $params
 {{- end}}
      */
-    public function {{camel .Name}}({{range .PathParams}}string ${{phpName .}}, {{end}}{{if .Body}}array $params, {{end}}{{if .Write}}?string $idempotencyKey = null, {{end}}?string $apiKey = null): void
+    public function {{camel .Name}}({{range .PathParams}}string ${{phpName .}}, {{end}}{{if .Body}}array $params, {{end}}?string $apiKey = null): void
     {
-        $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, body: $params{{end}}{{if .Write}}, idempotencyKey: $idempotencyKey{{end}}, apiKey: $apiKey);
+{{- template "form" .}}
+        $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, form: $form{{end}}, apiKey: $apiKey);
     }
 {{- else}}
 
@@ -60,15 +90,30 @@ final class {{pascal .Service.Name}}Service
      * {{.Summary}}.
 {{- if .Body}}
      *
-     * @param {{phpShape .Body}} $params
+     * @param {{phpShape .Body}} $params {{if .Multipart}}image is the photo's bytes (JPEG or PNG), as file_get_contents reads them{{end}}
 {{- end}}
      */
-    public function {{camel .Name}}({{range .PathParams}}string ${{phpName .}}, {{end}}{{if .Body}}array $params, {{end}}{{if .Write}}?string $idempotencyKey = null, {{end}}?string $apiKey = null): Models\{{.Response}}
+    public function {{camel .Name}}({{range .PathParams}}string ${{phpName .}}, {{end}}{{if .Body}}array $params, {{end}}?string $apiKey = null): Models\{{.Response}}
     {
-        $data = $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, body: $params{{end}}{{if .Write}}, idempotencyKey: $idempotencyKey{{end}}, apiKey: $apiKey);
+{{- template "form" .}}
+        $data = $this->client->request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, form: $form{{end}}, apiKey: $apiKey);
         return Models\{{.Response}}::fromArray($data);
     }
 {{- end}}
 {{- end}}
 }
-{{define "path"}}{{range $i, $part := pathParts .Path}}{{if $i}} . {{end}}{{if $part.Param}}rawurlencode(${{phpName $part.Param}}){{else}}'{{$part.Literal}}'{{end}}{{end}}{{end}}
+{{define "path"}}{{range $i, $part := pathParts .Path}}{{if $i}} . {{end}}{{if $part.Param}}rawurlencode(${{phpName $part.Param}}){{else}}{{quote $part.Literal}}{{end}}{{end}}{{end}}
+{{- define "form"}}
+{{- if .Body}}
+        $form = new Form();
+{{- range .Body.Fields}}
+{{- if or .Required }}
+        $form->{{if eq .Type.Kind "binary"}}file{{else}}text{{end}}({{quote .Wire}}, $params[{{quote .Wire}}]);
+{{- else}}
+        if (isset($params[{{quote .Wire}}])) {
+            $form->{{if eq .Type.Kind "binary"}}file{{else}}text{{end}}({{quote .Wire}}, $params[{{quote .Wire}}]);
+        }
+{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}

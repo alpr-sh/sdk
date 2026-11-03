@@ -6,21 +6,31 @@ declare(strict_types=1);
 
 namespace Alpr;
 
-/** Verifying the webhooks Alpr.sh sends, as Standard Webhooks signs them. */
+/** Verifying the webhooks Alpr.sh sends. */
 final class Webhook
 {
     /** How far from now, in seconds, a webhook's timestamp may be. */
     public const TOLERANCE_SECONDS = 300;
 
+    /** How many signatures a request may list: one for the secret in use and one for each secret still signing during a rotation. */
+    private const MAX_SIGNATURES = 6;
+
     /**
-     * Checks a webhook Alpr.sh sent and answers its event. The signature is an
-     * HMAC-SHA256 of "{webhook-id}.{webhook-timestamp}.{body}" under the key
-     * the endpoint's whsec_ secret encodes, one of the signatures in the
-     * webhook-signature header, which carries more than one while a secret is
-     * rotated. Pass the body exactly as it arrived
-     * (file_get_contents('php://input')), before decoding it.
+     * Checks a webhook Alpr.sh sent and answers its event. Alpr.sh signs the
+     * headers X-Alprsh-Timestamp and X-Alprsh-Delivery-Id and the body:
+     * X-Alprsh-Signature carries "sha256=" and the hex HMAC-SHA256 of
+     * "{timestamp}.{delivery-id}.{body}" under the endpoint's secret (the
+     * whole whsec_… text, as it is), and more than one signature while a
+     * secret is rotated: one matching is enough. Pass the body exactly as it
+     * arrived (file_get_contents('php://input')), before decoding it, and
+     * deduplicate deliveries by the X-Alprsh-Delivery-Id header (the body's id
+     * is the id of the reading or alert, not of the delivery).
      *
-     * @param array<string, string|list<string>> $headers
+     * @param array<string, string|list<string>> $headers names are case-insensitive; a repeated header may be a list
+     * @param int|null $now the clock in unix seconds, for tests
+     * @throws WebhookVerificationException when the request is not signed by the secret, or not recently
+     * @throws \InvalidArgumentException when the secret is empty
+     * @throws \UnexpectedValueException when the verified body is not an event
      */
     public static function verify(string $secret, array $headers, string $body, ?int $now = null): WebhookEvent
     {
@@ -32,62 +42,81 @@ final class Webhook
      * Checks a webhook's signature as verify() does, without reading its body.
      *
      * @param array<string, string|list<string>> $headers
+     * @param int|null $now the clock in unix seconds, for tests
+     * @throws WebhookVerificationException
+     * @throws \InvalidArgumentException when the secret is empty
      */
     public static function verifySignature(string $secret, array $headers, string $body, ?int $now = null): void
     {
-        $encodedKey = str_starts_with($secret, 'whsec_') ? substr($secret, 6) : $secret;
-        $key = base64_decode($encodedKey, true);
-        if ($key === false || $key === '') {
-            throw new \InvalidArgumentException('alpr: the webhook secret is whsec_ and a base64 key');
+        if ($secret === '') {
+            throw new \InvalidArgumentException('alpr: the webhook secret is empty');
         }
-        $id = self::header($headers, 'webhook-id');
-        $stamp = self::header($headers, 'webhook-timestamp');
-        if ($id === '' || !ctype_digit($stamp) || abs(($now ?? time()) - (int) $stamp) > self::TOLERANCE_SECONDS) {
+        $id = self::header($headers, 'x-alprsh-delivery-id', ',');
+        $stamp = self::header($headers, 'x-alprsh-timestamp', ',');
+        // Only ASCII digits: no sign, no space, no other script's numerals.
+        if ($id === '' || preg_match('/\A[0-9]+\z/', $stamp) !== 1 || abs(($now ?? time()) - (int) $stamp) > self::TOLERANCE_SECONDS) {
             throw new WebhookVerificationException();
         }
-        $expected = hash_hmac('sha256', "{$id}.{$stamp}.{$body}", $key, true);
-        foreach (preg_split('/\s+/', self::header($headers, 'webhook-signature'), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $signature) {
-            [$version, $encoded] = array_pad(explode(',', $signature, 2), 2, '');
-            $decoded = base64_decode($encoded, true);
-            if ($version === 'v1' && $decoded !== false && hash_equals($expected, $decoded)) {
-                return;
-            }
+        $listed = explode(',', self::header($headers, 'x-alprsh-signature', ','));
+        if (count($listed) > self::MAX_SIGNATURES) {
+            throw new WebhookVerificationException();
         }
-        throw new WebhookVerificationException();
+        $signatures = [];
+        foreach ($listed as $signature) {
+            // One malformed signature refuses the request.
+            if (preg_match('/\Asha256=([0-9a-fA-F]{64})\z/', trim($signature), $found) !== 1) {
+                throw new WebhookVerificationException();
+            }
+            $signatures[] = (string) hex2bin($found[1]);
+        }
+        $expected = hash_hmac('sha256', "{$stamp}.{$id}.{$body}", $secret, true);
+        $matched = false;
+        foreach ($signatures as $signature) {
+            // Every listed signature is compared, in constant time.
+            $matched = hash_equals($expected, $signature) || $matched;
+        }
+        if (!$matched) {
+            throw new WebhookVerificationException();
+        }
     }
 
-    /** A verified body as the event its type names. */
+    /** A verified body as the event its name says. */
     private static function event(string $body): WebhookEvent
     {
-        $event = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($event) || !is_string($event['type'] ?? null) || !is_string($event['id'] ?? null) || !is_string($event['timestamp'] ?? null)) {
+        try {
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $error) {
+            throw new \UnexpectedValueException('alpr: the webhook body is not an event: ' . $error->getMessage(), 0, $error);
+        }
+        if (!is_array($data) || !is_string($data['event'] ?? null) || $data['event'] === '') {
             throw new \UnexpectedValueException('alpr: the webhook body is not an event');
         }
         /** @var array<string, mixed> $data */
-        $data = is_array($event['data'] ?? null) ? $event['data'] : [];
-        [$id, $type, $timestamp] = [$event['id'], $event['type'], $event['timestamp']];
+        $event = $data['event'];
         return match (true) {
 {{- range .Webhooks}}
-{{- if eq .Data.Kind "model"}}
-            in_array($type, {{.Name}}WebhookEvent::TYPES, true) => new {{.Name}}WebhookEvent($id, $type, $timestamp, Models\{{.Data.Model}}::fromArray($data)),
-{{- else}}
-            in_array($type, {{.Name}}WebhookEvent::TYPES, true) => new {{.Name}}WebhookEvent($id, $type, $timestamp, array_map(static fn (mixed $value): string => is_scalar($value) ? (string) $value : '', $data)),
+            in_array($event, {{.Name}}WebhookEvent::EVENTS, true) => {{.Name}}WebhookEvent::fromArray($data),
 {{- end}}
-{{- end}}
-            default => new UnknownWebhookEvent($id, $type, $timestamp, $data),
+            default => new UnknownWebhookEvent($event, is_string($data['id'] ?? null) ? $data['id'] : '', $data, $body),
         };
     }
 
     /**
+     * The value of a header, whatever the case of its name; the values of a
+     * repeated header are joined with $glue.
+     *
      * @param array<string, string|list<string>> $headers
      */
-    private static function header(array $headers, string $name): string
+    private static function header(array $headers, string $name, string $glue): string
     {
+        $values = [];
         foreach ($headers as $key => $value) {
             if (strtolower((string) $key) === $name) {
-                return is_array($value) ? implode(' ', $value) : $value;
+                foreach (is_array($value) ? $value : [$value] as $each) {
+                    $values[] = (string) $each;
+                }
             }
         }
-        return '';
+        return implode($glue, $values);
     }
 }
