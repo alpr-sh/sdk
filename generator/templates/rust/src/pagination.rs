@@ -3,26 +3,27 @@ use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
-use crate::models::Pagination;
 
-/// One page of a list, and where the list ends.
+/// One page of a list, and the cursor of the next one.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Page<T> {
     /// The page's items.
-    #[serde(default = "Vec::new")]
+    #[serde(rename = "data", default = "Vec::new")]
     pub items: Vec<T>,
-    /// How many items and pages the list has.
-    pub pagination: Pagination,
+    /// The cursor to ask the next page with; `None` on the last page.
+    #[serde(default)]
+    pub next: Option<String>,
 }
 
-/// Walks pages from `first` (1 when zero) until the last one, as Polar's SDKs
-/// do, yielding every item. A page is fetched only when the items before it
-/// were taken, and an error ends the walk.
+/// Walks pages from the cursor `first` (the newest page when `None`) until
+/// the last one, yielding every item. A page is fetched only when the items
+/// before it were taken, a cursor that does not move ends the walk, and an
+/// error ends it too.
 pub(crate) fn iterate<'a, T: 'a>(
-    first: u32,
-    mut fetch: impl FnMut(u32) -> Result<Page<T>, Error> + 'a,
+    first: Option<String>,
+    mut fetch: impl FnMut(Option<&str>) -> Result<Page<T>, Error> + 'a,
 ) -> impl Iterator<Item = Result<T, Error>> + 'a {
-    let mut page = first.max(1);
+    let mut cursor = first.filter(|cursor| !cursor.is_empty());
     let mut items = VecDeque::new();
     let mut done = false;
     std::iter::from_fn(move || loop {
@@ -32,14 +33,14 @@ pub(crate) fn iterate<'a, T: 'a>(
         if done {
             return None;
         }
-        match fetch(page) {
+        match fetch(cursor.as_deref()) {
             Ok(result) => {
-                if i64::from(page) >= result.pagination.max_page {
-                    done = true;
-                } else {
-                    page += 1;
-                }
                 items.extend(result.items);
+                // A cursor that does not move would ask for the same page forever.
+                match result.next.filter(|next| !next.is_empty()) {
+                    Some(next) if cursor.as_deref() != Some(next.as_str()) => cursor = Some(next),
+                    _ => done = true,
+                }
             }
             Err(error) => {
                 done = true;

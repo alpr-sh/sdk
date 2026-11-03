@@ -3,13 +3,13 @@ name = "alpr-sdk"
 version = "{{.Version}}"
 edition = "2021"
 rust-version = "1.88"
-description = "Alpr.sh's SDK for Rust: products, customers, checkouts, payments, subscriptions and webhooks."
+description = "Alpr.sh's SDK for Rust: license plate recognition from photos, cameras, readings and webhooks."
 license = "MIT"
 homepage = "https://alpr.sh"
 repository = "https://github.com/alpr-sh/sdk"
 documentation = "https://docs.rs/alpr-sdk"
 readme = "README.md"
-keywords = ["alpr", "payments", "pix", "api", "webhooks"]
+keywords = ["alpr", "license-plate", "ocr", "api", "webhooks"]
 categories = ["api-bindings", "web-programming::http-client"]
 
 [lib]
@@ -17,7 +17,6 @@ categories = ["api-bindings", "web-programming::http-client"]
 name = "alpr"
 
 [dependencies]
-base64 = "0.23"
 hmac = "0.13"
 serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.100"

@@ -3,10 +3,8 @@
 use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 use hmac::{Hmac, KeyInit, Mac};
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
 use sha2::Sha256;
 
 use crate::models::{ {{- range $i, $m := webhookModels .Webhooks}}{{if $i}}, {{end}}{{$m}}{{end -}} };
@@ -14,31 +12,33 @@ use crate::models::{ {{- range $i, $m := webhookModels .Webhooks}}{{if $i}}, {{e
 /// How far from now a webhook's timestamp may be.
 pub const WEBHOOK_TOLERANCE: Duration = Duration::from_secs(300);
 
-/// What every webhook carries: the message's id, the same as the webhook-id
-/// header; the event's type; when it happened, in RFC 3339; and its data.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct WebhookMessage<T> {
-    /// The message's id, the same on every delivery of it.
-    pub id: String,
-    /// What happened: order.paid…
-    #[serde(rename = "type")]
-    pub type_: String,
-    /// When it happened.
-    pub timestamp: String,
-    /// What the event carries.
-    pub data: T,
-}
+/// How many signatures a request may list: one for the secret in use and one
+/// for each secret still signing during a rotation.
+const MAX_WEBHOOK_SIGNATURES: usize = 6;
 {{range .Webhooks}}
-/// The events that carry {{if eq .Data.Kind "model"}}{{article .Data.Model}}{{else}}the event's identifiers{{end}}: {{range $i, $t := .Types}}{{if $i}}, {{end}}`{{$t}}`{{end}}.
-pub type {{.Name}}WebhookEvent = WebhookMessage<{{rsData .Data}}>;
+/// The payload of {{range $i, $t := .Types}}{{if $i}}, {{end}}`{{$t}}`{{end}}. The
+/// fields are the body's own, flat: there is no wrapper around them.
+pub type {{.Name}}WebhookEvent = {{.Model}};
 {{end}}
-/// An event of a type this SDK does not know yet, its data as it was sent.
-pub type UnknownWebhookEvent = WebhookMessage<serde_json::Value>;
+/// An event of a name this SDK does not know yet, kept as it was sent.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct UnknownWebhookEvent {
+    /// The event's name.
+    pub event: String,
+    /// The `id` the body carries, or empty when it has none.
+    pub id: String,
+    /// The whole body, decoded.
+    pub body: serde_json::Value,
+}
 
-/// A webhook Alpr.sh sent, verified: one variant a kind of data, the event's
-/// type telling apart what happened, or [`WebhookEvent::Unknown`] for a type
-/// this SDK does not know yet.
+/// A webhook Alpr.sh sent, verified: one variant a kind of payload, told
+/// apart by [`WebhookEvent::event_name`] where a payload carries several
+/// events, or [`WebhookEvent::Unknown`] for an event this SDK does not know
+/// yet.
+///
+/// The body's `id` is the id of the reading or alert, not of the delivery:
+/// deduplicate deliveries by the `X-Alprsh-Delivery-Id` header.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum WebhookEvent {
@@ -46,12 +46,23 @@ pub enum WebhookEvent {
     /// {{range $i, $t := .Types}}{{if $i}}, {{end}}`{{$t}}`{{end}}.
     {{.Name}}({{.Name}}WebhookEvent),
 {{- end}}
-    /// A type this SDK does not know yet.
+    /// An event this SDK does not know yet.
     Unknown(UnknownWebhookEvent),
 }
 
 impl WebhookEvent {
-    /// The message's id, the same as the webhook-id header.
+    /// The event's name: `recognition.created`.
+    pub fn event_name(&self) -> &str {
+        match self {
+{{- range .Webhooks}}
+            WebhookEvent::{{.Name}}(event) => event.event.as_str(),
+{{- end}}
+            WebhookEvent::Unknown(event) => &event.event,
+        }
+    }
+
+    /// The `id` the body carries: the id of the reading or alert, not of the
+    /// delivery.
     pub fn id(&self) -> &str {
         match self {
 {{- range .Webhooks}}
@@ -61,36 +72,37 @@ impl WebhookEvent {
         }
     }
 
-    /// What happened: order.paid…
-    pub fn type_(&self) -> &str {
-        match self {
-{{- range .Webhooks}}
-            WebhookEvent::{{.Name}}(event) => &event.type_,
-{{- end}}
-            WebhookEvent::Unknown(event) => &event.type_,
-        }
-    }
-
-    /// When it happened.
-    pub fn timestamp(&self) -> &str {
-        match self {
-{{- range .Webhooks}}
-            WebhookEvent::{{.Name}}(event) => &event.timestamp,
-{{- end}}
-            WebhookEvent::Unknown(event) => &event.timestamp,
-        }
-    }
-
-    /// Reads a verified body into the event its type names.
+    /// Reads a verified body into the event its name says. The body must be a
+    /// JSON object with a string `event`.
     fn parse(body: &[u8]) -> Result<Self, serde_json::Error> {
-        let message: UnknownWebhookEvent = serde_json::from_slice(body)?;
-        match message.type_.as_str() {
+        let value: serde_json::Value = serde_json::from_slice(body)?;
+        let Some(name) = value
+            .get("event")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+        else {
+            return Err(serde_json::Error::custom(
+                "the body is not an event: it has no string `event`",
+            ));
+        };
+        match name.as_str() {
 {{- range .Webhooks}}
             {{range $i, $t := .Types}}{{if $i}} | {{end}}{{quote $t}}{{end}} => {
-                serde_json::from_slice(body).map(WebhookEvent::{{.Name}})
+                serde_json::from_value(value).map(WebhookEvent::{{.Name}})
             }
 {{- end}}
-            _ => Ok(WebhookEvent::Unknown(message)),
+            _ => {
+                let id = value
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                Ok(WebhookEvent::Unknown(UnknownWebhookEvent {
+                    event: name,
+                    id,
+                    body: value,
+                }))
+            }
         }
     }
 }
@@ -99,8 +111,8 @@ impl WebhookEvent {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum WebhookError {
-    /// The secret is not `whsec_` and a base64 key.
-    InvalidSecret,
+    /// The secret is empty: a configuration error, not a bad request.
+    EmptySecret,
     /// Alpr.sh did not sign the request, or signed it too long ago.
     InvalidSignature,
     /// The body is signed but is not an event.
@@ -110,9 +122,7 @@ pub enum WebhookError {
 impl fmt::Display for WebhookError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WebhookError::InvalidSecret => {
-                f.write_str("alpr: the webhook secret is whsec_ and a base64 key")
-            }
+            WebhookError::EmptySecret => f.write_str("alpr: the webhook secret is empty"),
             WebhookError::InvalidSignature => {
                 f.write_str("alpr: webhook signature does not verify")
             }
@@ -130,15 +140,17 @@ impl std::error::Error for WebhookError {
     }
 }
 
-/// Checks a webhook Alpr.sh sent, as Standard Webhooks signs it — an
-/// HMAC-SHA256 of `{webhook-id}.{webhook-timestamp}.{body}` under the key the
-/// endpoint's `whsec_` secret encodes, one of the signatures in the
-/// webhook-signature header, which carries more than one while a secret is
-/// rotated — and answers its event. Pass the body exactly as it arrived,
-/// before parsing it.
+/// Checks a webhook Alpr.sh sent and answers its event. Alpr.sh signs the
+/// `X-Alprsh-Timestamp` and `X-Alprsh-Delivery-Id` headers and the body:
+/// `X-Alprsh-Signature` carries `sha256=` and the hex HMAC-SHA256 of
+/// `{timestamp}.{delivery-id}.{body}` under the endpoint's secret (the whole
+/// `whsec_…` text, as it is), and more than one signature while a secret is
+/// rotated: one matching is enough. Pass the body exactly as it arrived,
+/// before parsing it, and deduplicate by the `X-Alprsh-Delivery-Id` header.
 ///
 /// `headers` are the request's, their names in any case: a `HashMap`, a list
-/// of pairs or an `http::HeaderMap` by reference.
+/// of pairs or an `http::HeaderMap` by reference. A signature header sent as
+/// several lines is read as one comma-separated value.
 pub fn verify_webhook<I, K, V>(
     secret: &str,
     headers: I,
@@ -195,23 +207,26 @@ where
     K: AsRef<str>,
     V: AsRef<[u8]>,
 {
-    let key = STANDARD
-        .decode(secret.strip_prefix("whsec_").unwrap_or(secret))
-        .ok()
-        .filter(|key| !key.is_empty())
-        .ok_or(WebhookError::InvalidSecret)?;
-    let (mut id, mut stamp, mut signatures) = (None, None, None);
+    if secret.is_empty() {
+        return Err(WebhookError::EmptySecret);
+    }
+    let (mut id, mut stamp) = (None::<String>, None::<String>);
+    let mut signatures: Vec<String> = Vec::new();
     for (name, value) in headers {
-        let Ok(value) = std::str::from_utf8(value.as_ref()) else {
-            continue;
-        };
         let name = name.as_ref();
-        if name.eq_ignore_ascii_case("webhook-id") {
-            id = id.or(Some(value.to_owned()));
-        } else if name.eq_ignore_ascii_case("webhook-timestamp") {
-            stamp = stamp.or(Some(value.to_owned()));
-        } else if name.eq_ignore_ascii_case("webhook-signature") {
-            signatures = signatures.or(Some(value.to_owned()));
+        let wanted = ["x-alprsh-delivery-id", "x-alprsh-timestamp", "x-alprsh-signature"];
+        if !wanted.iter().any(|wanted| name.eq_ignore_ascii_case(wanted)) {
+            continue;
+        }
+        let Ok(value) = std::str::from_utf8(value.as_ref()) else {
+            return Err(WebhookError::InvalidSignature);
+        };
+        if name.eq_ignore_ascii_case("x-alprsh-delivery-id") {
+            id = id.or_else(|| Some(value.to_owned()));
+        } else if name.eq_ignore_ascii_case("x-alprsh-timestamp") {
+            stamp = stamp.or_else(|| Some(value.to_owned()));
+        } else {
+            signatures.push(value.to_owned());
         }
     }
     let id = id
@@ -230,20 +245,53 @@ where
     if now.abs_diff(seconds) > WEBHOOK_TOLERANCE.as_secs() {
         return Err(WebhookError::InvalidSignature);
     }
-    let mut mac = Hmac::<Sha256>::new_from_slice(&key).map_err(|_| WebhookError::InvalidSecret)?;
-    mac.update(format!("{id}.{stamp}.").as_bytes());
-    mac.update(body);
-    for signature in signatures.unwrap_or_default().split_whitespace() {
-        let Some(("v1", encoded)) = signature.split_once(',') else {
-            continue;
-        };
-        let Ok(decoded) = STANDARD.decode(encoded) else {
-            continue;
-        };
-        // verify_slice compares in constant time.
-        if mac.clone().verify_slice(&decoded).is_ok() {
-            return Ok(());
-        }
+    let joined = signatures.join(",");
+    let listed: Vec<&str> = joined.split(',').collect();
+    if listed.len() > MAX_WEBHOOK_SIGNATURES {
+        return Err(WebhookError::InvalidSignature);
     }
-    Err(WebhookError::InvalidSignature)
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .map_err(|_| WebhookError::EmptySecret)?;
+    mac.update(format!("{stamp}.{id}.").as_bytes());
+    mac.update(body);
+    let mut matched = false;
+    for signature in listed {
+        // One malformed signature refuses the request, as Alpr.sh's own
+        // verifier does.
+        let decoded = signature
+            .trim()
+            .strip_prefix("sha256=")
+            .and_then(decode_hex)
+            .ok_or(WebhookError::InvalidSignature)?;
+        // verify_slice compares in constant time, and every listed signature
+        // is compared.
+        matched |= mac.clone().verify_slice(&decoded).is_ok();
+    }
+    if matched {
+        Ok(())
+    } else {
+        Err(WebhookError::InvalidSignature)
+    }
+}
+
+/// Reads exactly 64 hex digits, either case, as the 32 bytes they write.
+fn decode_hex(text: &str) -> Option<[u8; 32]> {
+    let digits = text.as_bytes();
+    if digits.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (index, byte) in out.iter_mut().enumerate() {
+        *byte = (nibble(digits[2 * index])? << 4) | nibble(digits[2 * index + 1])?;
+    }
+    Some(out)
+}
+
+fn nibble(digit: u8) -> Option<u8> {
+    match digit {
+        b'0'..=b'9' => Some(digit - b'0'),
+        b'a'..=b'f' => Some(digit - b'a' + 10),
+        b'A'..=b'F' => Some(digit - b'A' + 10),
+        _ => None,
+    }
 }
