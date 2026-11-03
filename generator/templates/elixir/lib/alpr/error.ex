@@ -2,11 +2,13 @@ defmodule Alpr.Error do
   @moduledoc """
   A request the API refused.
 
-  `code` is the API's: `invalid_credential`, `forbidden`, `not_found`,
-  `invalid_request`, `conflict`, `idempotency_conflict`, `body_too_large` or
-  `unavailable`. `message` is the API's explanation, `fields` says, for
-  `invalid_request`, what is wrong with each field, and `retry_after` is how
-  many seconds to wait on a 429.
+  `code` is the API's: `invalid_api_key`, `insufficient_scope`,
+  `insufficient_credits`, `missing image`, `invalid_image`, `invalid_option`,
+  `image_too_large`, `no_plate`, `not_found`, `image_unavailable`,
+  `rate_limited`, `engine_unavailable` or `storage_unavailable`. `message` is
+  the API's explanation, `fields` says, when the API names them, what is wrong
+  with each field (it is empty otherwise), and `retry_after` is how many
+  seconds to wait on a 429.
 
   A request that never got an answer has no `status` and the code `transport`.
   """
@@ -42,13 +44,16 @@ defmodule Alpr.Error do
       status: status,
       code: string(data["error"]),
       message: string(data["message"]),
-      fields: data["fields"] || %{},
+      fields: fields(data["fields"]),
       retry_after: retry_after(headers)
     }
   end
 
   defp string(value) when is_binary(value), do: value
   defp string(_value), do: ""
+
+  defp fields(%{} = fields), do: fields
+  defp fields(_other), do: %{}
 
   defp retry_after(headers) do
     with {_name, value} <- List.keyfind(headers, "retry-after", 0),
