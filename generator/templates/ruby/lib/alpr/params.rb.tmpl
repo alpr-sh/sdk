@@ -20,13 +20,20 @@ module Alpr
       freeze
     end
 
-    # The body as the API reads it.
-    def to_wire
-      wire = {}
+    # The multipart/form-data body as the API reads it: the photo as a file,
+    # the rest as text fields, an optional one left unset left out.
+    def to_form
+      form = Form.new
 {{- range .Fields}}
-      wire[{{quote .Wire}}] = {{rbWrite .}}{{if not .Required}} unless @{{rbName .Wire}}.nil?{{end}}
+{{- if eq .Type.Kind "binary"}}
+      form.file({{quote .Wire}}, @{{rbName .Wire}})
+{{- else if .Required}}
+      form.text({{quote .Wire}}, @{{rbName .Wire}})
+{{- else}}
+      form.text({{quote .Wire}}, @{{rbName .Wire}}) unless @{{rbName .Wire}}.nil?
 {{- end}}
-      wire
+{{- end}}
+      form
     end
   end
 {{- end}}

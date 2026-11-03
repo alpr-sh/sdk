@@ -5,13 +5,13 @@
 require "ipaddr"
 require "json"
 require "net/http"
-require "securerandom"
 require "uri"
 
 module Alpr
   # The standard library's HTTP, so the SDK depends on nothing. A transport is
   # anything that answers +call(method, url, headers, body, timeout)+ with
-  # +[status, headers in lower case, body]+.
+  # +[status, headers in lower case, body]+. Redirects are never followed: the
+  # API key must not travel, and a 3xx is an Alpr::Error.
   class NetHTTPTransport
     def call(method, url, headers, body, timeout)
       uri = URI(url)
@@ -23,14 +23,13 @@ module Alpr
     end
   end
 
-  # Alpr.sh's API with one organization's API key.
+  # Alpr.sh's API with one workspace's API key.
   #
-  # The key says the organization and the environment: +prk_test_…+ is the
-  # test environment, +prk_live_…+ the live one.
+  # The key (+alpr_live_…+) says the workspace and the scopes the calls may use.
   #
   #   alpr = Alpr::Client.new(ENV.fetch("ALPR_API_KEY"))
-  #   product = alpr.products.create({ name: "Curso" })
-  #   alpr.products.list_iter { |product| puts product.name }
+  #   result = alpr.photos.recognize({ image: File.binread("photo.jpg") })
+  #   alpr.recognitions.list_iter { |reading| puts reading.plate }
   class Client
 {{- range .Services}}
     # @return [{{pascal .Name}}Service]
@@ -50,9 +49,10 @@ module Alpr
 {{- end}}
     end
 
-    # Calls the API and answers what it wrapped in +data+; a refusal raises
-    # Alpr::Error.
-    def request(method, path, query: nil, body: nil, idempotency_key: nil, api_key: nil)
+    # Calls the API and answers the JSON it sent, parsed (nil for a 204); a
+    # refusal raises Alpr::Error. +form+ is the multipart body of a call that
+    # sends a photo, +api_key+ another key for this call.
+    def request(method, path, query: nil, form: nil, api_key: nil)
       url = @base_url + path
       values = (query || {}).reject { |_, value| value.nil? || value == "" }
       url += "?#{URI.encode_www_form(values)}" unless values.empty?
@@ -62,19 +62,16 @@ module Alpr
         "User-Agent" => "alpr-ruby/#{VERSION}"
       }
       data = nil
-      unless body.nil?
-        data = JSON.generate(body)
-        headers["Content-Type"] = "application/json"
+      unless form.nil?
+        data = form.body
+        headers["Content-Type"] = form.content_type
       end
-      # A POST is sent with a key of its own, one a call, unless the caller gave one.
-      idempotency_key = SecureRandom.uuid if (idempotency_key.nil? || idempotency_key.empty?) && method == "POST"
-      headers["Idempotency-Key"] = idempotency_key if idempotency_key && !idempotency_key.empty?
       status, response_headers, raw = @transport.call(method, url, headers, data, @timeout)
       raise Error.from_response(status, response_headers, raw) if status >= 300
 
-      return nil if status == 204
+      return nil if status == 204 || raw.to_s.empty?
 
-      JSON.parse(raw).fetch("data")
+      JSON.parse(raw.to_s.dup.force_encoding(Encoding::UTF_8))
     end
 
     private
