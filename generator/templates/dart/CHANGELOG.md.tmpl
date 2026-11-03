@@ -2,24 +2,10 @@
 
 Todos os SDKs da Alpr.sh saem com a mesma versão; as mudanças de cada uma estão também nas [releases de alpr-sh/sdk](https://github.com/alpr-sh/sdk/releases).
 
-## {{.Version}} (01/11/2026)
+## {{.Version}}
 
 Gerado a partir do contrato da API {{.APIVersion}}.
 
-- Os clientes recusam redirecionamentos, para que a chave da API nunca siga um; recusam um endereço base que não seja `https` (`http` só para `localhost`, `127.0.0.0/8` e `::1`), e todo POST sem `Idempotency-Key` sai com uma UUID v4 aleatória, uma por chamada. A verificação de webhooks só aceita um `webhook-timestamp` de dígitos ASCII. **Quem apontava o `baseUrl` para um endereço `http` que não seja local precisa passar a usar `https`.**
-- Contrato novo da API: `customers.getState` (assinaturas ativas e benefícios vigentes de um cliente, inclusive os feature flags), os modelos `CustomerState` e `CustomerStateBenefitGrant`, `benefitMetadata` e `properties` em `BenefitGrant`, `metadata`, `trialStart` e `trialEnd` em `Subscription`, e os modelos `WebhookBenefit` e `WebhookDiscount`. Os valores livres (`Map<String, Object?>`) são qualquer JSON. Os eventos `benefit.created`, `benefit.updated`, `discount.created`, `discount.updated`, `discount.deleted`, `product.created` e `product.updated` agora chegam como `BenefitWebhookEvent`, `DiscountWebhookEvent` e `ProductWebhookEvent`, com o objeto completo, e não mais como `IdentifiersWebhookEvent`. **Mudança incompatível para quem tratava esses tipos como `IdentifiersWebhookEvent`.**
-- A API pública passou de 21 para 61 operações. Recursos novos: `discounts`, `checkoutLinks` (links de checkout), `benefits` (com `listGrants`), `webhooks` (endpoints e entregas), `meters`, `events` e `disputes`. Operações novas em recursos antigos: `products.update` e `archive`, `customers.update`, `delete`, `getExternal` e `updateExternal` (por `external_id`), `checkouts.get` e `update`, `orders.get`, `getInvoice` e `getReceipt`, `refunds.list` e `subscriptions.update`. Toda lista nova tem o seu `…Iter`. As remoções (`DELETE`) respondem 204 e não devolvem nada: `Future<void>`.
-- **Mudanças incompatíveis:** `BenefitGrant.benefitType` passa a ser um valor enumerado (em Dart continua `String`, com as constantes de `BenefitGrant`; em Rust e Swift é um tipo próprio); `Checkout` e `BenefitGrant` ganham campos obrigatórios (`status`, `label`, `quantity`, `successUrl`, `cancelUrl`, `expiresAt` e `createdAt` no `Checkout`), o que só afeta quem constrói esses objetos à mão.
-
-## 0.2.0
-
-Gerado a partir do contrato da API 0.1.0.
-
-- Webhooks tipados: `verifyWebhook` responde um `WebhookEvent` selado, uma classe para cada dado que o evento carrega (`OrderWebhookEvent`, `SubscriptionWebhookEvent`, `CheckoutWebhookEvent`, `DisputeWebhookEvent`, `BenefitGrantWebhookEvent`, `IdentifiersWebhookEvent`…), e `UnknownWebhookEvent` para um tipo que esta versão ainda não conhece. Antes, `data` era um mapa de textos. **Mudança incompatível.**
-- `verifyWebhookSignature`, que só confere a assinatura; os testes conferem o vetor do próprio Standard Webhooks e a rotação do segredo (duas assinaturas no cabeçalho).
-- `customerSessions.create`: abre o portal do cliente já autenticado.
-- `Order` e `Payment` trazem o parcelamento: `installments`, `installmentInterestCents` e, no pagamento, `installmentAmountCents`.
-
-## 0.1.1
-
-- Primeira versão publicada: produtos, preços, clientes, checkouts, pedidos, pagamentos, cartões salvos, assinaturas e reembolsos, com paginação, `Idempotency-Key`, erros tipados e verificação dos webhooks.
+- Primeira versão: leitura de fotos (`photos.recognize`, `photos.detect` e `photos.ocr`, a foto como `Uint8List` em `multipart/form-data`), leituras (`recognitions.list` e `recognitions.listIter`, por cursor), câmeras (`cameras.list`) e o link da imagem de uma leitura (`detections.image`).
+- Erros tipados (`AlprException`, com `status`, `code`, `message`, `fields` e `retryAfter`), endereço base só `https` (`http` para `localhost`, `127.0.0.0/8` e `::1`) e nenhum redirecionamento seguido.
+- Verificação de webhooks (`verifyWebhook` e `verifyWebhookSignature`): assinatura `sha256=` com rotação de segredos, tolerância de 5 minutos e eventos tipados.

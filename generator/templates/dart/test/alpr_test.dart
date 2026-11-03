@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:alpr_sdk/alpr_sdk.dart';
+import 'package:alpr_sdk/src/upload.dart';
+import 'package:alpr_sdk/src/webhooks.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:alpr_sdk/alpr_sdk.dart';
 import 'package:test/test.dart';
 
 typedef Answer = http.Response Function(http.Request request);
+
+const key =
+    'alpr_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 (Alpr, List<http.Request>) client(Answer answer) {
   final seen = <http.Request>[];
@@ -14,11 +20,7 @@ typedef Answer = http.Response Function(http.Request request);
     seen.add(request);
     return answer(request);
   });
-  final alpr = Alpr(
-    'prk_test_key',
-    baseUrl: 'https://alpr.test/',
-    httpClient: fake,
-  );
+  final alpr = Alpr(key, baseUrl: 'https://alpr.test/', httpClient: fake);
   return (alpr, seen);
 }
 
@@ -32,68 +34,377 @@ http.Response json(
   headers: {'content-type': 'application/json', ...headers},
 );
 
-Map<String, Object?> product(String id) => {
-  'id': id,
-  'name': 'Curso',
-  'description': '',
-  'status': 'active',
-  'created_at': '2026-10-17T00:00:00Z',
+/// jpeg and png start with the bytes the API tells them by.
+final jpeg = Uint8List.fromList([
+  0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, //
+]);
+final png = Uint8List.fromList([
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, //
+  0x49, 0x48, 0x44, 0x52, //
+]);
+
+const recognized = {
+  'creditsRemaining': 41,
+  'imageHeight': 720,
+  'imageWidth': 1280,
+  'plates': [
+    {
+      'charConfs': '0.99,0.98,0.97,0.96,0.97,0.96,0.96',
+      'conf': 97.3,
+      'coordinateBottom': 361,
+      'coordinateLeft': 120,
+      'coordinateRight': 300,
+      'coordinateTop': 301,
+      'createdAt': '2026-10-22T12:00:00-03:00',
+      'plate': 'BRA2E19',
+      'plateType': 'mercosul',
+      'time': '2026-10-22T12:00:00-03:00',
+    },
+  ],
+  'processingTimeMs': 84,
 };
 
-// The webhook vectors every SDK checks: Standard Webhooks' own example, and
-// Alpr.sh events signed under two secrets, as while one is rotated.
-const referenceSecret = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw';
-const oldSecret = 'whsec_cGVyYXRhLXNkay1vbGQta2V5LTAxMjM0NTY3ODlhYmM=';
-const newSecret = 'whsec_cGVyYXRhLXNkay1uZXcta2V5LTAxMjM0NTY3ODlhYmM=';
-const orderPaid =
-    '{"id":"msg_2","type":"order.paid","timestamp":"2026-10-22T12:00:00Z",'
-    '"data":{"id":"ord_1","customer_id":"cus_1","product_id":"prod_1",'
-    '"price_id":"price_1","amount_cents":12000,"currency":"BRL",'
-    '"status":"succeeded","paid_at":"2026-10-22T12:00:00Z","installments":3,'
-    '"installment_interest_cents":360}}';
-const usageRecorded =
-    '{"id":"msg_3","type":"usage_event.recorded",'
-    '"timestamp":"2026-10-22T12:00:00Z","data":{"event_id":"ue_1",'
-    '"aggregate":"usage_event","aggregate_id":"ue_1","merchant_id":"mer_1",'
-    '"environment":"test"}}';
-const payoutSent =
-    '{"id":"msg_4","type":"payout.sent","timestamp":"2026-10-22T12:00:00Z",'
-    '"data":{"payout_id":"po_1","amount_cents":5000}}';
-const signedAt = 1792670400;
+/// One part of a multipart/form-data body.
+class Part {
+  Part(this.name, this.filename, this.contentType, this.data);
 
-Map<String, String> webhookHeaders(String id, int at, String signature) => {
-  'Webhook-Id': id,
-  'Webhook-Timestamp': '$at',
-  'Webhook-Signature': signature,
-};
+  final String name;
+  final String? filename;
+  final String? contentType;
+  final List<int> data;
+}
+
+/// The parts of a multipart/form-data body, read by hand.
+List<Part> parts(String contentType, List<int> body) {
+  final match = RegExp(
+    r'^multipart/form-data; boundary=(\S+)$',
+  ).firstMatch(contentType);
+  expect(match, isNotNull, reason: contentType);
+  final text = latin1.decode(body);
+  final pieces = text.split('--${match!.group(1)}');
+  expect(pieces.first, '');
+  expect(pieces.last, '--\r\n');
+  return [
+    for (final piece in pieces.sublist(1, pieces.length - 1))
+      () {
+        expect(piece, startsWith('\r\n'));
+        expect(piece, endsWith('\r\n'));
+        final inner = piece.substring(2, piece.length - 2);
+        final split = inner.indexOf('\r\n\r\n');
+        final headers = inner.substring(0, split).split('\r\n');
+        String? header(String name) {
+          for (final line in headers) {
+            if (line.toLowerCase().startsWith('${name.toLowerCase()}:')) {
+              return line.substring(name.length + 1).trim();
+            }
+          }
+          return null;
+        }
+
+        final disposition = header('Content-Disposition')!;
+        return Part(
+          RegExp(r'name="([^"]*)"').firstMatch(disposition)!.group(1)!,
+          RegExp(r'filename="([^"]*)"').firstMatch(disposition)?.group(1),
+          header('Content-Type'),
+          latin1.encode(inner.substring(split + 4)),
+        );
+      }(),
+  ];
+}
+
+Part part(List<Part> all, String name) => all.singleWhere(
+  (each) => each.name == name,
+  orElse: () => Part(name, null, null, const []),
+);
 
 void main() {
-  test('a call carries the key and unwraps the data', () async {
+  test('a call carries the key and no idempotency key', () async {
     final (alpr, seen) = client(
-      (_) => json(200, {'data': product('prod_1')}),
+      (_) => json(200, {
+        'data': [
+          {
+            'createdAt': '2026-10-01T09:00:00-03:00',
+            'enabled': true,
+            'id': 'cam_1',
+            'location': 'Portaria',
+            'name': 'Portão',
+            'protocol': 'rtsp',
+            'readingArea': null,
+          },
+          {
+            'createdAt': '2026-10-01T09:00:00-03:00',
+            'enabled': false,
+            'id': 'cam_2',
+            'location': '',
+            'name': 'Garagem',
+            'protocol': 'rtsp',
+            'readingArea': {
+              'box': {'height': 0.5, 'width': 0.5, 'x': 0.1, 'y': 0.2},
+              'points': [
+                [0.1, 0.2],
+                [0.6, 0.2],
+                [0.6, 0.7],
+              ],
+            },
+          },
+        ],
+      }),
     );
-    final got = await alpr.products.get('prod_1');
-    expect(got.id, 'prod_1');
-    expect(got.status, 'active');
-    expect(got.createdAt, '2026-10-17T00:00:00Z');
+    final cameras = await alpr.cameras.list();
     expect(seen.single.method, 'GET');
-    expect(seen.single.url.path, '/api/v1/products/prod_1');
-    expect(seen.single.headers['authorization'], 'Bearer prk_test_key');
+    expect(seen.single.url.path, '/api/v1/cameras');
+    expect(seen.single.headers['authorization'], 'Bearer $key');
     expect(seen.single.headers['accept'], 'application/json');
+    expect(seen.single.headers['user-agent'], startsWith('alpr-dart/'));
+    expect(seen.single.headers.containsKey('idempotency-key'), isFalse);
+    expect(cameras, hasLength(2));
+    expect(cameras[0].id, 'cam_1');
+    expect(cameras[0].enabled, isTrue);
+    expect(cameras[0].readingArea, isNull);
+    final area = cameras[1].readingArea!;
+    expect(area.box!.x, 0.1);
+    expect(area.points, hasLength(3));
+    expect(area.points![1][0], 0.6);
   });
 
-  test('a write sends its body and idempotency key', () async {
+  test('a photo goes as multipart', () async {
+    final (alpr, seen) = client((_) => json(200, recognized));
+    final result = await alpr.photos.recognize(
+      PhotosRecognizeParams(image: jpeg, lprConfidence: 0.5),
+    );
+    final request = seen.single;
+    expect(request.method, 'POST');
+    expect(request.url.path, '/api/v1/recognize');
+    final sent = parts(request.headers['content-type']!, request.bodyBytes);
+    final image = part(sent, 'image');
+    expect(image.data, jpeg);
+    expect(image.filename, 'photo.jpg');
+    expect(image.contentType, 'image/jpeg');
+    expect(utf8.decode(part(sent, 'lpr_confidence').data), '0.5');
+    expect(
+      sent.map((each) => each.name),
+      isNot(contains('min_ocr_confidence')),
+    );
+    expect(result.creditsRemaining, 41);
+    expect(result.plates, hasLength(1));
+    expect(result.plates[0].plate, 'BRA2E19');
+    expect(result.plates[0].conf, 97.3);
+    expect(result.plates[0].coordinateLeft, 120);
+  });
+
+  test('a photo is named by its bytes', () async {
+    final cases = {
+      'jpeg': (jpeg, 'photo.jpg', 'image/jpeg'),
+      'png': (png, 'photo.png', 'image/png'),
+      'other': (
+        Uint8List.fromList(utf8.encode('not an image')),
+        'photo',
+        'application/octet-stream',
+      ),
+    };
+    for (final MapEntry(:key, :value) in cases.entries) {
+      final (data, filename, kind) = value;
+      final (alpr, seen) = client(
+        (_) => json(200, {
+          'imageHeight': 10,
+          'imageWidth': 20,
+          'plates': <Object?>[],
+          'processingTimeMs': 3,
+        }),
+      );
+      final result = await alpr.photos.detect(PhotosDetectParams(image: data));
+      final image = part(
+        parts(seen.single.headers['content-type']!, seen.single.bodyBytes),
+        'image',
+      );
+      expect(image.data, data, reason: key);
+      expect(image.filename, filename, reason: key);
+      expect(image.contentType, kind, reason: key);
+      expect(result.imageWidth, 20, reason: key);
+      expect(result.plates, isEmpty, reason: key);
+    }
+  });
+
+  test('a number is written in its shortest decimal form', () {
+    expect(formatNumber(0.5), '0.5');
+    expect(formatNumber(1), '1');
+    expect(formatNumber(0.95), '0.95');
+  });
+
+  test('a plate image is read by OCR', () async {
     final (alpr, seen) = client(
-      (_) => json(201, {'data': product('prod_1')}),
+      (_) => json(200, {
+        'confidence': 0.91,
+        'creditsRemaining': 40,
+        'detectionId': null,
+        'latencyMs': 12,
+        'plate': 'ABC1234',
+      }),
     );
-    await alpr.products.create(
-      const ProductsCreateParams(name: 'Curso'),
-      idempotencyKey: 'create-1',
+    final result = await alpr.photos.ocr(PhotosOCRParams(image: png));
+    expect(seen.single.url.path, '/api/v1/ocr');
+    expect(result.plate, 'ABC1234');
+    expect(result.detectionId, isNull);
+    expect(result.confidence, 0.91);
+  });
+
+  test('a detection image is a link', () async {
+    final (alpr, seen) = client(
+      (_) => json(200, {
+        'detectionId': 'a/b',
+        'expiresIn': 300,
+        'imageUrl': 'https://alpr.sh/api/v1/detections/a/image/file?s=x',
+      }),
     );
-    expect(seen.single.method, 'POST');
-    expect(seen.single.headers['idempotency-key'], 'create-1');
-    expect(seen.single.headers['content-type'], 'application/json');
-    expect(jsonDecode(seen.single.body), {'name': 'Curso'});
+    final image = await alpr.detections.image('a/b');
+    expect(seen.single.url.path, '/api/v1/detections/a%2Fb/image');
+    expect(image.expiresIn, 300);
+    expect(image.detectionId, 'a/b');
+    expect(image.imageUrl, startsWith('https://alpr.sh/'));
+  });
+
+  test('iterating walks every page by cursor', () async {
+    Map<String, Object?> item(String id) => {
+      'cameraId': null,
+      'capturedAt': '2026-10-22T12:00:00-03:00',
+      'conf': 90,
+      'id': id,
+      'plate': 'BRA2E19',
+      'source': 'api',
+    };
+    final (alpr, seen) = client((request) {
+      return switch (request.url.queryParameters['before']) {
+        null => json(200, {
+          'data': [item('r3'), item('r2')],
+          'next': 'c2',
+        }),
+        'c2' => json(200, {
+          'data': [item('r1')],
+          'next': null,
+        }),
+        final other => throw StateError('cursor $other'),
+      };
+    });
+    final ids = [
+      await for (final reading in alpr.recognitions.listIter(
+        plate: 'BRA',
+        source: 'api',
+      ))
+        reading.id,
+    ];
+    expect(ids, ['r3', 'r2', 'r1']);
+    expect(seen, hasLength(2));
+    expect(seen[0].url.queryParameters, {'plate': 'BRA', 'source': 'api'});
+    expect(seen[1].url.queryParameters, {
+      'before': 'c2',
+      'plate': 'BRA',
+      'source': 'api',
+    });
+
+    final page = await alpr.recognitions.list(before: 'c2');
+    expect(page.items, hasLength(1));
+    expect(page.next, isNull);
+    expect(page.items[0].cameraId, isNull);
+    expect(seen.last.url.queryParameters, {'before': 'c2'});
+  });
+
+  test('a walk starts from the cursor it is given', () async {
+    final (alpr, seen) = client(
+      (_) => json(200, {'data': <Object?>[], 'next': null}),
+    );
+    expect(await alpr.recognitions.listIter(before: 'c9').toList(), isEmpty);
+    expect(seen.single.url.queryParameters, {'before': 'c9'});
+  });
+
+  test('a cursor that does not move ends the walk', () async {
+    final (alpr, seen) = client(
+      (_) => json(200, {
+        'data': [
+          {
+            'cameraId': 'cam_1',
+            'capturedAt': '2026-10-22T12:00:00-03:00',
+            'conf': 90,
+            'id': 'r1',
+            'plate': 'ABC1234',
+            'source': 'camera',
+          },
+        ],
+        'next': 'same',
+      }),
+    );
+    final items = await alpr.recognitions.listIter().toList();
+    expect(items, hasLength(2));
+    expect(seen, hasLength(2));
+  });
+
+  test('a walk ends at the first error', () async {
+    final (alpr, seen) = client(
+      (_) => json(500, {'error': 'engine_unavailable', 'message': 'down'}),
+    );
+    await expectLater(
+      alpr.recognitions.listIter().toList(),
+      throwsA(isA<AlprException>()),
+    );
+    expect(seen, hasLength(1));
+  });
+
+  test('a refusal is a typed error', () async {
+    final (alpr, _) = client((request) {
+      if (request.url.path == '/api/v1/recognize') {
+        return json(402, {
+          'error': 'insufficient_credits',
+          'message': 'This workspace has no credits left.',
+        });
+      }
+      return json(
+        429,
+        {'error': 'rate_limited', 'message': 'Too many requests.'},
+        {'retry-after': '7'},
+      );
+    });
+    await expectLater(
+      alpr.photos.recognize(PhotosRecognizeParams(image: jpeg)),
+      throwsA(
+        isA<AlprException>()
+            .having((error) => error.status, 'status', 402)
+            .having((error) => error.code, 'code', 'insufficient_credits')
+            .having(
+              (error) => error.message,
+              'message',
+              'This workspace has no credits left.',
+            )
+            .having((error) => error.retryAfter, 'retryAfter', isNull)
+            .having((error) => error.fields, 'fields', isEmpty),
+      ),
+    );
+    await expectLater(
+      alpr.cameras.list(),
+      throwsA(
+        isA<AlprException>()
+            .having((error) => error.status, 'status', 429)
+            .having((error) => error.code, 'code', 'rate_limited')
+            .having((error) => error.retryAfter, 'retryAfter', 7),
+      ),
+    );
+  });
+
+  test('an error body that is not JSON is still an error', () async {
+    final (alpr, _) = client((_) => http.Response('<html>', 502));
+    await expectLater(
+      alpr.cameras.list(),
+      throwsA(
+        isA<AlprException>()
+            .having((error) => error.status, 'status', 502)
+            .having((error) => error.code, 'code', '')
+            .having((error) => error.fields, 'fields', isEmpty),
+      ),
+    );
+  });
+
+  test('a call can use another key', () async {
+    final (alpr, seen) = client((_) => json(200, {'data': <Object?>[]}));
+    await alpr.cameras.list(apiKey: 'alpr_live_other');
+    expect(seen.single.headers['authorization'], 'Bearer alpr_live_other');
   });
 
   test('a base URL must be https unless it is loopback', () {
@@ -131,331 +442,49 @@ void main() {
     }
   });
 
-  test('a discount goes through create, get, list and delete', () async {
-    Map<String, Object?> discount(String id) =>
-        jsonDecode(
-              '''{"id":"__ID__","name":"Black","code":null,"type":"percentage","basis_points":1000,"amount_cents":0,"currency":"BRL","duration":"once","duration_in_months":0,"max_redemptions":null,"max_redemptions_per_customer":null,"redemptions_count":0,"starts_at":"2026-10-17T00:00:00Z","ends_at":null,"status":"active","product_ids":["prod_1"],"created_at":"2026-10-17T00:00:00Z","modified_at":"2026-10-17T00:00:00Z"}'''
-                  .replaceFirst('__ID__', id),
-            )
-            as Map<String, Object?>;
-    final (alpr, seen) = client((request) {
-      if (request.method == 'POST') {
-        return json(201, {'data': discount('disc_1')});
-      }
-      if (request.method == 'DELETE') {
-        return http.Response('', 204);
-      }
-      if (request.url.path == '/api/v1/discounts') {
-        final page = request.url.queryParameters['page'];
-        return json(200, {
-          'data': {
-            'items': [discount('disc_$page')],
-            'pagination': {'total_count': 2, 'max_page': 2},
-          },
-        });
-      }
-      return json(200, {'data': discount('disc_1')});
-    });
-    final created = await alpr.discounts.create(
-      const DiscountsCreateParams(
-        duration: 'once',
-        name: 'Black',
-        type: 'percentage',
-        basisPoints: 1000,
-      ),
-    );
-    expect(created.id, 'disc_1');
-    expect(created.code, isNull);
-    expect(created.productIds, ['prod_1']);
-    expect((await alpr.discounts.get('disc_1')).name, 'Black');
-    expect(
-      [
-        await for (final each in alpr.discounts.listIter(limit: 1)) each.id,
-      ],
-      ['disc_1', 'disc_2'],
-    );
-    await alpr.discounts.delete('disc_1');
-    expect(
-      [for (final each in seen) '${each.method} ${each.url.path}'],
-      [
-        'POST /api/v1/discounts',
-        'GET /api/v1/discounts/disc_1',
-        'GET /api/v1/discounts',
-        'GET /api/v1/discounts',
-        'DELETE /api/v1/discounts/disc_1',
-      ],
-    );
-    expect(jsonDecode(seen.first.body), {
-      'name': 'Black',
-      'type': 'percentage',
-      'duration': 'once',
-      'basis_points': 1000,
-    });
-  });
-
-  test('a free-form value decodes nested', () async {
-    final state = jsonDecode(
-      '''{"id":"cus_1","name":"Ana","email":"ana@example.com","external_id":"","status":"active","created_at":"2026-10-17T00:00:00Z","active_subscriptions":[],"granted_benefits":[{"id":"gr_1","granted_at":"2026-10-17T00:00:00Z","benefit_id":"ben_1","benefit_type":"feature_flag","benefit_metadata":{"flags":{"beta":true,"limits":{"seats":5,"tiers":["a",2,null,1.5]}}},"properties":{"links":[{"url":"https://example.com","expires":null}]}}]}''',
-    );
-    final (alpr, _) = client((_) => json(200, {'data': state}));
-    final grant = (await alpr.customers.getState('cus_1')).grantedBenefits[0];
-    expect(grant.benefitMetadata, {
-      'flags': {
-        'beta': true,
-        'limits': {
-          'seats': 5,
-          'tiers': ['a', 2, null, 1.5],
-        },
-      },
-    });
-    expect(grant.properties, {
-      'links': [
-        {'url': 'https://example.com', 'expires': null},
-      ],
-    });
-  });
-
-  test('a POST without a key is sent with its own, a GET with none', () async {
-    final (alpr, seen) = client(
-      (_) => json(201, {'data': product('prod_1')}),
-    );
-    const params = ProductsCreateParams(name: 'Curso');
-    await alpr.products.create(params);
-    await alpr.products.create(params);
-    await alpr.products.create(params, idempotencyKey: 'mine');
-    await alpr.products.get('prod_1');
-    final keys = [for (final each in seen) each.headers['idempotency-key']];
-    final uuid = RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-    );
-    expect(keys[0], matches(uuid));
-    expect(keys[1], matches(uuid));
-    expect(keys[0], isNot(keys[1]));
-    expect(keys[2], 'mine');
-    expect(keys[3], isNull);
-  });
-
-  test('iterating walks every page', () async {
-    final (alpr, seen) = client(
-      (request) => json(200, {
-        'data': {
-          'items': [product('prod_${request.url.queryParameters['page']}')],
-          'pagination': {'total_count': 3, 'max_page': 3},
-        },
-      }),
-    );
-    final ids = await alpr.products
-        .listIter(limit: 1)
-        .map((item) => item.id)
-        .toList();
-    expect(ids, ['prod_1', 'prod_2', 'prod_3']);
-    expect(seen.first.url.queryParameters['limit'], '1');
-  });
-
-  test('a refusal is a typed error', () async {
-    final (alpr, _) = client(
-      (request) => request.url.path == '/api/v1/customers'
-          ? json(422, {
-              'error': 'invalid_request',
-              'fields': {
-                'email': ['send an e-mail'],
-              },
-            })
-          : json(429, null, {'retry-after': '7'}),
-    );
-    await expectLater(
-      alpr.customers.create(
-        const CustomersCreateParams(name: 'x', email: 'x'),
-      ),
-      throwsA(
-        isA<AlprException>()
-            .having((error) => error.status, 'status', 422)
-            .having((error) => error.code, 'code', 'invalid_request')
-            .having((error) => error.fields['email'], 'fields', [
-              'send an e-mail',
-            ]),
-      ),
-    );
-    await expectLater(
-      alpr.products.list(),
-      throwsA(
-        isA<AlprException>()
-            .having((error) => error.status, 'status', 429)
-            .having((error) => error.retryAfter, 'retryAfter', 7),
-      ),
-    );
-  });
-
-  test('the Standard Webhooks vector verifies', () {
-    const body = '{"test": 2432232314}';
-    final headers = webhookHeaders(
-      'msg_p5jXN8AQM9LWM0D4loKWxJek',
-      1614265330,
-      'v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=',
-    );
-    final at = DateTime.fromMillisecondsSinceEpoch(1614265330000, isUtc: true);
-    verifyWebhookSignature(referenceSecret, headers, body, now: at);
-    for (final (secret, payload, now) in [
-      (referenceSecret, '$body ', at),
-      (referenceSecret, body, at.add(const Duration(seconds: 301))),
-      (newSecret, body, at),
-    ]) {
-      expect(
-        () => verifyWebhookSignature(secret, headers, payload, now: now),
-        throwsA(isA<WebhookVerificationException>()),
-      );
-    }
-  });
-
-  test('a timestamp that is not plain digits is refused', () {
-    for (final (stamp, signature) in [
-      ('+1614265330', 'JQsSpSSK1m9NI2FueDRZN3FL/jU9336idQcq6VmF+c8='),
-      ('²', 'PEggIsKE32VQ8J4ZIk9apRhPy7w+a20bxGpjk1K4/HY='),
-      ('', 'x'),
-      ('1_6', 'x'),
-    ]) {
-      final headers = {
-        ...webhookHeaders(
-          'msg_p5jXN8AQM9LWM0D4loKWxJek',
-          0,
-          'v1,$signature',
-        ),
-        'Webhook-Timestamp': stamp,
-      };
-      expect(
-        () => verifyWebhookSignature(
-          referenceSecret,
-          headers,
-          '{"test": 2432232314}',
-          now: DateTime.fromMillisecondsSinceEpoch(1614265330000, isUtc: true),
-        ),
-        throwsA(isA<WebhookVerificationException>()),
-        reason: stamp,
-      );
-    }
-  });
-
-  test('a webhook answers its typed event', () {
-    final now = DateTime.fromMillisecondsSinceEpoch(
-      (signedAt + 120) * 1000,
-      isUtc: true,
-    );
-    final headers = webhookHeaders(
-      'msg_2',
-      signedAt,
-      'v1,wYfYi9j4EexjSjLLsUssBYbtAFSwF9KVQBJ2o+qD6Jw= '
-          'v1,0rD3K6HM83kGY+mZMPVidXSW2zXHHDvy3bMt2QzM8Ak=',
-    );
-    for (final secret in [newSecret, oldSecret]) {
-      final event = verifyWebhook(secret, headers, orderPaid, now: now);
-      if (event is! OrderWebhookEvent) {
-        fail('not an order event: $event');
-      }
-      expect(event.type, 'order.paid');
-      expect(event.data.id, 'ord_1');
-      expect(event.data.installments, 3);
-      expect(event.data.installmentInterestCents, 360);
-    }
-    expect(
-      () => verifyWebhook(referenceSecret, headers, orderPaid, now: now),
-      throwsA(isA<WebhookVerificationException>()),
-    );
-    final usage = verifyWebhook(
-      newSecret,
-      webhookHeaders(
-        'msg_3',
-        signedAt,
-        'v1,Z3E2vTbczigiySfkzakxuZotPn9FlBY1KAET6hPEZoU=',
-      ),
-      utf8.encode(usageRecorded),
-      now: now,
-    );
-    expect(
-      usage,
-      isA<IdentifiersWebhookEvent>()
-          .having((event) => event.id, 'id', 'msg_3')
-          .having((event) => event.data['merchant_id'], 'merchant', 'mer_1'),
-    );
-    final unknown = verifyWebhook(
-      newSecret,
-      webhookHeaders(
-        'msg_4',
-        signedAt,
-        'v1,Sa/yofA3h/58pFR+rIiWdIc8qXfcuqvyJSjxn4oJ1ZY=',
-      ),
-      payoutSent,
-      now: now,
-    );
-    expect(
-      unknown,
-      isA<UnknownWebhookEvent>()
-          .having((event) => event.type, 'type', 'payout.sent')
-          .having((event) => event.data, 'data', {
-            'payout_id': 'po_1',
-            'amount_cents': 5000,
-          }),
-    );
-  });
-
   test('a call goes over real HTTP', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() => server.close(force: true));
-    final seen = <String, String>{};
+    final seen = <String, Object>{};
     server.listen((request) async {
-      final body = await utf8.decodeStream(request);
+      final body = await request.fold<List<int>>(
+        [],
+        (all, chunk) => all + chunk,
+      );
       seen['method'] = request.method;
       seen['path'] = request.uri.path;
       seen['authorization'] = request.headers.value('authorization') ?? '';
       seen['user-agent'] = request.headers.value('user-agent') ?? '';
       seen['content-type'] = request.headers.value('content-type') ?? '';
-      seen['idempotency-key'] = request.headers.value('idempotency-key') ?? '';
       seen['body'] = body;
-      final created = request.uri.path == '/api/v1/products';
       request.response
-        ..statusCode = created ? 201 : 404
+        ..statusCode = 200
         ..headers.contentType = ContentType.json
-        ..write(
-          jsonEncode(
-            created
-                ? {'data': product('prod_1')}
-                : {'error': 'not_found', 'message': 'no such product'},
-          ),
-        );
+        ..write(jsonEncode(recognized));
       await request.response.close();
     });
     final alpr = Alpr(
-      'prk_test_key',
+      key,
       baseUrl: 'http://${server.address.host}:${server.port}',
     );
     addTearDown(alpr.close);
 
-    final created = await alpr.products.create(
-      const ProductsCreateParams(name: 'Curso', description: 'Um curso'),
-      idempotencyKey: 'create-1',
-      apiKey: 'prk_test_other',
+    final result = await alpr.photos.recognize(
+      PhotosRecognizeParams(image: png, minOcrConfidence: 0.8),
+      apiKey: 'alpr_live_other',
     );
-    expect(created.id, 'prod_1');
+    expect(result.plates.single.plate, 'BRA2E19');
     expect(seen['method'], 'POST');
-    expect(seen['path'], '/api/v1/products');
-    expect(seen['authorization'], 'Bearer prk_test_other');
+    expect(seen['path'], '/api/v1/recognize');
+    expect(seen['authorization'], 'Bearer alpr_live_other');
     expect(seen['user-agent'], 'alpr-dart/$sdkVersion');
-    expect(seen['content-type'], 'application/json');
-    expect(seen['idempotency-key'], 'create-1');
-    expect(jsonDecode(seen['body']!), {
-      'name': 'Curso',
-      'description': 'Um curso',
-    });
-
-    await expectLater(
-      alpr.products.get('a b/c'),
-      throwsA(
-        isA<AlprException>()
-            .having((error) => error.status, 'status', 404)
-            .having((error) => error.code, 'code', 'not_found')
-            .having((error) => error.message, 'message', 'no such product'),
-      ),
+    final sent = parts(
+      seen['content-type']! as String,
+      seen['body']! as List<int>,
     );
-    expect(seen['path'], '/api/v1/products/a%20b%2Fc');
+    expect(part(sent, 'image').data, png);
+    expect(part(sent, 'image').filename, 'photo.png');
+    expect(utf8.decode(part(sent, 'min_ocr_confidence').data), '0.8');
   });
 
   test('a redirect is refused and the key never follows it', () async {
@@ -475,17 +504,291 @@ void main() {
       await request.response.close();
     });
     final alpr = Alpr(
-      'prk_test_key',
+      key,
       baseUrl: 'http://${first.address.host}:${first.port}',
     );
     addTearDown(alpr.close);
 
     await expectLater(
-      alpr.products.get('prod_1'),
+      alpr.cameras.list(),
       throwsA(
         isA<AlprException>().having((error) => error.status, 'status', 302),
       ),
     );
     expect(elsewhere, 0);
+  });
+
+  group('webhooks', () {
+    // The vectors every SDK checks (generator/testdata/webhook-vectors.json):
+    // Alpr.sh events signed under two secrets, as while one is rotated.
+    const newSecret = 'whsec_SDK-test-secret-new-0123456789';
+    const oldSecret = 'whsec_SDK-test-secret-old-0123456789';
+    const otherSecret = 'whsec_SDK-test-secret-other-012345678';
+    const signedAt = 1792670400;
+
+    const recognitionBody =
+        '{"event":"recognition.created","id":"rec_1","tenant_id":"ws_1",'
+        '"source":"camera","camera_id":"cam_1","plate":"BRA2E19",'
+        '"confidence":0.97,"captured_at":"2026-10-22T11:59:58Z"}';
+    const recognitionNew =
+        'sha256=97deaf1c8a9348f3a7d64ce68943f4e6b4cc44590df4caea4c16d6373fa7d623';
+    const recognitionOld =
+        'sha256=12b70f2a8838157260e3b9470befa2627c16c42fe5e4b1d80fb841e206f8c781';
+    const alertBody =
+        '{"event":"alert.triggered","id":"alt_1","tenant_id":"ws_1",'
+        '"rule_id":"rule_1","rule_name":"Veículo bloqueado",'
+        '"recognition_id":"rec_1","plate":"BRA2E19","camera_id":"cam_1",'
+        '"confidence":0.97,"captured_at":"2026-10-22T11:59:58Z"}';
+    const alertNew =
+        'sha256=0b84627fa4564b006237b52feca68ca3c8dfebc54d4e271e881105f75e2a962a';
+    const testBody =
+        '{"event":"webhook.test","id":"evt_1","tenant_id":"ws_1",'
+        '"sent_at":"2026-10-22T12:00:00Z"}';
+    const testNew =
+        'sha256=f3064f502ba3ffe3e409d9186c89ce7e425ad1dcad34b73edbeb1ad8e0633245';
+    const unknownBody =
+        '{"event":"payout.sent","id":"po_1","tenant_id":"ws_1"}';
+    const unknownNew =
+        'sha256=cb5b4f83462c974ea9706723b97a28de5d591d2093aa62e8dc8e388997daa0d6';
+    const plusSignature =
+        'sha256=ceef0f02180106de386c85b403f2b448142e897911c1e6075725b7e8d2912771';
+
+    /// The headers of a delivery; [signature] is a `String` or the list of
+    /// the lines the header came on.
+    Map<String, Object> hook(String id, String stamp, [Object? signature]) => {
+      'x-alprsh-delivery-id': id,
+      'X-Alprsh-Timestamp': stamp,
+      'X-Alprsh-Signature': ?signature,
+    };
+
+    DateTime at(int seconds) =>
+        DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+    final now = at(signedAt + 120);
+
+    Matcher refused() => throwsA(isA<WebhookVerificationException>());
+
+    void verifies(
+      String secret,
+      Map<String, Object> headers,
+      String body, [
+      DateTime? when,
+    ]) {
+      verifyWebhookSignatureAt(secret, headers, body, when ?? now);
+    }
+
+    test('the vector verifies, and only it', () {
+      final headers = hook('del_0001', '$signedAt', recognitionNew);
+      verifies(newSecret, headers, recognitionBody);
+      verifyWebhookSignatureAt(
+        newSecret,
+        headers,
+        utf8.encode(recognitionBody),
+        now,
+      );
+      expect(
+        () => verifies(newSecret, headers, '$recognitionBody '),
+        refused(),
+      );
+      expect(
+        () => verifies(
+          newSecret,
+          hook('del_0009', '$signedAt', recognitionNew),
+          recognitionBody,
+        ),
+        refused(),
+      );
+      expect(
+        () => verifies(newSecret, headers, recognitionBody, at(signedAt + 301)),
+        refused(),
+      );
+      expect(
+        () => verifies(newSecret, headers, recognitionBody, at(signedAt - 301)),
+        refused(),
+      );
+      verifies(newSecret, headers, recognitionBody, at(signedAt + 300));
+      expect(() => verifies(otherSecret, headers, recognitionBody), refused());
+      expect(() => verifies(newSecret, {}, recognitionBody), refused());
+      expect(webhookTolerance, const Duration(seconds: 300));
+    });
+
+    test('an empty secret is a configuration error', () {
+      expect(
+        () => verifies(
+          '',
+          hook('del_0001', '$signedAt', recognitionNew),
+          recognitionBody,
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error is WebhookVerificationException,
+            'is a signature error',
+            isFalse,
+          ),
+        ),
+      );
+    });
+
+    test('a timestamp that is not plain digits is refused', () {
+      for (final stamp in [
+        '+1792670400',
+        '²',
+        '',
+        '1_7',
+        ' 1792670400',
+        '1792670400 ',
+      ]) {
+        expect(
+          () => verifies(
+            newSecret,
+            hook('del_0001', stamp, plusSignature),
+            recognitionBody,
+          ),
+          refused(),
+          reason: '"$stamp"',
+        );
+      }
+    });
+
+    test('more than one signature verifies during a rotation', () {
+      final headers = {
+        'one value': hook(
+          'del_0001',
+          '$signedAt',
+          '$recognitionOld,$recognitionNew',
+        ),
+        'two lines': hook('del_0001', '$signedAt', [
+          recognitionOld,
+          recognitionNew,
+        ]),
+        'with spaces': hook(
+          'del_0001',
+          '$signedAt',
+          '$recognitionOld, $recognitionNew',
+        ),
+      };
+      for (final MapEntry(:key, :value) in headers.entries) {
+        for (final secret in [newSecret, oldSecret]) {
+          verifies(secret, value, recognitionBody);
+        }
+        expect(
+          () => verifies(otherSecret, value, recognitionBody),
+          refused(),
+          reason: key,
+        );
+      }
+      final signatures = {
+        'a malformed one beside a good one': 'sha256=zz,$recognitionNew',
+        'no prefix': recognitionNew.substring(7),
+        'a short one': 'sha256=97de',
+        'too many': '${'$recognitionOld,' * 6}$recognitionNew',
+      };
+      for (final MapEntry(:key, :value) in signatures.entries) {
+        expect(
+          () => verifies(
+            newSecret,
+            hook('del_0001', '$signedAt', value),
+            recognitionBody,
+          ),
+          refused(),
+          reason: key,
+        );
+      }
+    });
+
+    test('a webhook answers its typed event', () {
+      final event = verifyWebhookAt(
+        newSecret,
+        hook('del_0001', '$signedAt', recognitionNew),
+        recognitionBody,
+        now,
+      );
+      expect(event, isA<RecognitionCreatedWebhookEvent>());
+      final read = event as RecognitionCreatedWebhookEvent;
+      expect(read.event, 'recognition.created');
+      expect(read.id, 'rec_1');
+      expect(read.plate, 'BRA2E19');
+      expect(read.confidence, 0.97);
+      expect(read.cameraId, 'cam_1');
+      expect(read.source, 'camera');
+      expect(read.tenantId, 'ws_1');
+      expect(read.capturedAt, '2026-10-22T11:59:58Z');
+
+      final alert = verifyWebhookAt(
+        newSecret,
+        hook('del_0002', '$signedAt', alertNew),
+        alertBody,
+        now,
+      );
+      expect(alert, isA<AlertTriggeredWebhookEvent>());
+      alert as AlertTriggeredWebhookEvent;
+      expect(alert.ruleName, 'Veículo bloqueado');
+      expect(alert.recognitionId, 'rec_1');
+      expect(alert.ruleId, 'rule_1');
+
+      final test = verifyWebhookAt(
+        newSecret,
+        hook('del_0003', '$signedAt', testNew),
+        testBody,
+        now,
+      );
+      expect(test, isA<WebhookTestWebhookEvent>());
+      test as WebhookTestWebhookEvent;
+      expect(test.event, 'webhook.test');
+      expect(test.sentAt, '2026-10-22T12:00:00Z');
+
+      final unknown = verifyWebhookAt(
+        newSecret,
+        hook('del_0004', '$signedAt', unknownNew),
+        unknownBody,
+        now,
+      );
+      expect(unknown, isA<UnknownWebhookEvent>());
+      unknown as UnknownWebhookEvent;
+      expect(unknown.event, 'payout.sent');
+      expect(unknown.id, 'po_1');
+      expect(unknown.body, jsonDecode(unknownBody));
+    });
+
+    test('a verified body that is not an event is a parse error', () {
+      expect(
+        () => parseWebhookEvent(utf8.encode('[1]')),
+        throwsFormatException,
+      );
+      expect(
+        () => parseWebhookEvent(utf8.encode('{"id":"x"}')),
+        throwsFormatException,
+      );
+      expect(
+        () => parseWebhookEvent(utf8.encode('nope')),
+        throwsFormatException,
+      );
+    });
+
+    test('a body signed with nothing does not verify', () {
+      expect(
+        () => verifyWebhookAt(
+          newSecret,
+          hook('del_0005', '$signedAt', 'sha256=${'0' * 64}'),
+          '{"id":"x"}',
+          now,
+        ),
+        refused(),
+      );
+    });
+
+    test('the public functions use the clock', () {
+      expect(
+        () => verifyWebhook(
+          newSecret,
+          hook('del_0001', '$signedAt', recognitionNew),
+          recognitionBody,
+        ),
+        refused(),
+      );
+      expect(
+        () => verifyWebhookSignature(newSecret, {}, recognitionBody),
+        refused(),
+      );
+    });
   });
 }

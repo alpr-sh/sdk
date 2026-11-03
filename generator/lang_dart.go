@@ -17,7 +17,7 @@ var dartKeywords = map[string]bool{
 
 // dartLocals are the names a service method gives its own parameters and
 // variables, which a path parameter or a filter cannot take.
-var dartLocals = map[string]bool{"at": true, "data": true, "page": true, "limit": true, "apiKey": true, "idempotencyKey": true, "params": true}
+var dartLocals = map[string]bool{"at": true, "data": true, "apiKey": true, "params": true}
 
 func init() {
 	register(Language{Name: "dart", Funcs: template.FuncMap{
@@ -32,6 +32,8 @@ func init() {
 		"dartPath":   dartPath,
 		"dartParams": dartParams,
 		"dartText":   dartText,
+		// dartFormValue writes a multipart text field's value, held in value.
+		"dartFormValue": func(f *Field) string { return dartFormValue(f.Type) },
 		// dartReadEntry and dartWriteEntry are a model's fromJson argument
 		// and toJson entry, wrapped as dart format wraps them.
 		"dartReadEntry":  func(f *Field) string { return dartEntry(6, dartName(f.Wire), dartRead(f)) },
@@ -121,6 +123,8 @@ func dartBase(t *TypeRef) string {
 		return "double"
 	case "boolean":
 		return "bool"
+	case "binary":
+		return "Uint8List"
 	case "model":
 		return t.Model
 	case "array":
@@ -251,8 +255,9 @@ func dartPath(m *Method) string {
 
 // dartParams is a service method's parameter list, split one a line as
 // dart format writes it: the path parameters and the body positional, the
-// rest named. variant is "list" for a page, "iter" for the walk over every
-// page, and "call" for any other method.
+// rest named. variant is "list" for a page and "iter" for the walk over
+// every page (the cursor and the filters, named), and "call" for any other
+// method.
 func dartParams(m *Method, variant string) string {
 	var positional, named []string
 	for _, param := range m.PathParams {
@@ -260,21 +265,13 @@ func dartParams(m *Method, variant string) string {
 	}
 	switch variant {
 	case "list", "iter":
-		if variant == "iter" {
-			named = append(named, "int page = 1")
-		} else {
-			named = append(named, "int? page")
-		}
-		named = append(named, "int? limit")
+		named = append(named, "String? "+dartParam(m.Cursor))
 		for _, query := range m.Query {
 			named = append(named, "String? "+dartParam(query.Name))
 		}
 	default:
 		if m.Body != nil {
 			positional = append(positional, m.Body.Name+" params")
-		}
-		if m.Write {
-			named = append(named, "String? idempotencyKey")
 		}
 	}
 	named = append(named, "String? apiKey")
@@ -296,6 +293,18 @@ func dartParams(m *Method, variant string) string {
 	}
 	b.WriteString("  })")
 	return b.String()
+}
+
+// dartFormValue is the expression that writes a multipart text field's
+// value, held in value, as text.
+func dartFormValue(t *TypeRef) string {
+	switch t.Kind {
+	case "number":
+		return "formatNumber(value)"
+	case "integer", "boolean":
+		return "'$value'"
+	}
+	return "value"
 }
 
 // dartLimit is the width dart format wraps lines at.

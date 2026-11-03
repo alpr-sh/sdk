@@ -2,10 +2,10 @@
 ///
 /// ```dart
 /// final alpr = Alpr(apiKey);
-/// final product = await alpr.products.create(
-///   const ProductsCreateParams(name: 'Curso'),
+/// final result = await alpr.photos.recognize(
+///   PhotosRecognizeParams(image: photo),
 /// );
-/// await for (final product in alpr.products.listIter()) { … }
+/// await for (final reading in alpr.recognitions.listIter()) { … }
 /// ```
 library;
 
@@ -15,5 +15,7 @@ export 'src/errors.dart' show AlprException;
 export 'src/models.dart';
 export 'src/pagination.dart' show Page;
 export 'src/services.dart';
+export 'src/upload.dart' show MultipartForm;
 export 'src/version.dart' show apiVersion, defaultBaseUrl, sdkVersion;
-export 'src/webhooks.dart';
+export 'src/webhooks.dart'
+    hide parseWebhookEvent, verifyWebhookAt, verifyWebhookSignatureAt;

@@ -1,0 +1,25 @@
+name: alpr_sdk
+version: 0.1.0
+description: >-
+  Alpr.sh's SDK for Dart and Flutter: license plate reading from photos,
+  readings, cameras and webhook verification.
+homepage: https://alpr.sh
+repository: https://github.com/alpr-sh/sdk
+issue_tracker: https://github.com/alpr-sh/sdk/issues
+topics:
+  - license-plate
+  - ocr
+  - api
+  - sdk
+  - webhooks
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  crypto: ^3.0.3
+  http: ^1.2.0
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.25.0

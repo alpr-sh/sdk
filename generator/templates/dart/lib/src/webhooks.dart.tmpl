@@ -4,59 +4,83 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-import 'models.dart';
+import 'json.dart';
 
-/// A webhook Alpr.sh sent, verified: one subclass a kind of data
-/// ([OrderWebhookEvent] carries an [Order]…), or [UnknownWebhookEvent] for a
-/// type this SDK does not know yet. Within a class, [type] says what happened.
+/// A webhook Alpr.sh sent, verified: one subclass a payload
+/// ([RecognitionCreatedWebhookEvent]…), told apart by a `switch`, or
+/// [UnknownWebhookEvent] for an event this SDK does not know yet.
+///
+/// ```dart
+/// switch (event) {
+///   case RecognitionCreatedWebhookEvent(:final plate, :final capturedAt):
+///     print('$plate $capturedAt');
+///   case _:
+///     break;
+/// }
+/// ```
 sealed class WebhookEvent {
-  const WebhookEvent({
-    required this.id,
-    required this.type,
-    required this.timestamp,
-  });
+  const WebhookEvent();
 
-  /// The message's id, the same as the `webhook-id` header.
-  final String id;
+  /// The event's name, such as `recognition.created`.
+  String get event;
 
-  /// What happened, such as `order.paid`.
-  final String type;
-
-  /// When it happened, in RFC 3339.
-  final String timestamp;
+  /// The id the body carries: the read's or the alert's, not the delivery's.
+  /// Deduplicate deliveries by the `X-Alprsh-Delivery-Id` header.
+  String get id;
 }
-{{range .Webhooks}}
-/// The events that carry {{if eq .Data.Kind "model"}}{{article .Data.Model}}{{else}}the event's identifiers{{end}}.
+{{range $group := .Webhooks}}
+/// The payload of the events
+{{- range .Types}}
+/// `{{.}}`,
+{{- end}}
+/// all with the fields of a [{{.Model}}].
 final class {{.Name}}WebhookEvent extends WebhookEvent {
   const {{.Name}}WebhookEvent({
-    required super.id,
-    required super.type,
-    required super.timestamp,
-    required this.data,
+{{- range $.Models}}{{if eq .Name $group.Model}}{{range .Fields}}
+    {{if not (dartOptional .)}}required {{end}}this.{{dartName .Wire}},
+{{- end}}{{end}}{{end}}
   });
 
-  /// The event types this class carries.
-  static const types = {
+  /// The payload of a body already known to be one of these events.
+  factory {{.Name}}WebhookEvent.fromJson(Map<String, Object?> json) {
+    return {{.Name}}WebhookEvent(
+{{- range $.Models}}{{if eq .Name $group.Model}}{{range .Fields}}
+      {{dartReadEntry .}},
+{{- end}}{{end}}{{end}}
+    );
+  }
+
+  /// The event names this class carries.
+  static const names = {
 {{- range .Types}}
     {{quote .}},
 {{- end}}
   };
-
-  /// What the event carries.
-  final {{dartBase .Data}} data;
+{{range $.Models}}{{if eq .Name $group.Model}}{{range .Fields}}
+{{dartFieldDoc "  " .}}{{if or (eq .Wire "event") (eq .Wire "id")}}  @override
+{{end}}  final {{dartType .}} {{dartName .Wire}};
+{{end}}{{end}}{{end -}}
 }
 {{end}}
-/// An event of a type this SDK does not know yet, its data as it was sent.
+/// An event of a name this SDK does not know yet; its body is kept as it was
+/// sent.
 final class UnknownWebhookEvent extends WebhookEvent {
   const UnknownWebhookEvent({
-    required super.id,
-    required super.type,
-    required super.timestamp,
-    required this.data,
+    required this.event,
+    required this.id,
+    required this.body,
   });
 
-  /// What the event carries, as it was sent.
-  final Map<String, Object?> data;
+  /// The event's name.
+  @override
+  final String event;
+
+  /// The id the body carries, or empty when it has none.
+  @override
+  final String id;
+
+  /// The whole body, decoded.
+  final Map<String, Object?> body;
 }
 
 /// A request Alpr.sh did not sign, or signed too long ago.
@@ -74,52 +98,65 @@ class WebhookVerificationException implements Exception {
 /// How far from now a webhook's timestamp may be.
 const webhookTolerance = Duration(minutes: 5);
 
-final _digits = RegExp(r'^\d+$');
-final _spaces = RegExp(r'\s+');
+/// How many signatures a request may list: one for the secret in use and one
+/// for each secret still signing during a rotation.
+const _maxSignatures = 6;
 
-/// Checks a webhook Alpr.sh sent, as Standard Webhooks signs it, and answers
-/// its event.
+final _digits = RegExp(r'^[0-9]+$');
+final _hex = RegExp(r'^[0-9a-fA-F]{64}$');
+
+/// Checks a webhook Alpr.sh sent and answers its event.
 ///
-/// The signature is an HMAC-SHA256 of `{webhook-id}.{webhook-timestamp}.{body}`
-/// under the key the endpoint's `whsec_` [secret] encodes, one of the
-/// signatures in the `webhook-signature` header, which carries more than one
-/// while a secret is rotated. [headers] are the request's, in any case; [body]
-/// is a `String` or the bytes (`List<int>`), exactly as they arrived, before
-/// parsing them. Throws [WebhookVerificationException] when the signature does
-/// not verify.
+/// Alpr.sh signs the headers `X-Alprsh-Timestamp` and `X-Alprsh-Delivery-Id`
+/// and the body: `X-Alprsh-Signature` carries `sha256=` and the hex
+/// HMAC-SHA256 of `{timestamp}.{delivery-id}.{body}` under the endpoint's
+/// [secret] (the whole `whsec_…` text, as it is), and more than one signature
+/// while a secret is rotated: one matching is enough.
+///
+/// [headers] are the request's, in any case; a value is a `String` or a list
+/// of them (a header sent on several lines). [body] is a `String` or the bytes
+/// (`List<int>`), exactly as they arrived, before parsing them. Throws
+/// [WebhookVerificationException] when the signature does not verify, an
+/// [ArgumentError] when the secret is empty, and a [FormatException] when the
+/// verified body is not an event. Deduplicate deliveries by the
+/// `X-Alprsh-Delivery-Id` header.
 WebhookEvent verifyWebhook(
   String secret,
-  Map<String, String> headers,
-  Object body, {
-  DateTime? now,
-}) => _event(_verified(secret, headers, body, now));
+  Map<String, Object> headers,
+  Object body,
+) => verifyWebhookAt(secret, headers, body, DateTime.now());
 
 /// Checks a webhook's signature as [verifyWebhook] does, without reading its
 /// body.
 void verifyWebhookSignature(
   String secret,
-  Map<String, String> headers,
-  Object body, {
-  DateTime? now,
-}) {
-  _verified(secret, headers, body, now);
+  Map<String, Object> headers,
+  Object body,
+) {
+  verifyWebhookSignatureAt(secret, headers, body, DateTime.now());
 }
 
-/// The body's bytes, once its signature verifies.
-List<int> _verified(
+/// [verifyWebhook] at the time [now], for tests.
+WebhookEvent verifyWebhookAt(
   String secret,
-  Map<String, String> headers,
+  Map<String, Object> headers,
   Object body,
-  DateTime? now,
+  DateTime now,
+) => parseWebhookEvent(verifyWebhookSignatureAt(secret, headers, body, now));
+
+/// [verifyWebhookSignature] at the time [now], for tests; answers the body's
+/// bytes.
+List<int> verifyWebhookSignatureAt(
+  String secret,
+  Map<String, Object> headers,
+  Object body,
+  DateTime now,
 ) {
-  final key = _base64(
-    secret.startsWith('whsec_') ? secret.substring(6) : secret,
-  );
-  if (key == null || key.isEmpty) {
+  if (secret.isEmpty) {
     throw ArgumentError.value(
       secret,
       'secret',
-      'alpr: the webhook secret is whsec_ and a base64 key',
+      'alpr: the webhook secret is empty',
     );
   }
   final List<int> raw = switch (body) {
@@ -127,89 +164,92 @@ List<int> _verified(
     List<int> bytes => bytes,
     _ => throw ArgumentError.value(body, 'body', 'a String or a List<int>'),
   };
-  final id = _header(headers, 'webhook-id');
-  final stamp = _header(headers, 'webhook-timestamp');
-  final seconds = _digits.hasMatch(stamp) && stamp.length <= 18
-      ? int.tryParse(stamp)
-      : null;
-  if (id.isEmpty || seconds == null) {
+  final id = _header(headers, 'x-alprsh-delivery-id');
+  final stamp = _header(headers, 'x-alprsh-timestamp');
+  // Only ASCII digits, and few enough to be a time: the signer sends no sign,
+  // no space, no separator.
+  if (id.isEmpty || !_digits.hasMatch(stamp) || stamp.length > 12) {
     throw const WebhookVerificationException();
   }
-  final at = DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
-  if ((now ?? DateTime.now()).difference(at).abs() > webhookTolerance) {
+  final delta = now.millisecondsSinceEpoch - int.parse(stamp) * 1000;
+  if (delta.abs() > webhookTolerance.inMilliseconds) {
     throw const WebhookVerificationException();
   }
   final expected = Hmac(
     sha256,
-    key,
-  ).convert([...utf8.encode('$id.$stamp.'), ...raw]).bytes;
-  final signatures = _header(headers, 'webhook-signature').split(_spaces);
-  for (final signature in signatures) {
-    final comma = signature.indexOf(',');
-    if (comma < 0 || signature.substring(0, comma) != 'v1') {
+    utf8.encode(secret),
+  ).convert([...utf8.encode('$stamp.$id.'), ...raw]).bytes;
+  final listed = _header(headers, 'x-alprsh-signature', ',').split(',');
+  if (listed.length > _maxSignatures) {
+    throw const WebhookVerificationException();
+  }
+  var matched = false;
+  for (final signature in listed) {
+    final text = signature.trim();
+    // One malformed signature refuses the request, as Alpr.sh's own verifier
+    // does; every listed signature is compared, in constant time.
+    if (!text.startsWith('sha256=') || !_hex.hasMatch(text.substring(7))) {
+      throw const WebhookVerificationException();
+    }
+    if (_equal(_decodeHex(text.substring(7)), expected)) {
+      matched = true;
+    }
+  }
+  if (!matched) {
+    throw const WebhookVerificationException();
+  }
+  return raw;
+}
+
+/// Reads a verified body into the event its name says.
+WebhookEvent parseWebhookEvent(List<int> raw) {
+  final json = jsonDecode(utf8.decode(raw));
+  if (json is! Map<String, Object?> || json['event'] is! String) {
+    throw const FormatException('alpr: the webhook body is not an event');
+  }
+  final event = json['event']! as String;
+  try {
+    switch (event) {
+{{- range .Webhooks}}
+      case {{range $i, $t := .Types}}{{if $i}} || {{end}}{{quote $t}}{{end}}:
+        return {{.Name}}WebhookEvent.fromJson(json);
+{{- end}}
+    }
+  } on TypeError {
+    throw FormatException('alpr: the webhook body is not a $event event');
+  }
+  return UnknownWebhookEvent(
+    event: event,
+    id: json['id'] is String ? json['id']! as String : '',
+    body: json,
+  );
+}
+
+/// The values of the header [name] (lower case), however it is cased and
+/// however many lines it came on, joined by [separator].
+String _header(
+  Map<String, Object> headers,
+  String name, [
+  String separator = '',
+]) {
+  final values = <String>[];
+  for (final MapEntry(:key, :value) in headers.entries) {
+    if (key.toLowerCase() != name) {
       continue;
     }
-    final decoded = _base64(signature.substring(comma + 1));
-    if (decoded != null && _equal(decoded, expected)) {
-      return raw;
+    if (value is Iterable<Object?>) {
+      values.addAll(value.map((each) => '$each'));
+    } else {
+      values.add('$value');
     }
   }
-  throw const WebhookVerificationException();
+  return values.join(separator);
 }
 
-WebhookEvent _event(List<int> raw) {
-  final json = jsonDecode(utf8.decode(raw));
-  if (json case {
-    'id': final String id,
-    'type': final String type,
-    'timestamp': final String timestamp,
-  }) {
-    final data = switch (json['data']) {
-      final Map<String, Object?> data => data,
-      _ => const <String, Object?>{},
-    };
-{{- range .Webhooks}}
-    if ({{.Name}}WebhookEvent.types.contains(type)) {
-      return {{.Name}}WebhookEvent(
-        id: id,
-        type: type,
-        timestamp: timestamp,
-{{- if eq .Data.Kind "model"}}
-        data: {{.Data.Model}}.fromJson(data),
-{{- else}}
-        data: Map.unmodifiable(
-          data.map((key, value) => MapEntry(key, '$value')),
-        ),
-{{- end}}
-      );
-    }
-{{- end}}
-    return UnknownWebhookEvent(
-      id: id,
-      type: type,
-      timestamp: timestamp,
-      data: data,
-    );
-  }
-  throw const FormatException('alpr: the webhook body is not an event');
-}
-
-String _header(Map<String, String> headers, String name) {
-  for (final MapEntry(:key, :value) in headers.entries) {
-    if (key.toLowerCase() == name) {
-      return value.trim();
-    }
-  }
-  return '';
-}
-
-List<int>? _base64(String text) {
-  try {
-    return base64.decode(text);
-  } on FormatException {
-    return null;
-  }
-}
+List<int> _decodeHex(String text) => [
+  for (var i = 0; i < text.length; i += 2)
+    int.parse(text.substring(i, i + 2), radix: 16),
+];
 
 /// Compares two digests in constant time.
 bool _equal(List<int> a, List<int> b) {
