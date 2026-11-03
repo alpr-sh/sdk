@@ -1,21 +1,22 @@
-import type { Pagination } from "./models.ts";
-
-/** One page of a list, and where the list ends. */
+/** One page of a list: its items, and the cursor of the next page (null on the last). */
 export interface Page<T> {
   items: T[];
-  pagination: Pagination;
+  next: string | null;
 }
 
 /**
- * Walks pages from `first` until the last one, as Polar's SDKs do, yielding
- * every item. An error ends the walk.
+ * Walks pages from the cursor `first` (the newest page when absent) until
+ * the last one, yielding every item. A cursor that does not move ends the
+ * walk, and an error ends it too.
  */
-export async function* iterate<T>(fetch: (page: number) => Promise<Page<T>>, first = 1): AsyncGenerator<T, void, undefined> {
-  for (let page = Math.max(first, 1); ; page++) {
-    const result = await fetch(page);
+export async function* iterate<T>(fetch: (cursor: string | undefined) => Promise<Page<T>>, first?: string): AsyncGenerator<T, void, undefined> {
+  let cursor = first;
+  for (;;) {
+    const result = await fetch(cursor);
     yield* result.items;
-    if (page >= result.pagination.max_page) {
+    if (!result.next || result.next === cursor) {
       return;
     }
+    cursor = result.next;
   }
 }

@@ -1,0 +1,107 @@
+{
+  "name": "@alpr-sh/sdk",
+  "version": "0.1.0",
+  "description": "Alpr.sh's SDK for TypeScript and JavaScript: license-plate reading by photo, readings, cameras, webhooks, and the monitor screen for React, Vue, Svelte, Next.js and HTMX.",
+  "license": "MIT",
+  "homepage": "https://alpr.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alpr-sh/sdk.git",
+    "directory": "typescript"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./monitor": {
+      "types": "./dist/monitor/index.d.ts",
+      "default": "./dist/monitor/index.js"
+    },
+    "./monitor/server": {
+      "types": "./dist/monitor/server.d.ts",
+      "default": "./dist/monitor/server.js"
+    },
+    "./monitor.css": "./dist/monitor.css",
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    },
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "default": "./dist/vue/index.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte/index.d.ts",
+      "svelte": "./dist/svelte/index.js",
+      "default": "./dist/svelte/index.js"
+    },
+    "./svelte/AlprMonitor.svelte": {
+      "svelte": "./dist/svelte/AlprMonitor.svelte",
+      "default": "./dist/svelte/AlprMonitor.svelte"
+    },
+    "./next": {
+      "types": "./dist/next/index.d.ts",
+      "default": "./dist/next/index.js"
+    },
+    "./next/client": {
+      "types": "./dist/next/client.d.ts",
+      "default": "./dist/next/client.js"
+    },
+    "./htmx": {
+      "types": "./dist/htmx/index.d.ts",
+      "default": "./dist/htmx/index.js"
+    },
+    "./htmx/element": {
+      "types": "./dist/htmx/register.d.ts",
+      "default": "./dist/htmx/register.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "./dist/htmx/register.js"
+  ],
+  "engines": {
+    "node": ">=20.3"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build --silent && node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "vue": ">=3.3",
+    "svelte": ">=4",
+    "next": ">=13"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "happy-dom": "^21.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "svelte": "^5.57.3",
+    "typescript": "^7.0.2",
+    "vue": "^3.5.44"
+  }
+}

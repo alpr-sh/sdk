@@ -6,6 +6,7 @@ export { AlprError } from "./errors.ts";
 export type * from "./models.ts";
 export type { Page } from "./pagination.ts";
 export * from "./services.ts";
+export type { Photo } from "./upload.ts";
 export { API_VERSION, DEFAULT_BASE_URL, VERSION } from "./version.ts";
 export type * from "./webhooks.ts";
-export { verifyWebhook, verifyWebhookSignature, WEBHOOK_TOLERANCE_SECONDS, WebhookVerificationError } from "./webhooks.ts";
+export { isKnownWebhookEvent, verifyWebhook, verifyWebhookSignature, WEBHOOK_TOLERANCE_SECONDS, WebhookVerificationError } from "./webhooks.ts";

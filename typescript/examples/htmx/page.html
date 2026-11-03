@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monitor</title>
+    <!-- A strict CSP is enough: script-src 'self'; style-src 'self'. -->
+    <link rel="stylesheet" href="/alpr/monitor.css" />
+    <script src="/vendor/htmx.js" defer></script>
+  </head>
+  <body>
+    <!-- No JavaScript of yours: htmx fetches the fragment and keeps it fresh. -->
+    <div hx-get="/alpr/monitor" hx-trigger="load" hx-swap="outerHTML">Carregando…</div>
+  </body>
+</html>

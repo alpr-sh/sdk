@@ -5,23 +5,25 @@ import { AlprError } from "./errors.ts";
 import { {{range $i, $s := .Services}}{{if $i}}, {{end}}{{pascal .Name}}Service{{end}} } from "./services.ts";
 import { DEFAULT_BASE_URL, VERSION } from "./version.ts";
 
+const INSECURE = "alpr: the base URL must be https (http is accepted only for localhost, 127.0.0.0/8 and ::1), so the API key is never sent in clear text";
+
 /** Throws unless baseUrl is https, or http to localhost, 127.0.0.0/8 or ::1. */
 function checkBaseUrl(baseUrl: string): void {
   let url: URL;
   try {
     url = new URL(baseUrl);
   } catch {
-    throw new Error("alpr: the base URL must be https (http is accepted only for localhost, 127.0.0.0/8 and ::1), so the API key is never sent in clear text");
+    throw new Error(INSECURE);
   }
   const host = url.hostname.toLowerCase();
   const loopback = host === "localhost" || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host);
   if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
-    throw new Error("alpr: the base URL must be https (http is accepted only for localhost, 127.0.0.0/8 and ::1), so the API key is never sent in clear text");
+    throw new Error(INSECURE);
   }
 }
 
 export interface ClientOptions {
-  /** The organization's API key. prk_test_… is the test environment, prk_live_… the live one. */
+  /** The workspace's API key, alpr_live_…. */
   apiKey: string;
   /** Another address, such as a local server. It must be https; http is accepted only for localhost, 127.0.0.0/8 and ::1. */
   baseUrl?: string;
@@ -32,11 +34,13 @@ export interface ClientOptions {
 }
 
 /**
- * Alpr.sh's API with one organization's API key.
+ * Alpr.sh's API with one workspace's API key. Never build this in a browser:
+ * the key is a secret (the monitor screens take a short-lived session
+ * instead).
  *
  *     const alpr = new Alpr({ apiKey: process.env.ALPR_API_KEY! });
- *     const product = await alpr.products.create({ name: "Curso" });
- *     for await (const product of alpr.products.listIter()) { … }
+ *     const result = await alpr.photos.recognize({ image: photo });
+ *     for await (const reading of alpr.recognitions.listIter()) { … }
  */
 export class Alpr implements Requester {
 {{- range .Services}}
@@ -60,7 +64,7 @@ export class Alpr implements Requester {
 {{- end}}
   }
 
-  /** Calls the API and answers what it wrapped in `data`; a refusal throws AlprError. */
+  /** Calls the API and answers its JSON; a refusal throws AlprError. */
   async request<T>(method: string, path: string, spec: RequestSpec = {}): Promise<T> {
     const url = new URL(this.#baseUrl + path);
     for (const [name, value] of Object.entries(spec.query ?? {})) {
@@ -73,28 +77,18 @@ export class Alpr implements Requester {
       Accept: "application/json",
       "User-Agent": `alpr-typescript/${VERSION}`,
     };
-    let body: string | undefined;
-    if (spec.body !== undefined) {
-      body = JSON.stringify(spec.body);
-      headers["Content-Type"] = "application/json";
-    }
-    // A POST is sent with a key of its own, one a call, unless the caller gave one.
-    const idempotencyKey = spec.options?.idempotencyKey || (method === "POST" ? crypto.randomUUID() : "");
-    if (idempotencyKey) {
-      headers["Idempotency-Key"] = idempotencyKey;
-    }
     const signals = [AbortSignal.timeout(this.#timeoutMs)];
     if (spec.options?.signal) {
       signals.push(spec.options.signal);
     }
-    const response = await this.#fetch(url, { method, headers, body, signal: AbortSignal.any(signals), redirect: "manual" });
+    // The Content-Type of a FormData, boundary included, is fetch's to write.
+    const response = await this.#fetch(url, { method, headers, body: spec.form, signal: AbortSignal.any(signals), redirect: "manual" });
     if (!response.ok) {
       throw await AlprError.from(response);
     }
     if (response.status === 204) {
       return undefined as T;
     }
-    const envelope = (await response.json()) as { data: T };
-    return envelope.data;
+    return (await response.json()) as T;
   }
 }

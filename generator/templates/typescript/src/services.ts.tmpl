@@ -3,14 +3,13 @@
 import type { Requester, RequestOptions } from "./core.ts";
 import type * as models from "./models.ts";
 import { iterate, type Page } from "./pagination.ts";
+import { toForm } from "./upload.ts";
 {{range $service := .Services}}
 {{- range .Methods}}{{if .Paginated}}
-/** The page and filters of {{.OperationID}}. */
+/** The filters of {{.OperationID}}, and the cursor to start from. */
 export interface {{pascal $service.Name}}{{pascal .Name}}Params {
-  /** The page, from 1. */
-  page?: number;
-  /** Items a page, 1 to 100 (10 by default). */
-  limit?: number;
+  /** The cursor the previous page answered as `next`; absent asks for the newest page. */
+  {{.Cursor}}?: string;
 {{- range .Query}}
 {{tsDoc "  " .Description}}  {{.Name}}?: string;
 {{- end}}
@@ -26,23 +25,30 @@ export class {{pascal .Name}}Service {
 {{range .Methods}}
 {{- if .Paginated}}
   /** {{.Summary}}. One page; `{{camel .Name}}Iter` walks every page. */
-  {{camel .Name}}({{range .PathParams}}{{camel .}}: string, {{end}}params: {{pascal $service.Name}}{{pascal .Name}}Params = {}, options?: RequestOptions): Promise<Page<models.{{.Item}}>> {
-    return this.#client.request({{quote .HTTPMethod}}, {{template "path" .}}, { query: { ...params }, options });
+  async {{camel .Name}}({{range .PathParams}}{{camel .}}: string, {{end}}params: {{pascal $service.Name}}{{pascal .Name}}Params = {}, options?: RequestOptions): Promise<Page<models.{{.Item}}>> {
+    const body = await this.#client.request<{ data: models.{{.Item}}[]; {{.Next}}: string | null }>({{quote .HTTPMethod}}, {{template "path" .}}, { query: { ...params }, options });
+    return { items: body.data, next: body.{{.Next}} ?? null };
   }
 
   /** Walks every page of {{.OperationID}}, item by item: `for await (const item of …)`. */
   {{camel .Name}}Iter({{range .PathParams}}{{camel .}}: string, {{end}}params: {{pascal $service.Name}}{{pascal .Name}}Params = {}, options?: RequestOptions): AsyncGenerator<models.{{.Item}}, void, undefined> {
-    return iterate((page) => this.{{camel .Name}}({{range .PathParams}}{{camel .}}, {{end}}{ ...params, page }, options), params.page);
+    return iterate((cursor) => this.{{camel .Name}}({{range .PathParams}}{{camel .}}, {{end}}{ ...params, {{.Cursor}}: cursor }, options), params.{{.Cursor}});
+  }
+{{- else if .List}}
+  /** {{.Summary}}. */
+  async {{camel .Name}}({{range .PathParams}}{{camel .}}: string, {{end}}options?: RequestOptions): Promise<models.{{.Item}}[]> {
+    const body = await this.#client.request<{ data: models.{{.Item}}[] }>({{quote .HTTPMethod}}, {{template "path" .}}, { options });
+    return body.data;
   }
 {{- else if .NoContent}}
   /** {{.Summary}}. The API answers 204, so there is nothing to return. */
   async {{camel .Name}}({{range .PathParams}}{{camel .}}: string, {{end}}{{if .Body}}params: models.{{.Body.Name}}, {{end}}options?: RequestOptions): Promise<void> {
-    await this.#client.request<undefined>({{quote .HTTPMethod}}, {{template "path" .}}, { {{if .Body}}body: params, {{end}}options });
+    await this.#client.request<undefined>({{quote .HTTPMethod}}, {{template "path" .}}, { {{if .Multipart}}form: await toForm(params), {{end}}options });
   }
 {{- else}}
   /** {{.Summary}}. */
-  {{camel .Name}}({{range .PathParams}}{{camel .}}: string, {{end}}{{if .Body}}params: models.{{.Body.Name}}, {{end}}options?: RequestOptions): Promise<models.{{.Response}}> {
-    return this.#client.request({{quote .HTTPMethod}}, {{template "path" .}}, { {{if .Body}}body: params, {{end}}options });
+  async {{camel .Name}}({{range .PathParams}}{{camel .}}: string, {{end}}{{if .Body}}params: models.{{.Body.Name}}, {{end}}options?: RequestOptions): Promise<models.{{.Response}}> {
+    return this.#client.request({{quote .HTTPMethod}}, {{template "path" .}}, { {{if .Multipart}}form: await toForm(params), {{end}}options });
   }
 {{- end}}
 {{end}}}

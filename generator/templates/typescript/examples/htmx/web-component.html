@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Monitor</title>
+    <!-- The same element serves React, Vue, Svelte, Angular or plain HTML. -->
+    <script type="module" src="/node_modules/@alpr-sh/sdk/dist/htmx/register.js"></script>
+  </head>
+  <body>
+    <alpr-monitor src="/api/alpr/monitor" refresh="30" theme="auto"></alpr-monitor>
+    <!-- Or let it read Alpr.sh itself with a short-lived session from your backend: -->
+    <!-- <alpr-monitor session-url="/api/alpr/session"></alpr-monitor> -->
+  </body>
+</html>

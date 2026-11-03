@@ -1,8 +1,10 @@
 /**
- * A request the API refused. `code` is the API's: invalid_credential,
- * forbidden, not_found, invalid_request, conflict, idempotency_conflict,
- * body_too_large or unavailable. `fields` says, for invalid_request, what is
- * wrong with each field. `retryAfter` is how many seconds to wait on a 429.
+ * A request the API refused. `code` is the API's: invalid_api_key,
+ * insufficient_scope, insufficient_credits, missing image, invalid_image,
+ * invalid_option, image_too_large, no_plate, not_found, image_unavailable,
+ * rate_limited, engine_unavailable or storage_unavailable. `fields` says, when
+ * the API names them, what is wrong with each field. `retryAfter` is how many
+ * seconds to wait on a 429.
  */
 export class AlprError extends Error {
   readonly status: number;
