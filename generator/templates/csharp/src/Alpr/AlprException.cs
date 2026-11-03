@@ -7,10 +7,12 @@ namespace Alpr;
 
 /// <summary>
 /// A request the API refused. <see cref="Code"/> is the API's:
-/// invalid_credential, forbidden, not_found, invalid_request, conflict,
-/// idempotency_conflict, body_too_large or unavailable. <see cref="Fields"/>
-/// says, for invalid_request, what is wrong with each field.
-/// <see cref="RetryAfter"/> is how many seconds to wait on a 429.
+/// invalid_api_key, insufficient_scope, insufficient_credits, missing image,
+/// invalid_image, invalid_option, image_too_large, no_plate, not_found,
+/// image_unavailable, rate_limited, engine_unavailable or
+/// storage_unavailable. <see cref="Fields"/> says, when the API names them,
+/// what is wrong with each field. <see cref="RetryAfter"/> is how many
+/// seconds to wait on a 429.
 /// </summary>
 public sealed class AlprException : Exception
 {
@@ -35,13 +37,13 @@ public sealed class AlprException : Exception
     /// <summary>The HTTP status.</summary>
     public int Status { get; }
 
-    /// <summary>The API's error code: invalid_request, not_found…</summary>
+    /// <summary>The API's error code: insufficient_credits, rate_limited, no_plate…</summary>
     public string Code { get; }
 
     /// <summary>The API's message, empty when it sent none.</summary>
     public string ApiMessage { get; }
 
-    /// <summary>For invalid_request, what is wrong with each field.</summary>
+    /// <summary>What is wrong with each field, when the API names them; empty otherwise.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Fields { get; }
 
     /// <summary>On a 429, how many seconds to wait; null otherwise.</summary>

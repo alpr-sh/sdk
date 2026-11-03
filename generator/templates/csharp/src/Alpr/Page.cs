@@ -7,42 +7,46 @@ using System.Threading.Tasks;
 
 namespace Alpr;
 
-/// <summary>One page of a list, and where the list ends.</summary>
+/// <summary>One page of a list, and the cursor of the next one.</summary>
 /// <typeparam name="T">The resource listed.</typeparam>
 public sealed class Page<T>
 {
     /// <summary>The page's items.</summary>
-    [JsonPropertyName("items")]
-    public required IReadOnlyList<T> Items { get; init; }
+    [JsonPropertyName("data")]
+    public IReadOnlyList<T> Items { get; init; } = [];
 
-    /// <summary>How many items and pages the list has.</summary>
-    [JsonPropertyName("pagination")]
-    public required Pagination Pagination { get; init; }
+    /// <summary>The cursor to ask the next page with; null or empty on the last page.</summary>
+    [JsonPropertyName("next")]
+    public string? Next { get; init; }
 }
 
 internal static class Pages
 {
     /// <summary>
-    /// Walks pages from <paramref name="first"/> (1 when less) until the last
-    /// one, as Polar's SDKs do, fetching each page only when the previous one
-    /// is used up.
+    /// Walks pages from the cursor <paramref name="first"/> (the newest page
+    /// when empty) until the last one, fetching each page only when the
+    /// previous one is used up. It ends at the first error, and when a page
+    /// answers the cursor it was asked with, which would ask for the same
+    /// page forever.
     /// </summary>
     internal static async IAsyncEnumerable<T> IterateAsync<T>(
-        Func<int, CancellationToken, Task<Page<T>>> fetch,
-        int? first,
+        Func<string?, CancellationToken, Task<Page<T>>> fetch,
+        string? first,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        for (var page = Math.Max(first ?? 1, 1); ; page++)
+        var cursor = string.IsNullOrEmpty(first) ? null : first;
+        while (true)
         {
-            var result = await fetch(page, cancellationToken).ConfigureAwait(false);
+            var result = await fetch(cursor, cancellationToken).ConfigureAwait(false);
             foreach (var item in result.Items)
             {
                 yield return item;
             }
-            if (page >= result.Pagination.MaxPage)
+            if (string.IsNullOrEmpty(result.Next) || result.Next == cursor)
             {
                 yield break;
             }
+            cursor = result.Next;
         }
     }
 }

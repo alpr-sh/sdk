@@ -1,22 +1,30 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Alpr;
 
 /// <summary>
-/// A webhook Alpr.sh sent, verified: one record a kind of data
-/// (<see cref="OrderWebhookEvent"/> carries an <see cref="Order"/>…), or
-/// <see cref="UnknownWebhookEvent"/> for a type this SDK does not know yet.
-/// Within a record, <see cref="Type"/> says what happened.
+/// A webhook Alpr.sh sent, verified: one of the <c>*WebhookEvent</c> records
+/// (<see cref="RecognitionCreatedWebhookEvent"/>…), each carrying the fields
+/// of its payload flat, or <see cref="UnknownWebhookEvent"/> for an event
+/// this SDK does not know yet. Deduplicate deliveries by the
+/// <c>X-Alprsh-Delivery-Id</c> header: the body's <c>id</c> is the id of the
+/// reading or alert, not of the delivery.
 /// </summary>
-/// <param name="Id">The message's id, the same as the webhook-id header and on every delivery of it.</param>
-/// <param name="Type">What happened: <c>order.paid</c>…</param>
-/// <param name="Timestamp">When it happened, RFC 3339.</param>
-public abstract record WebhookEvent(string Id, string Type, string Timestamp);
+public interface IWebhookEvent
+{
+    /// <summary>The event's name: <c>recognition.created</c>…</summary>
+    [JsonIgnore]
+    string EventName { get; }
+}
 
-/// <summary>An event of a type this SDK does not know yet, its data as it was sent.</summary>
-/// <param name="Id">The message's id.</param>
-/// <param name="Type">What happened.</param>
-/// <param name="Timestamp">When it happened, RFC 3339.</param>
-/// <param name="Data">The event's data, as JSON.</param>
-public sealed record UnknownWebhookEvent(string Id, string Type, string Timestamp, JsonElement Data)
-    : WebhookEvent(Id, Type, Timestamp);
+/// <summary>An event of a name this SDK does not know yet, its body as it was sent.</summary>
+/// <param name="Event">The event's name.</param>
+/// <param name="Id">The <c>id</c> the body carries; empty when it has none.</param>
+/// <param name="Body">The whole body, as JSON.</param>
+public sealed record UnknownWebhookEvent(string Event, string Id, JsonElement Body) : IWebhookEvent
+{
+    /// <inheritdoc />
+    [JsonIgnore]
+    public string EventName => Event;
+}

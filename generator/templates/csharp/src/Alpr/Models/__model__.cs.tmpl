@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace Alpr;
 
 {{if .Model.Description}}{{csDoc "" .Model.Description}}{{else}}/// <summary>{{.Model.Name}} is a resource of Alpr.sh's API.</summary>
-{{end}}public sealed record {{.Model.Name}}
+{{end}}public {{csSealed .Model.Name .Webhooks}}record {{.Model.Name}}
 {
 {{- $model := .Model.Name}}
 {{- range $field := .Model.Fields}}{{range .Type.Enum}}

@@ -45,25 +45,16 @@ func init() {
 			}
 			return name
 		},
-		"csType":      csType,
-		"csRequired":  func(f *Field, input bool) bool { return f.Required && (input || !f.Nullable) },
-		"csConst":     func(field, value string) string { return idiomPascal(field) + csConstPart(value) },
-		"csDoc":       csDoc,
-		"csText":      csText,
-		"csEnvelopes": csEnvelopes,
-		"csWrite":     csWrite,
-		"csRef":       csRef,
-		// csTypeInfo is the JsonTypeInfo property the JSON context names a
-		// webhook's data by: Order, DictionaryStringString.
-		"csTypeInfo": func(t *TypeRef) (string, error) {
-			switch {
-			case t.Kind == "model":
-				return t.Model, nil
-			case t.Kind == "map" && t.Items.Kind == "string":
-				return "DictionaryStringString", nil
-			}
-			return "", fmt.Errorf("generator: csharp: a webhook carrying %s is not supported", t.Kind)
-		},
+		"csType":         csType,
+		"csRequired":     func(f *Field, input bool) bool { return f.Required && (input || !f.Nullable) },
+		"csConst":        func(field, value string) string { return idiomPascal(field) + csConstPart(value) },
+		"csDoc":          csDoc,
+		"csText":         csText,
+		"csSerializable": csSerializable,
+		"csWrite":        csWrite,
+		"csRef":          csRef,
+		"csFormText":     csFormText,
+		"csSealed":       csSealed,
 	}})
 }
 
@@ -119,6 +110,8 @@ func csRef(t *TypeRef) string {
 		return "IReadOnlyList<" + csRef(t.Items) + ">"
 	case "map":
 		return "IReadOnlyDictionary<string, " + csRef(t.Items) + ">"
+	case "binary":
+		return "byte[]"
 	case "any":
 		return "JsonElement"
 	}
@@ -151,31 +144,66 @@ func csDoc(indent, text string) string {
 	return indent + "/// <summary>" + strings.ReplaceAll(text, "\n", "\n"+indent+"/// ") + "</summary>\n"
 }
 
-// Envelope is one type the API answers in its data envelope, for the
-// source-generated JSON context.
-type Envelope struct {
-	// Type is the C# type in the envelope: Product, Page<Product>.
+// Serializable is one type the source-generated JSON context reads.
+type Serializable struct {
+	// Type is the C# type: Camera, Page<Recognition>.
 	Type string
 	// Name is its JsonTypeInfo's name on the context.
 	Name string
 }
 
-// csEnvelopes are the types the services read, once each.
-func csEnvelopes(services []*Service) []Envelope {
-	seen := map[string]Envelope{}
+// csSerializable are the types the SDK reads from JSON, once each: the
+// models the services answer, the {"data": [...]} lists, the pages, and the
+// webhook events.
+func csSerializable(services []*Service, groups []*WebhookGroup) []Serializable {
+	seen := map[string]Serializable{}
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if method.Paginated {
-				seen[method.Item+"Page"] = Envelope{Type: "Page<" + method.Item + ">", Name: method.Item + "PageEnvelope"}
-			} else if !method.NoContent {
-				seen[method.Response] = Envelope{Type: method.Response, Name: method.Response + "Envelope"}
+			switch {
+			case method.Paginated:
+				seen[method.Item+"Page"] = Serializable{Type: "Page<" + method.Item + ">", Name: method.Item + "Page"}
+			case method.List:
+				seen[method.Item+"ListEnvelope"] = Serializable{Type: "Envelope<IReadOnlyList<" + method.Item + ">>", Name: method.Item + "ListEnvelope"}
+			case !method.NoContent:
+				seen[method.Response] = Serializable{Type: method.Response, Name: method.Response}
 			}
 		}
 	}
-	out := make([]Envelope, 0, len(seen))
-	for _, envelope := range seen {
-		out = append(out, envelope)
+	for _, group := range groups {
+		name := group.Name + "WebhookEvent"
+		seen[name] = Serializable{Type: name, Name: name}
+	}
+	out := make([]Serializable, 0, len(seen))
+	for _, each := range seen {
+		out = append(out, each)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// csSealed is "sealed " for a model no webhook event extends.
+func csSealed(model string, groups []*WebhookGroup) string {
+	for _, group := range groups {
+		if group.Model == model {
+			return ""
+		}
+	}
+	return "sealed "
+}
+
+// csFormText is the C# expression that writes a multipart text field's
+// value. name is the property; optional says it is nullable, so a value type
+// is read through .Value.
+func csFormText(t *TypeRef, name string, optional bool) string {
+	value := name
+	if optional && t.Kind != "string" {
+		value = name + ".Value"
+	}
+	switch t.Kind {
+	case "integer", "number":
+		return value + ".ToString(CultureInfo.InvariantCulture)"
+	case "boolean":
+		return "(" + value + " ? \"true\" : \"false\")"
+	}
+	return value
 }

@@ -25,26 +25,42 @@ public sealed class {{pascal .Service.Name}}Service
 {{- range .PathParams}}
     /// <param name="{{csParam .}}">The {{.}}.</param>
 {{- end}}
-    /// <param name="parameters">The page, its size and the filters; the first page when null.</param>
-    /// <param name="options">Another organization's key for this call.</param>
+    /// <param name="parameters">The cursor to start from and the filters; the newest page when null.</param>
+    /// <param name="options">Another workspace's key for this call.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>The page.</returns>
     /// <exception cref="AlprException">The API refused the call.</exception>
     public Task<Page<{{.Item}}>> {{pascal .Name}}Async({{template "sig" .}}{{$service}}{{pascal .Name}}Params? parameters = null, RequestOptions? options = null, CancellationToken cancellationToken = default) =>
-        client.RequestAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, parameters?.Query(), null, AlprJson.Default.{{.Item}}PageEnvelope, null, options, cancellationToken);
+        client.RequestAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, parameters?.Query(), null, AlprJson.Default.{{.Item}}Page, options, cancellationToken);
 
-    /// <summary>Walks every page of {{.OperationID}} from the parameters' page (the first by default), item by item, fetching a page only when the previous one is used up.</summary>
+    /// <summary>Walks every page of {{.OperationID}} from the cursor in the parameters (the newest page by default), item by item, fetching a page only when the previous one is used up.</summary>
 {{- range .PathParams}}
     /// <param name="{{csParam .}}">The {{.}}.</param>
 {{- end}}
-    /// <param name="parameters">The first page, the page size and the filters.</param>
-    /// <param name="options">Another organization's key for every call.</param>
+    /// <param name="parameters">The cursor to start from and the filters.</param>
+    /// <param name="options">Another workspace's key for every call.</param>
     /// <param name="cancellationToken">Cancels the walk.</param>
     /// <returns>The items, page after page.</returns>
+    /// <exception cref="AlprException">The API refused a call; the walk ends there.</exception>
     public IAsyncEnumerable<{{.Item}}> {{pascal .Name}}IterAsync({{template "sig" .}}{{$service}}{{pascal .Name}}Params? parameters = null, RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         var walk = parameters ?? new {{$service}}{{pascal .Name}}Params();
-        return Pages.IterateAsync((page, token) => {{pascal .Name}}Async({{template "args" .}}walk with { Page = page }, options, token), walk.Page, cancellationToken);
+        return Pages.IterateAsync((cursor, token) => {{pascal .Name}}Async({{template "args" .}}walk with { {{csName .Cursor}} = cursor }, options, token), walk.{{csName .Cursor}}, cancellationToken);
+    }
+{{- else if .List}}
+
+    /// <summary>{{csText .Summary}}.</summary>
+{{- range .PathParams}}
+    /// <param name="{{csParam .}}">The {{.}}.</param>
+{{- end}}
+    /// <param name="options">Another workspace's key for this call.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The items, unwrapped from the answer's <c>data</c>.</returns>
+    /// <exception cref="AlprException">The API refused the call.</exception>
+    public async Task<IReadOnlyList<{{.Item}}>> {{pascal .Name}}Async({{template "sig" .}}RequestOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        var answer = await client.RequestAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, null, null, AlprJson.Default.{{.Item}}ListEnvelope, options, cancellationToken).ConfigureAwait(false);
+        return answer.Data ?? [];
     }
 {{- else if .NoContent}}
 
@@ -55,7 +71,7 @@ public sealed class {{pascal .Service.Name}}Service
 {{- if .Body}}
     /// <param name="parameters">The request.</param>
 {{- end}}
-    /// <param name="options">{{if .Write}}An idempotency key, or another{{else}}Another{{end}} organization's key for this call.</param>
+    /// <param name="options">Another workspace's key for this call.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     /// <exception cref="AlprException">The API refused the call.</exception>
     public Task {{pascal .Name}}Async({{template "sig" .}}{{if .Body}}{{.Body.Name}} parameters, {{end}}RequestOptions? options = null, CancellationToken cancellationToken = default)
@@ -63,7 +79,7 @@ public sealed class {{pascal .Service.Name}}Service
 {{- if .Body}}
         ArgumentNullException.ThrowIfNull(parameters);
 {{- end}}
-        return client.RequestNoContentAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, null, {{if .Body}}JsonSerializer.SerializeToUtf8Bytes(parameters, AlprJson.Default.{{.Body.Name}}){{else}}null{{end}}, {{if .Write}}options?.IdempotencyKey{{else}}null{{end}}, options, cancellationToken);
+        return client.RequestNoContentAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, null, {{if .Body}}parameters.ToForm().Content{{else}}null{{end}}, options, cancellationToken);
     }
 {{- else}}
 
@@ -74,16 +90,16 @@ public sealed class {{pascal .Service.Name}}Service
 {{- if .Body}}
     /// <param name="parameters">The request.</param>
 {{- end}}
-    /// <param name="options">{{if .Write}}An idempotency key, or another{{else}}Another{{end}} organization's key for this call.</param>
+    /// <param name="options">Another workspace's key for this call.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The {{lower .Response}}.</returns>
+    /// <returns>The {{.Response}}.</returns>
     /// <exception cref="AlprException">The API refused the call.</exception>
     public Task<{{.Response}}> {{pascal .Name}}Async({{template "sig" .}}{{if .Body}}{{.Body.Name}} parameters, {{end}}RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
 {{- if .Body}}
         ArgumentNullException.ThrowIfNull(parameters);
 {{- end}}
-        return client.RequestAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, null, {{if .Body}}JsonSerializer.SerializeToUtf8Bytes(parameters, AlprJson.Default.{{.Body.Name}}){{else}}null{{end}}, AlprJson.Default.{{.Response}}Envelope, {{if .Write}}options?.IdempotencyKey{{else}}null{{end}}, options, cancellationToken);
+        return client.RequestAsync(HttpMethod.{{pascal (lower .HTTPMethod)}}, {{template "path" .}}, null, {{if .Body}}parameters.ToForm().Content{{else}}null{{end}}, AlprJson.Default.{{.Response}}, options, cancellationToken);
     }
 {{- end}}
 {{- end}}
@@ -91,14 +107,11 @@ public sealed class {{pascal .Service.Name}}Service
 {{- range .Service.Methods}}
 {{- if .Paginated}}
 
-/// <summary>The page and filters of {{.OperationID}}.</summary>
+/// <summary>The cursor and filters of {{.OperationID}}.</summary>
 public sealed record {{$service}}{{pascal .Name}}Params
 {
-    /// <summary>The page, from 1; the first when null.</summary>
-    public int? Page { get; init; }
-
-    /// <summary>The items a page, 1 to 100; the API's 10 when null.</summary>
-    public int? Limit { get; init; }
+    /// <summary>The cursor the previous page answered as <c>Next</c>; null or empty asks for the newest page.</summary>
+    public string? {{csName .Cursor}} { get; init; }
 {{- range .Query}}
 
     /// <summary>{{if .Description}}{{csText .Description}}{{else}}The <c>{{.Name}}</c> filter.{{end}}</summary>
@@ -107,8 +120,7 @@ public sealed record {{$service}}{{pascal .Name}}Params
 
     internal IEnumerable<KeyValuePair<string, string?>> Query() =>
     [
-        new("page", Page?.ToString(CultureInfo.InvariantCulture)),
-        new("limit", Limit?.ToString(CultureInfo.InvariantCulture)),
+        new({{quote .Cursor}}, {{csName .Cursor}}),
 {{- range .Query}}
         new({{quote .Name}}, {{csName .Name}}),
 {{- end}}
@@ -121,16 +133,31 @@ public sealed record {{$service}}{{pascal .Name}}Params
 {{if .Body.Description}}{{csDoc "" .Body.Description}}{{else}}/// <summary>The body of {{.OperationID}}.</summary>
 {{end}}public sealed record {{$body}}
 {
-{{- range $field := .Body.Fields}}{{range .Type.Enum}}
-    /// <summary>A value of <see cref="{{csProp $body $field.Wire}}"/>.</summary>
-    public const string {{csConst $field.Wire .}} = {{quote .}};
-{{end}}{{end}}
 {{- range $i, $f := .Body.Fields}}{{csWrite .}}
 {{- if $i}}
 {{end}}
     /// <summary>{{if .Description}}{{csText .Description}}{{else}}The <c>{{.Wire}}</c> to send.{{end}}{{if not .Required}} Left out of the request when null.{{end}}</summary>
-    [JsonPropertyName({{quote .Wire}})]
     public {{if csRequired . true}}required {{end}}{{csType . true}} {{csProp $body .Wire}} { get; init; }
+{{- end}}
+{{- if .Multipart}}
+
+    internal Form ToForm()
+    {
+        var form = new Alpr.Form();
+{{- range .Body.Fields}}
+{{- if eq .Type.Kind "binary"}}
+        form.File({{quote .Wire}}, {{csProp $body .Wire}});
+{{- else if .Required}}
+        form.Text({{quote .Wire}}, {{csFormText .Type (csProp $body .Wire) false}});
+{{- else}}
+        if ({{csProp $body .Wire}} is not null)
+        {
+            form.Text({{quote .Wire}}, {{csFormText .Type (csProp $body .Wire) true}});
+        }
+{{- end}}
+{{- end}}
+        return form;
+    }
 {{- end}}
 }
 {{- end}}

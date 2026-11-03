@@ -13,16 +13,15 @@ using System.Threading.Tasks;
 namespace Alpr;
 
 /// <summary>
-/// Alpr.sh's API with one organization's API key. The key says the
-/// organization and the environment: <c>prk_test_…</c> is the test
-/// environment, <c>prk_live_…</c> the live one. The client is safe to share
-/// between threads.
+/// Alpr.sh's API with one workspace's API key (<c>alpr_live_…</c>), which
+/// says the workspace and the scopes the calls may use. The client is safe to
+/// share between threads.
 /// </summary>
 /// <example>
 /// <code>
 /// var alpr = new AlprClient(Environment.GetEnvironmentVariable("ALPR_API_KEY")!);
-/// var product = await alpr.Products.CreateAsync(new ProductsCreateParams { Name = "Curso" });
-/// await foreach (var each in alpr.Products.ListIterAsync()) { … }
+/// var result = await alpr.Photos.RecognizeAsync(new PhotosRecognizeParams { Image = photo });
+/// await foreach (var reading in alpr.Recognitions.ListIterAsync()) { … }
 /// </code>
 /// </example>
 public sealed class AlprClient
@@ -33,7 +32,7 @@ public sealed class AlprClient
     /// <summary>The contract this SDK was generated from.</summary>
     public const string ApiVersion = {{quote .APIVersion}};
 
-    /// <summary>Alpr.sh's API. The environment, test or live, is the API key's: <c>prk_test_…</c> or <c>prk_live_…</c>.</summary>
+    /// <summary>Alpr.sh's API. The workspace is the API key's: <c>alpr_live_…</c>.</summary>
     public const string DefaultBaseUrl = {{quote .BaseURL}};
 
     // One connection pool for every client that brings no HttpClient of its
@@ -48,8 +47,8 @@ public sealed class AlprClient
     private readonly TimeSpan timeout;
     private readonly HttpClient http;
 
-    /// <summary>A client for the organization <paramref name="apiKey"/> belongs to.</summary>
-    /// <param name="apiKey">The organization's API key.</param>
+    /// <summary>A client for the workspace <paramref name="apiKey"/> belongs to.</summary>
+    /// <param name="apiKey">The workspace's API key.</param>
     /// <param name="options">Another base URL, timeout or HTTP stack; null for the defaults.</param>
     public AlprClient(string apiKey, AlprClientOptions? options = null)
     {
@@ -70,26 +69,20 @@ public sealed class AlprClient
     public {{pascal .Name}}Service {{pascal .Name}} { get; }
 {{end}}
     /// <summary>
-    /// Calls the API and answers what it wrapped in <c>data</c>; a refusal
-    /// throws <see cref="AlprException"/>.
+    /// Calls the API and reads the answer as <typeparamref name="T"/>; a
+    /// refusal throws <see cref="AlprException"/>.
     /// </summary>
     internal async Task<T> RequestAsync<T>(
         HttpMethod method,
         string path,
         IEnumerable<KeyValuePair<string, string?>>? query,
-        byte[]? body,
-        JsonTypeInfo<Envelope<T>> answer,
-        string? idempotencyKey,
+        HttpContent? content,
+        JsonTypeInfo<T> answer,
         RequestOptions? options,
         CancellationToken cancellationToken)
     {
-        var raw = await SendAsync(method, path, query, body, idempotencyKey, options, cancellationToken).ConfigureAwait(false);
-        var envelope = JsonSerializer.Deserialize(raw, answer);
-        if (envelope is null || envelope.Data is null)
-        {
-            throw new JsonException("alpr: the API answered no data");
-        }
-        return envelope.Data;
+        var raw = await SendAsync(method, path, query, content, options, cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Deserialize(raw, answer) ?? throw new JsonException("alpr: the API answered no body");
     }
 
     /// <summary>Calls the API for an answer that is a 204 with no body; a refusal throws <see cref="AlprException"/>.</summary>
@@ -97,18 +90,16 @@ public sealed class AlprClient
         HttpMethod method,
         string path,
         IEnumerable<KeyValuePair<string, string?>>? query,
-        byte[]? body,
-        string? idempotencyKey,
+        HttpContent? content,
         RequestOptions? options,
         CancellationToken cancellationToken) =>
-        await SendAsync(method, path, query, body, idempotencyKey, options, cancellationToken).ConfigureAwait(false);
+        await SendAsync(method, path, query, content, options, cancellationToken).ConfigureAwait(false);
 
     private async Task<byte[]> SendAsync(
         HttpMethod method,
         string path,
         IEnumerable<KeyValuePair<string, string?>>? query,
-        byte[]? body,
-        string? idempotencyKey,
+        HttpContent? content,
         RequestOptions? options,
         CancellationToken cancellationToken)
     {
@@ -135,20 +126,7 @@ public sealed class AlprClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.TryAddWithoutValidation("User-Agent", "alpr-csharp/" + Version);
-        if (body is not null)
-        {
-            request.Content = new ByteArrayContent(body);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-        }
-        if (string.IsNullOrEmpty(idempotencyKey) && method == HttpMethod.Post)
-        {
-            // A POST is sent with a key of its own, one a call, unless the caller gave one.
-            idempotencyKey = Guid.NewGuid().ToString();
-        }
-        if (!string.IsNullOrEmpty(idempotencyKey))
-        {
-            request.Headers.TryAddWithoutValidation("Idempotency-Key", idempotencyKey);
-        }
+        request.Content = content;
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
