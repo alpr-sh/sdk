@@ -123,7 +123,8 @@ else
 fi
 
 if [ "${SKIP_SWIFT:-}" = 1 ]; then
-	skip swift "SKIP_SWIFT=1"
+	# Not a gate that did not run: the caller runs Swift elsewhere (CI's macOS job).
+	echo "== swift: run by another job (SKIP_SWIFT=1)"
 elif have swift; then
 	echo "== swift"
 	swift=swift
