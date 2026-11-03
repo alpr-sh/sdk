@@ -6,26 +6,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
-import java.util.function.IntFunction;
 
 /**
- * One page of a list, and where the list ends.
+ * One page of a list: its items, and the cursor of the next page.
  *
  * @param <T> the resource listed
  */
 public final class Page<T> {
     private final List<T> items;
-    private final Pagination pagination;
+    private final String next;
 
     /**
      * A page.
      *
      * @param items the page's items
-     * @param pagination how many items and pages the list has
+     * @param next the cursor of the next page, or null on the last
      */
-    public Page(List<T> items, Pagination pagination) {
+    public Page(List<T> items, String next) {
         this.items = Collections.unmodifiableList(items);
-        this.pagination = pagination;
+        this.next = next == null || next.isEmpty() ? null : next;
     }
 
     /** @return the page's items */
@@ -33,38 +32,51 @@ public final class Page<T> {
         return items;
     }
 
-    /** @return how many items and pages the list has */
-    public Pagination getPagination() {
-        return pagination;
+    /** @return the cursor to ask the next page with, or null on the last page */
+    public String getNext() {
+        return next;
     }
 
-    static <T> Page<T> fromJson(Object value, Function<Object, T> item) {
+    /** @return whether there is a page after this one */
+    public boolean hasNext() {
+        return next != null;
+    }
+
+    static <T> Page<T> fromJson(Object value, String nextName, Function<Object, T> item) {
         Map<String, Object> data = Json.asObject(value);
-        List<T> items = Json.optional(data, "items", Json.list(item));
-        return new Page<>(items == null ? Collections.emptyList() : items, Json.required(data, "pagination", Json.model(Pagination::fromJson)));
+        List<T> items = Json.optional(data, "data", Json.list(item));
+        return new Page<>(items == null ? Collections.emptyList() : items, Json.optional(data, nextName, Json::asString));
     }
 
     /**
-     * Walks pages from first (1 when less) until the last one, as Polar's
-     * SDKs do, fetching each page only when the previous one is used up.
+     * Walks pages from the cursor first (the newest page when null or empty)
+     * until the last one, fetching each page only when the previous one is
+     * used up. A cursor that does not move would ask for the same page
+     * forever, so it ends the walk; so does the first error, which the
+     * iterator throws.
      */
-    static <T> Iterable<T> iterate(IntFunction<Page<T>> fetch, Integer first) {
-        int start = first == null || first < 1 ? 1 : first;
+    static <T> Iterable<T> iterate(Function<String, Page<T>> fetch, String first) {
+        String start = first == null || first.isEmpty() ? null : first;
         return () -> new Iterator<T>() {
-            private int page = start - 1;
+            private String cursor = start;
             private Iterator<T> items = Collections.emptyIterator();
-            private boolean last;
+            private boolean done;
 
             @Override
             public boolean hasNext() {
                 while (!items.hasNext()) {
-                    if (last) {
+                    if (done) {
                         return false;
                     }
-                    page++;
-                    Page<T> result = fetch.apply(page);
+                    String used = cursor;
+                    // Set before the fetch: if it throws, the walk is over.
+                    done = true;
+                    Page<T> result = fetch.apply(used);
                     items = result.getItems().iterator();
-                    last = page >= result.getPagination().getMaxPage();
+                    if (result.getNext() != null && !result.getNext().equals(used)) {
+                        cursor = result.getNext();
+                        done = false;
+                    }
                 }
                 return true;
             }

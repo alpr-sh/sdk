@@ -15,17 +15,16 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
- * Alpr.sh's API with one organization's API key. The key says the
- * organization and the environment: prk_test_… is the test environment,
- * prk_live_… the live one.
+ * Alpr.sh's API with one workspace's API key (alpr_live_…), which says the
+ * workspace and the scopes the calls may use.
  *
  * <pre>{@code
  * Alpr alpr = new Alpr(System.getenv("ALPR_API_KEY"));
- * Product product = alpr.products().create(ProductsService.CreateParams.builder().name("Curso").build());
- * for (Product each : alpr.products().listIter()) { … }
+ * RecognizeResult result = alpr.photos().recognize(
+ *         PhotosService.RecognizeParams.builder().image(photo).build());
+ * for (Recognition each : alpr.recognitions().listIter()) { … }
  * }</pre>
  *
  * <p>A refusal throws {@link AlprException}; a request that could not be
@@ -39,7 +38,7 @@ public final class Alpr {
     /** The contract this SDK was generated from. */
     public static final String API_VERSION = {{quote .APIVersion}};
 
-    /** Alpr.sh's API. The environment, test or live, is the API key's: prk_test_… or prk_live_…. */
+    /** Alpr.sh's API. The workspace is the API key's: alpr_live_…. */
     public static final String DEFAULT_BASE_URL = {{quote .BaseURL}};
 
     private final String apiKey;
@@ -51,9 +50,9 @@ public final class Alpr {
 {{- end}}
 
     /**
-     * A client for the organization apiKey belongs to.
+     * A client for the workspace apiKey belongs to.
      *
-     * @param apiKey the organization's API key
+     * @param apiKey the workspace's API key
      */
     public Alpr(String apiKey) {
         this(builder(apiKey));
@@ -73,7 +72,7 @@ public final class Alpr {
     /**
      * A builder of a client with another base URL, timeout or transport.
      *
-     * @param apiKey the organization's API key
+     * @param apiKey the workspace's API key
      * @return the builder
      */
     public static Builder builder(String apiKey) {
@@ -86,10 +85,10 @@ public final class Alpr {
     }
 {{end}}
     /**
-     * Calls the API and answers what it wrapped in "data"; a refusal throws
-     * AlprException.
+     * Calls the API and answers the JSON of its body, or null on a 204; a
+     * refusal throws AlprException.
      */
-    Object request(String method, String path, Map<String, String> query, Map<String, Object> body, String idempotencyKey, RequestOptions options) {
+    Object request(String method, String path, Map<String, String> query, Multipart form, RequestOptions options) {
         StringBuilder url = new StringBuilder(baseUrl).append(path);
         if (query != null) {
             char separator = '?';
@@ -107,16 +106,9 @@ public final class Alpr {
         headers.put("Accept", "application/json");
         headers.put("User-Agent", "alpr-java/" + VERSION);
         byte[] payload = null;
-        if (body != null) {
-            payload = Json.write(body).getBytes(StandardCharsets.UTF_8);
-            headers.put("Content-Type", "application/json");
-        }
-        if ((idempotencyKey == null || idempotencyKey.isEmpty()) && method.equals("POST")) {
-            // A POST is sent with a key of its own, one a call, unless the caller gave one.
-            idempotencyKey = UUID.randomUUID().toString();
-        }
-        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
-            headers.put("Idempotency-Key", idempotencyKey);
+        if (form != null) {
+            payload = form.body();
+            headers.put("Content-Type", form.contentType());
         }
         Transport.Response response;
         try {
@@ -133,7 +125,7 @@ public final class Alpr {
         if (response.getStatus() == 204) {
             return null;
         }
-        return Json.required(Json.asObject(Json.parse(new String(response.getBody(), StandardCharsets.UTF_8))), "data", Json::any);
+        return Json.parse(new String(response.getBody(), StandardCharsets.UTF_8));
     }
 
     /** Throws unless the base URL is https, or http to localhost, 127.0.0.0/8 or ::1. */
@@ -161,7 +153,7 @@ public final class Alpr {
     }
 
     private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20").replace("*", "%2A");
     }
 
     /** Builds a {@link Alpr} client. */

@@ -22,14 +22,14 @@ public final class {{pascal .Service.Name}}Service {
 {{- range .PathParams}}
      * @param {{javaName .}} the {{.}}
 {{- end}}
-     * @param params the page, its size and the filters, or null
+     * @param params the cursor to start from and the filters, or null
      * @param options options for this call, or null
      * @return the page
      * @throws AlprException when the API refuses the call
      */
-    public Page<{{.Item}}> {{camel .Name}}({{template "sig" .}}{{pascal .Name}}Params params, RequestOptions options) {
-        Object data = client.request({{quote .HTTPMethod}}, {{template "path" .}}, params == null ? null : params.query(), null, null, options);
-        return Page.fromJson(data, Json.model({{.Item}}::fromJson));
+    public Page<{{.Item}}> {{camel .Name}}({{template "sig" .}}{{javaPascal .Name}}Params params, RequestOptions options) {
+        Object data = client.request({{quote .HTTPMethod}}, {{template "path" .}}, params == null ? null : params.query(), null, options);
+        return Page.fromJson(data, {{quote .Next}}, Json.model({{.Item}}::fromJson));
     }
 
     /**
@@ -37,15 +37,15 @@ public final class {{pascal .Service.Name}}Service {
 {{- range .PathParams}}
      * @param {{javaName .}} the {{.}}
 {{- end}}
-     * @param params the page, its size and the filters, or null
+     * @param params the cursor to start from and the filters, or null
      * @return the page
      */
-    public Page<{{.Item}}> {{camel .Name}}({{template "sig" .}}{{pascal .Name}}Params params) {
+    public Page<{{.Item}}> {{camel .Name}}({{template "sig" .}}{{javaPascal .Name}}Params params) {
         return {{camel .Name}}({{template "args" .}}params, null);
     }
 
     /**
-     * {{javaText .Summary}}. The first page.
+     * {{javaText .Summary}}. The newest page.
 {{- range .PathParams}}
      * @param {{javaName .}} the {{.}}
 {{- end}}
@@ -56,19 +56,20 @@ public final class {{pascal .Service.Name}}Service {
     }
 
     /**
-     * Walks every page of {{.OperationID}} from params' page (the first by
-     * default), item by item, fetching a page only when the previous one is
-     * used up.
+     * Walks every page of {{.OperationID}} from the cursor of params (the
+     * newest page by default), item by item, fetching a page only when the
+     * previous one is used up. The walk ends at the last page, at a cursor
+     * that does not move, and at the first error, which the iterator throws.
 {{- range .PathParams}}
      * @param {{javaName .}} the {{.}}
 {{- end}}
-     * @param params the first page, the page size and the filters, or null
+     * @param params the cursor to start from and the filters, or null
      * @param options options for every call, or null
      * @return the items, page after page
      */
-    public Iterable<{{.Item}}> {{camel .Name}}Iter({{template "sig" .}}{{pascal .Name}}Params params, RequestOptions options) {
-        {{pascal .Name}}Params walk = params == null ? {{pascal .Name}}Params.builder().build() : params;
-        return Page.iterate(page -> {{camel .Name}}({{template "args" .}}walk.withPage(page), options), walk.getPage());
+    public Iterable<{{.Item}}> {{camel .Name}}Iter({{template "sig" .}}{{javaPascal .Name}}Params params, RequestOptions options) {
+        {{javaPascal .Name}}Params walk = params == null ? {{javaPascal .Name}}Params.builder().build() : params;
+        return Page.iterate(cursor -> {{camel .Name}}({{template "args" .}}walk.withCursor(cursor), options), walk.{{javaGetter .Cursor}}());
     }
 
     /**
@@ -76,15 +77,15 @@ public final class {{pascal .Service.Name}}Service {
 {{- range .PathParams}}
      * @param {{javaName .}} the {{.}}
 {{- end}}
-     * @param params the first page, the page size and the filters, or null
+     * @param params the cursor to start from and the filters, or null
      * @return the items, page after page
      */
-    public Iterable<{{.Item}}> {{camel .Name}}Iter({{template "sig" .}}{{pascal .Name}}Params params) {
+    public Iterable<{{.Item}}> {{camel .Name}}Iter({{template "sig" .}}{{javaPascal .Name}}Params params) {
         return {{camel .Name}}Iter({{template "args" .}}params, null);
     }
 
     /**
-     * Walks every page of {{.OperationID}}, item by item.
+     * Walks every page of {{.OperationID}}, item by item, from the newest.
 {{- range .PathParams}}
      * @param {{javaName .}} the {{.}}
 {{- end}}
@@ -94,35 +95,28 @@ public final class {{pascal .Service.Name}}Service {
         return {{camel .Name}}Iter({{template "args" .}}null, null);
     }
 
-    /** The page and filters of {{.OperationID}}. */
-    public static final class {{pascal .Name}}Params {
-        private final Integer page;
-        private final Integer limit;
+    /** The cursor and filters of {{.OperationID}}. */
+    public static final class {{javaPascal .Name}}Params {
+        private final String {{javaName .Cursor}};
 {{- range .Query}}
         private final String {{javaName .Name}};
 {{- end}}
 
-        private {{pascal .Name}}Params(Builder builder) {
-            this.page = builder.page;
-            this.limit = builder.limit;
+        private {{javaPascal .Name}}Params(Builder builder) {
+            this.{{javaName .Cursor}} = builder.{{javaName .Cursor}};
 {{- range .Query}}
             this.{{javaName .Name}} = builder.{{javaName .Name}};
 {{- end}}
         }
 
-        /** @return a builder of the page and filters */
+        /** @return a builder of the cursor and filters */
         public static Builder builder() {
             return new Builder();
         }
 
-        /** @return the page, from 1, or null for the first */
-        public Integer getPage() {
-            return page;
-        }
-
-        /** @return the items a page, or null for the API's 10 */
-        public Integer getLimit() {
-            return limit;
+        /** @return the cursor the previous page answered as its next, or null for the newest page */
+        public String {{javaGetter .Cursor}}() {
+            return {{javaName .Cursor}};
         }
 {{- range .Query}}
 
@@ -132,29 +126,27 @@ public final class {{pascal .Service.Name}}Service {
         }
 {{- end}}
 
-        {{pascal .Name}}Params withPage(int page) {
-            Builder builder = builder().page(page);
-            builder.limit = limit;
+        {{javaPascal .Name}}Params withCursor(String cursor) {
+            Builder builder = builder();
 {{- range .Query}}
             builder.{{javaName .Name}} = {{javaName .Name}};
 {{- end}}
+            builder.{{javaName .Cursor}} = cursor;
             return builder.build();
         }
 
         Map<String, String> query() {
             Map<String, String> query = new LinkedHashMap<>();
-            query.put("page", page == null ? null : page.toString());
-            query.put("limit", limit == null ? null : limit.toString());
+            query.put({{quote .Cursor}}, {{javaName .Cursor}});
 {{- range .Query}}
             query.put({{quote .Name}}, {{javaName .Name}});
 {{- end}}
             return query;
         }
 
-        /** Builds {@link {{pascal .Name}}Params}. */
+        /** Builds {@link {{javaPascal .Name}}Params}. */
         public static final class Builder {
-            private Integer page;
-            private Integer limit;
+            private String {{javaName .Cursor}};
 {{- range .Query}}
             private String {{javaName .Name}};
 {{- end}}
@@ -163,20 +155,11 @@ public final class {{pascal .Service.Name}}Service {
             }
 
             /**
-             * @param page the page, from 1
+             * @param {{javaName .Cursor}} the cursor the previous page answered as its next
              * @return this builder
              */
-            public Builder page(int page) {
-                this.page = page;
-                return this;
-            }
-
-            /**
-             * @param limit the items a page, 1 to 100 (10 by default)
-             * @return this builder
-             */
-            public Builder limit(int limit) {
-                this.limit = limit;
+            public Builder {{javaName .Cursor}}(String {{javaName .Cursor}}) {
+                this.{{javaName .Cursor}} = {{javaName .Cursor}};
                 return this;
             }
 {{- range .Query}}
@@ -191,9 +174,9 @@ public final class {{pascal .Service.Name}}Service {
             }
 {{- end}}
 
-            /** @return the page and filters */
-            public {{pascal .Name}}Params build() {
-                return new {{pascal .Name}}Params(this);
+            /** @return the cursor and filters */
+            public {{javaPascal .Name}}Params build() {
+                return new {{javaPascal .Name}}Params(this);
             }
         }
     }
@@ -207,17 +190,20 @@ public final class {{pascal .Service.Name}}Service {
 {{- if .Body}}
      * @param params the request
 {{- end}}
-     * @param options {{if .Write}}an idempotency key or {{end}}another organization's key for this call, or null
+     * @param options another workspace's key for this call, or null
 {{- if not .NoContent}}
-     * @return the {{lower .Response}}
+     * @return {{if .List}}the {{lower .Item}}s{{else}}the {{lower .Response}}{{end}}
 {{- end}}
      * @throws AlprException when the API refuses the call
      */
-    public {{if .NoContent}}void{{else}}{{.Response}}{{end}} {{camel .Name}}({{template "sig" .}}{{if .Body}}{{pascal .Name}}Params params, {{end}}RequestOptions options) {
+    public {{if .NoContent}}void{{else if .List}}List<{{.Item}}>{{else}}{{.Response}}{{end}} {{camel .Name}}({{template "sig" .}}{{if .Body}}{{javaPascal .Name}}Params params, {{end}}RequestOptions options) {
 {{- if .NoContent}}
-        client.request({{quote .HTTPMethod}}, {{template "path" .}}, null, {{if .Body}}Objects.requireNonNull(params, "params").toJson(){{else}}null{{end}}, {{if .Write}}options == null ? null : options.getIdempotencyKey(){{else}}null{{end}}, options);
+        client.request({{quote .HTTPMethod}}, {{template "path" .}}, null, {{if .Body}}Objects.requireNonNull(params, "params").toForm(){{else}}null{{end}}, options);
+{{- else if .List}}
+        Object data = client.request({{quote .HTTPMethod}}, {{template "path" .}}, null, {{if .Body}}Objects.requireNonNull(params, "params").toForm(){{else}}null{{end}}, options);
+        return Json.required(Json.asObject(data), "data", Json.list(Json.model({{.Item}}::fromJson)));
 {{- else}}
-        Object data = client.request({{quote .HTTPMethod}}, {{template "path" .}}, null, {{if .Body}}Objects.requireNonNull(params, "params").toJson(){{else}}null{{end}}, {{if .Write}}options == null ? null : options.getIdempotencyKey(){{else}}null{{end}}, options);
+        Object data = client.request({{quote .HTTPMethod}}, {{template "path" .}}, null, {{if .Body}}Objects.requireNonNull(params, "params").toForm(){{else}}null{{end}}, options);
         return {{.Response}}.fromJson(Json.asObject(data));
 {{- end}}
     }
@@ -231,15 +217,15 @@ public final class {{pascal .Service.Name}}Service {
      * @param params the request
 {{- end}}
 {{- if not .NoContent}}
-     * @return the {{lower .Response}}
+     * @return {{if .List}}the {{lower .Item}}s{{else}}the {{lower .Response}}{{end}}
 {{- end}}
      * @throws AlprException when the API refuses the call
      */
-    public {{if .NoContent}}void{{else}}{{.Response}}{{end}} {{camel .Name}}({{if .Body}}{{template "sig" .}}{{pascal .Name}}Params params{{else}}{{template "only" .}}{{end}}) {
+    public {{if .NoContent}}void{{else if .List}}List<{{.Item}}>{{else}}{{.Response}}{{end}} {{camel .Name}}({{if .Body}}{{template "sig" .}}{{javaPascal .Name}}Params params{{else}}{{template "only" .}}{{end}}) {
         {{if not .NoContent}}return {{end}}{{camel .Name}}({{template "args" .}}{{if .Body}}params, {{end}}null);
     }
 {{- if .Body}}
-{{- $params := printf "%sParams" (pascal .Name)}}
+{{- $params := printf "%sParams" (javaPascal .Name)}}
 
     /** {{if .Body.Description}}{{javaText .Body.Description}}{{else}}The body of {{.OperationID}}.{{end}} */
     public static final class {{$params}} {
@@ -267,18 +253,20 @@ public final class {{pascal .Service.Name}}Service {
             return {{javaName .Wire}};
         }
 {{end}}
-        Map<String, Object> toJson() {
-            Map<String, Object> body = new LinkedHashMap<>();
+        Multipart toForm() {
+            Multipart form = new Multipart();
 {{- range .Body.Fields}}
-{{- if .Required}}
-            body.put({{quote .Wire}}, {{javaWrite .Type (javaName .Wire)}});
+{{- if eq .Type.Kind "binary"}}
+            form.file({{quote .Wire}}, {{javaName .Wire}});
+{{- else if .Required}}
+            form.text({{quote .Wire}}, {{javaForm .Type (javaName .Wire)}});
 {{- else}}
             if ({{javaName .Wire}} != null) {
-                body.put({{quote .Wire}}, {{javaWrite .Type (javaName .Wire)}});
+                form.text({{quote .Wire}}, {{javaForm .Type (javaName .Wire)}});
             }
 {{- end}}
 {{- end}}
-            return body;
+            return form;
         }
 
         /** Builds {@link {{$params}}}; the fields left unset are left out of the request. */
