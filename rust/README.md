@@ -98,4 +98,4 @@ O evento é tipado: uma variante para cada carga (`RecognitionCreated`, `AlertTr
 
 O `id` do corpo é o da leitura ou do alerta, não o da entrega: elimine entregas repetidas pelo cabeçalho `X-Alprsh-Delivery-Id`.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

@@ -116,4 +116,4 @@ Durante a rotação do segredo o cabeçalho de assinatura traz mais de uma, numa
 
 O evento é tipado: um tipo por carga (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `TestWebhookEvent`), com os campos da carga na raiz (`event`, `id`, `tenant_id`, `plate`…), sem `data` nem `type`. Um nome de evento que esta versão do SDK não conhece chega como `UnknownWebhookEvent` (`event`, `id` e o `body` inteiro), e não é um erro. Um corpo que não é um objeto com `event` levanta `ValueError`.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

@@ -3,7 +3,7 @@ package sh.alpr;
 /**
  * A webhook Alpr.sh sent, verified: one subclass a payload
  * ({@link RecognitionCreatedWebhookEvent} carries the fields of a
- * {@link RecognitionCreated}…), or {@link UnknownWebhookEvent} for an event
+ * {@link WebhookRecognitionCreated}…), or {@link UnknownWebhookEvent} for an event
  * this SDK does not know yet. The body is flat: {@link #getEvent()} names
  * what happened and {@link #getId()} is the id of the read or alert, not of
  * the delivery. Deduplicate deliveries by the {@code X-Alprsh-Delivery-Id}

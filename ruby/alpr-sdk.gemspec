@@ -4,7 +4,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "alpr-sdk"
-  spec.version = "0.1.0"
+  spec.version = "0.1.1"
   spec.authors = ["Alpr.sh"]
   spec.summary = "Alpr.sh's SDK for Ruby: license-plate recognition from photos, readings, cameras and webhooks."
   spec.homepage = "https://alpr.sh"

@@ -6,7 +6,7 @@
 
     <groupId>sh.alpr</groupId>
     <artifactId>sdk</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <packaging>jar</packaging>
 
     <name>Alpr.sh SDK for Java</name>
@@ -34,7 +34,7 @@
         <connection>scm:git:https://github.com/alpr-sh/sdk.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/alpr-sh/sdk.git</developerConnection>
         <url>https://github.com/alpr-sh/sdk</url>
-        <tag>v0.1.0</tag>
+        <tag>v0.1.1</tag>
     </scm>
 
     <properties>

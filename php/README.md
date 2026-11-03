@@ -102,4 +102,4 @@ Cada entrega traz três cabeçalhos (o nome não diferencia maiúsculas): `X-Alp
 
 `Alpr\Webhook::verifySignature` só confere a assinatura, sem interpretar o corpo.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

@@ -2,7 +2,7 @@
 
 Todos os SDKs da Alpr.sh saem com a mesma versão; as mudanças de cada uma estão também nas [releases de alpr-sh/sdk](https://github.com/alpr-sh/sdk/releases).
 
-## 0.1.0
+## 0.1.1
 
 Gerado a partir do contrato da API 1.0.0.
 

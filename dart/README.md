@@ -106,4 +106,4 @@ O evento é tipado, plano e sem `data`: um tipo para cada carga do webhook, com 
 
 Um evento que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com `event`, `id` (se o corpo tem um) e o `body` inteiro; não é um erro. Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`: o `id` do corpo é o da leitura ou do alerta, não o da entrega.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

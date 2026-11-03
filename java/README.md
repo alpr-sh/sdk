@@ -6,12 +6,12 @@ SDK oficial da API da Alpr.sh para Java 17+, sem dependências: só `java.net.ht
 <dependency>
     <groupId>sh.alpr</groupId>
     <artifactId>sdk</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 
 ```kotlin
-implementation("sh.alpr:sdk:0.1.0") // Gradle
+implementation("sh.alpr:sdk:0.1.1") // Gradle
 ```
 
 ## Início rápido
@@ -51,7 +51,7 @@ System.out.println(image.getImageUrl() + " (vale " + image.getExpiresIn() + " s)
 
 `Alpr.builder(apiKey).baseUrl(…).timeout(…).transport(…).build()` troca o endereço, o tempo de espera (30 s por padrão) ou o HTTP (`HttpTransport` recebe um `HttpClient` seu). O endereço precisa ser `https`; `http` só vale para `localhost`, `127.0.0.0/8` e `::1`, e outro endereço faz o `build()` lançar `IllegalArgumentException`, para a chave nunca viajar em texto puro. Redirecionamentos nunca são seguidos: um 3xx é devolvido como `AlprException`. O cliente pode ser compartilhado entre threads.
 
-Toda chamada envia `Authorization: Bearer <chave>`, `Accept: application/json` e `User-Agent: alpr-java/0.1.0`. Para usar a chave de outro espaço numa chamada, passe `RequestOptions.builder().apiKey("alpr_live_…").build()` como último argumento. O SDK não repete chamadas sozinho.
+Toda chamada envia `Authorization: Bearer <chave>`, `Accept: application/json` e `User-Agent: alpr-java/0.1.1`. Para usar a chave de outro espaço numa chamada, passe `RequestOptions.builder().apiKey("alpr_live_…").build()` como último argumento. O SDK não repete chamadas sozinho.
 
 ## A foto
 
@@ -115,4 +115,4 @@ O evento é tipado, plano e sem envelope: cada grupo vira `<Payload>WebhookEvent
 
 O `id` do corpo é o da leitura ou do alerta, não o da entrega. Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

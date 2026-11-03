@@ -67,4 +67,4 @@ O Alpr.sh assina cada entrega com HMAC-SHA256 e manda três cabeçalhos: `X-Alpr
 
 O evento é tipado, plano, sem envelope: `RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent` e `TestWebhookEvent` (o botão Testar do painel). Um evento que esta versão não conhece chega como `UnknownWebhookEvent`. `VerifyWebhookSignature` só confere a assinatura. As entregas no formato da plataforma anterior (`X-Signature-256`) e as dos parceiros (`X-Alprsh-Signature: v1=…`) não são verificadas por este SDK.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

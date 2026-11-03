@@ -6,7 +6,7 @@ SDK oficial da API da Alpr.sh para Swift 6 (macOS 12+, iOS 15+, tvOS 15+, watchO
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/alpr-sh/sdk", from: "0.1.0"),
+.package(url: "https://github.com/alpr-sh/sdk", from: "0.1.1"),
 // e, no target:
 .product(name: "Alpr", package: "sdk"),
 ```
@@ -119,4 +119,4 @@ do {
 
 `verifyWebhookSignature` só confere a assinatura, sem ler o corpo.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

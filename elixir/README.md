@@ -4,7 +4,7 @@ SDK oficial da API da Alpr.sh para Elixir 1.18+, sem dependências: só `:httpc`
 
 ```elixir
 # mix.exs
-{:alpr_sdk, "~> 0.1.0"}
+{:alpr_sdk, "~> 0.1.1"}
 ```
 
 ## Começando
@@ -100,4 +100,4 @@ O evento é tipado, com os campos do corpo no próprio struct, sem `data` nem `t
 
 **Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`.** O `id` do corpo é o da leitura ou do alerta, não o da entrega.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

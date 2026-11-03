@@ -125,4 +125,4 @@ export default () => <AlprMonitorServer source={apiKeySource(alpr)} endpointUrl=
 
 **Estilo e tema.** Visual simples e acessível (tabela com legenda e cabeçalhos de escopo, campos rotulados, foco visível, status por texto e não só por cor, `prefers-reduced-motion`), claro e escuro (`theme="auto" | "light" | "dark"`), com variáveis CSS (`--alpr-fg`, `--alpr-bg`, `--alpr-accent`, `--alpr-radius`, `--alpr-font`…) para ajustar ao seu site. Sem Tailwind, sem CDN, sem fonte externa, sem atributo `style`, sem `<script>` inline: uma CSP estrita basta. React e Vue escrevem a folha em um `<style>` (aceita `nonce`; desligue com `injectStyles={false}` e use o `<link>`); Svelte, Next e HTMX usam o arquivo `monitor.css` ou a rota `monitorStylesheet()`; o Web Component adota a folha na própria raiz sombra. Os textos são em português do Brasil. Todo texto vindo da API (como o nome de uma câmera) é escapado.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

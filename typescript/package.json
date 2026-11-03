@@ -1,6 +1,6 @@
 {
   "name": "@alpr-sh/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Alpr.sh's SDK for TypeScript and JavaScript: license-plate reading by photo, readings, cameras, webhooks, and the monitor screen for React, Vue, Svelte, Next.js and HTMX.",
   "license": "MIT",
   "homepage": "https://alpr.sh",

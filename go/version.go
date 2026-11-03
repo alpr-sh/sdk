@@ -5,7 +5,7 @@ package alpr
 // Version is this SDK's version; APIVersion is the contract it was generated
 // from.
 const (
-	Version    = "0.1.0"
+	Version    = "0.1.1"
 	APIVersion = "1.0.0"
 	// DefaultBaseURL is Alpr.sh's API. The workspace is the API key's:
 	// alpr_live_….

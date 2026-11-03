@@ -9,7 +9,7 @@ namespace Alpr;
 final class Version
 {
     /** This SDK's version. */
-    public const SDK = '0.1.0';
+    public const SDK = '0.1.1';
 
     /** The contract this SDK was generated from. */
     public const API = '1.0.0';

@@ -121,4 +121,4 @@ O evento é tipado e plano, sem `data` nem `type`: `AlertTriggeredWebhookEvent`,
 
 Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent` com `Event`, `Id` (vazio se o corpo não tiver um `id` em texto) e o corpo inteiro em `Body`. Desduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`: o `id` do corpo é o da leitura ou do alerta, não o da entrega.
 
-Versão do SDK: 0.1.0 · contrato da API: 1.0.0
+Versão do SDK: 0.1.1 · contrato da API: 1.0.0

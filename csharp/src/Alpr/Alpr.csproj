@@ -12,7 +12,7 @@
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>AlprSh.Sdk</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Alpr.sh</Authors>
     <Company>Alpr.sh</Company>
     <Description>Alpr.sh's SDK for .NET: license plate recognition from photos, readings, cameras, detection images and webhook verification.</Description>
