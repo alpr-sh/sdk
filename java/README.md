@@ -1,0 +1,119 @@
+# Alpr.sh SDK para Java
+
+SDK oficial da API da Alpr.sh para Java 17+, sem dependências: só `java.net.http` e um leitor de JSON próprio. Serve também para Kotlin. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```xml
+<dependency>
+    <groupId>sh.alpr</groupId>
+    <artifactId>sdk</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+```kotlin
+implementation("sh.alpr:sdk:0.1.0") // Gradle
+```
+
+## Início rápido
+
+```java
+import java.nio.file.Files;
+import java.nio.file.Path;
+import sh.alpr.Alpr;
+import sh.alpr.CamerasService;
+import sh.alpr.DetectionImage;
+import sh.alpr.PhotosService;
+import sh.alpr.Recognition;
+import sh.alpr.RecognitionsService;
+import sh.alpr.RecognizeResult;
+
+Alpr alpr = new Alpr(System.getenv("ALPR_API_KEY")); // alpr_live_…
+
+// Ler as placas de uma foto.
+byte[] photo = Files.readAllBytes(Path.of("carro.jpg"));
+RecognizeResult result = alpr.photos().recognize(
+        PhotosService.RecognizeParams.builder().image(photo).lprConfidence(0.5).build());
+result.getPlates().forEach(plate -> System.out.println(plate.getPlate() + " " + plate.getConf()));
+
+// Percorrer as leituras, da mais nova para a mais antiga, com filtros.
+RecognitionsService.ListParams filters = RecognitionsService.ListParams.builder().plate("BRA2E19").build();
+for (Recognition reading : alpr.recognitions().listIter(filters)) {
+    System.out.println(reading.getId() + " " + reading.getCapturedAt());
+}
+
+// Listar as câmeras do espaço.
+alpr.cameras().list().forEach(camera -> System.out.println(camera.getName()));
+
+// O link temporário da imagem de uma leitura.
+DetectionImage image = alpr.detections().image("det_123");
+System.out.println(image.getImageUrl() + " (vale " + image.getExpiresIn() + " s)");
+```
+
+`Alpr.builder(apiKey).baseUrl(…).timeout(…).transport(…).build()` troca o endereço, o tempo de espera (30 s por padrão) ou o HTTP (`HttpTransport` recebe um `HttpClient` seu). O endereço precisa ser `https`; `http` só vale para `localhost`, `127.0.0.0/8` e `::1`, e outro endereço faz o `build()` lançar `IllegalArgumentException`, para a chave nunca viajar em texto puro. Redirecionamentos nunca são seguidos: um 3xx é devolvido como `AlprException`. O cliente pode ser compartilhado entre threads.
+
+Toda chamada envia `Authorization: Bearer <chave>`, `Accept: application/json` e `User-Agent: alpr-java/0.1.0`. Para usar a chave de outro espaço numa chamada, passe `RequestOptions.builder().apiKey("alpr_live_…").build()` como último argumento. O SDK não repete chamadas sozinho.
+
+## A foto
+
+`image` é a foto em bytes (`byte[]`), JPEG ou PNG, até 10 MB e 8000 px. O SDK envia `multipart/form-data` e dá nome e tipo ao arquivo pelos primeiros bytes: JPEG (`FF D8 FF`) vira `photo.jpg` (`image/jpeg`), PNG vira `photo.png` (`image/png`), e o resto vai como `photo` (`application/octet-stream`) para a API recusar. As opções `lprConfidence` e `minOcrConfidence` (de 0 a 1) são opcionais: as que ficam de fora não são enviadas.
+
+## Leituras e páginas
+
+`recognitions().list(params)` busca uma página (`Page` com `getItems()` e `getNext()`, que é `null` na última); `params.before(cursor)` continua de onde a página anterior parou, e sem cursor vem a página mais nova. `listIter(params)` devolve um `Iterable` que percorre todas as páginas, item por item, com os mesmos filtros em cada requisição. A volta termina na última página, quando o cursor não anda, e no primeiro erro, que o iterador lança.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+| `alpr.cameras()` | `list` |
+| `alpr.detections()` | `image` |
+| `alpr.photos()` | `detect`, `ocr`, `recognize` |
+| `alpr.recognitions()` | `list`, `listIter` |
+
+Os modelos são imutáveis, com getters em camelCase (`plate.getCoordinateLeft()`) e os valores enumerados como constantes (`Recognition.SOURCE_CAMERA`). Um campo opcional ausente na resposta chega como `null`.
+
+## Erros
+
+Uma recusa da API lança `AlprException` (não verificada), com `getStatus()`, `getCode()`, `getApiMessage()`, `getFields()` (vazio, a não ser que o corpo traga `fields`) e, num 429, `getRetryAfter()` em segundos (do cabeçalho `Retry-After`). Um corpo de erro que não é JSON continua sendo um erro, só com o status. Uma falha de rede lança `UncheckedIOException`. Os códigos:
+
+| Status | Código |
+|---|---|
+| 401 | `invalid_api_key` |
+| 402 | `insufficient_credits` |
+| 403 | `insufficient_scope` |
+| 400 | `missing image`, `invalid_image`, `invalid_option` |
+| 413 | `image_too_large` |
+| 422 | `no_plate` |
+| 404 | `not_found`, `image_unavailable` |
+| 429 | `rate_limited` |
+| 503 | `engine_unavailable`, `storage_unavailable` |
+
+## Webhooks
+
+```java
+WebhookEvent event = Webhook.verify(System.getenv("ALPR_WEBHOOK_SECRET"), headers, body);
+if (event instanceof RecognitionCreatedWebhookEvent) {
+    RecognitionCreatedWebhookEvent reading = (RecognitionCreatedWebhookEvent) event;
+    System.out.println(reading.getPlate() + " " + reading.getCapturedAt());
+} else if (event instanceof AlertTriggeredWebhookEvent) {
+    System.out.println(((AlertTriggeredWebhookEvent) event).getRuleName());
+} else if (event instanceof UnknownWebhookEvent) {
+    // um evento que esta versão do SDK ainda não conhece: getBody() e getRaw() trazem o corpo
+}
+```
+
+A Alpr.sh assina cada entrega com três cabeçalhos (a busca por nome ignora maiúsculas):
+
+- `X-Alprsh-Delivery-Id`: o id da entrega.
+- `X-Alprsh-Timestamp`: segundos desde 1970, só dígitos ASCII.
+- `X-Alprsh-Signature`: `sha256=` e o HMAC-SHA256 em hexadecimal (64 caracteres) de `timestamp + "." + deliveryId + "." + corpo`, com o segredo do endpoint como chave, o texto inteiro, `whsec_…` incluído, sem decodificar nada.
+
+Passe o corpo cru (`byte[]` ou `String`), antes de interpretar, e os cabeçalhos num `Map` (valores `String` ou listas). `Webhook.verify` confere e devolve o evento; `Webhook.verifySignature` só confere a assinatura. Uma assinatura que não confere, ou um carimbo fora da tolerância (`Webhook.TOLERANCE`, 5 minutos para mais ou para menos), lança `WebhookVerificationException`. Um segredo vazio lança `IllegalArgumentException`, que é erro de configuração, não de assinatura.
+
+Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, numa só linha separada por vírgulas ou em linhas repetidas. Basta uma conferir, mas mais de 6 entradas, ou uma entrada que não seja `sha256=` e 64 dígitos hexadecimais, recusam a requisição inteira.
+
+O evento é tipado, plano e sem envelope: cada grupo vira `<Payload>WebhookEvent` (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `WebhookTestWebhookEvent`) com os campos do corpo (`getEvent()`, `getId()`, `getTenantId()`, `getPlate()`…). Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent`, com `getEvent()`, `getId()` (vazio se o corpo não tiver `id`) e o corpo inteiro. Um corpo que não é um objeto com `event` lança `IllegalArgumentException`.
+
+O `id` do corpo é o da leitura ou do alerta, não o da entrega. Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`.
+
+Versão do SDK: 0.1.0 · contrato da API: 1.0.0
