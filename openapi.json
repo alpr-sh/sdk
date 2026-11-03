@@ -1,0 +1,1177 @@
+{
+  "components": {
+    "schemas": {
+      "AlertTriggered": {
+        "description": "Carga de alert.triggered: a regra que disparou e a leitura que a disparou.",
+        "properties": {
+          "camera_id": {
+            "type": "string"
+          },
+          "captured_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "event": {
+            "enum": [
+              "alert.triggered"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "recognition_id": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "captured_at",
+          "confidence",
+          "event",
+          "id",
+          "plate",
+          "recognition_id",
+          "rule_id",
+          "rule_name",
+          "tenant_id"
+        ],
+        "type": "object"
+      },
+      "Camera": {
+        "description": "Uma câmera do espaço, sem endereço nem credenciais.",
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "readingArea": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingArea"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "createdAt",
+          "enabled",
+          "id",
+          "location",
+          "name",
+          "protocol",
+          "readingArea"
+        ],
+        "type": "object"
+      },
+      "CameraList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Camera"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "DetectResult": {
+        "description": "Onde estão as placas de uma foto.",
+        "properties": {
+          "imageHeight": {
+            "type": "integer"
+          },
+          "imageWidth": {
+            "type": "integer"
+          },
+          "plates": {
+            "items": {
+              "$ref": "#/components/schemas/DetectedPlate"
+            },
+            "type": "array"
+          },
+          "processingTimeMs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "imageHeight",
+          "imageWidth",
+          "plates",
+          "processingTimeMs"
+        ],
+        "type": "object"
+      },
+      "DetectedPlate": {
+        "description": "Uma placa localizada na foto, sem o texto.",
+        "properties": {
+          "conf": {
+            "type": "number"
+          },
+          "coordinateBottom": {
+            "type": "integer"
+          },
+          "coordinateLeft": {
+            "type": "integer"
+          },
+          "coordinateRight": {
+            "type": "integer"
+          },
+          "coordinateTop": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "plateType": {
+            "type": "string"
+          },
+          "time": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conf",
+          "coordinateBottom",
+          "coordinateLeft",
+          "coordinateRight",
+          "coordinateTop",
+          "createdAt",
+          "plateType",
+          "time"
+        ],
+        "type": "object"
+      },
+      "DetectionImage": {
+        "description": "O link temporário da imagem de uma leitura.",
+        "properties": {
+          "detectionId": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "description": "Segundos de validade do link.",
+            "type": "integer"
+          },
+          "imageUrl": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detectionId",
+          "expiresIn",
+          "imageUrl"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "description": "Código do erro: invalid_api_key, insufficient_scope, insufficient_credits, missing image, invalid_image, invalid_option, image_too_large, no_plate, not_found, image_unavailable, rate_limited, engine_unavailable ou storage_unavailable.",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message"
+        ],
+        "type": "object"
+      },
+      "OcrResult": {
+        "description": "A placa lida de uma imagem já recortada.",
+        "properties": {
+          "confidence": {
+            "type": "number"
+          },
+          "creditsRemaining": {
+            "type": "integer"
+          },
+          "detectionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latencyMs": {
+            "type": "integer"
+          },
+          "plate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "confidence",
+          "creditsRemaining",
+          "detectionId",
+          "latencyMs",
+          "plate"
+        ],
+        "type": "object"
+      },
+      "ReadingArea": {
+        "description": "A área de leitura da câmera: placas fora do polígono são ignoradas.",
+        "properties": {
+          "box": {
+            "$ref": "#/components/schemas/ReadingBox"
+          },
+          "points": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "ReadingBox": {
+        "description": "A caixa envolvente da área de leitura, em frações da imagem.",
+        "properties": {
+          "height": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "Recognition": {
+        "description": "Uma leitura de placa, de uma câmera ou da API por foto.",
+        "properties": {
+          "cameraId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capturedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "conf": {
+            "description": "Confiança da leitura, de 0 a 100.",
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "camera",
+              "api"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "cameraId",
+          "capturedAt",
+          "conf",
+          "id",
+          "plate",
+          "source"
+        ],
+        "type": "object"
+      },
+      "RecognitionCreated": {
+        "description": "Carga de recognition.created: os fatos no instante da leitura.",
+        "properties": {
+          "camera_id": {
+            "type": "string"
+          },
+          "captured_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "event": {
+            "enum": [
+              "recognition.created"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "camera",
+              "api"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "captured_at",
+          "confidence",
+          "event",
+          "id",
+          "plate",
+          "source",
+          "tenant_id"
+        ],
+        "type": "object"
+      },
+      "RecognitionList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Recognition"
+            },
+            "type": "array"
+          },
+          "next": {
+            "description": "O cursor da próxima página (before); nulo na última.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "next"
+        ],
+        "type": "object"
+      },
+      "RecognizeResult": {
+        "description": "O resultado da leitura de uma foto. Sem placa, plates é [].",
+        "properties": {
+          "creditsRemaining": {
+            "type": "integer"
+          },
+          "imageHeight": {
+            "type": "integer"
+          },
+          "imageWidth": {
+            "type": "integer"
+          },
+          "plates": {
+            "items": {
+              "$ref": "#/components/schemas/RecognizedPlate"
+            },
+            "type": "array"
+          },
+          "processingTimeMs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "creditsRemaining",
+          "imageHeight",
+          "imageWidth",
+          "plates",
+          "processingTimeMs"
+        ],
+        "type": "object"
+      },
+      "RecognizedPlate": {
+        "description": "Uma placa lida na foto, com a caixa em pixels.",
+        "properties": {
+          "charConfs": {
+            "description": "Confiança de 0 a 1 de cada caractere, separadas por vírgula.",
+            "type": "string"
+          },
+          "conf": {
+            "description": "Confiança da leitura, de 0 a 100.",
+            "type": "number"
+          },
+          "coordinateBottom": {
+            "type": "integer"
+          },
+          "coordinateLeft": {
+            "type": "integer"
+          },
+          "coordinateRight": {
+            "type": "integer"
+          },
+          "coordinateTop": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "plateType": {
+            "type": "string"
+          },
+          "time": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "charConfs",
+          "conf",
+          "coordinateBottom",
+          "coordinateLeft",
+          "coordinateRight",
+          "coordinateTop",
+          "createdAt",
+          "plate",
+          "plateType",
+          "time"
+        ],
+        "type": "object"
+      },
+      "WebhookTest": {
+        "description": "Carga de webhook.test, enviada pelo botão Testar do painel.",
+        "properties": {
+          "event": {
+            "enum": [
+              "webhook.test"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "id",
+          "sent_at",
+          "tenant_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "bearerFormat": "Chave de API do espaço (formato: alpr_live_...)",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Leitura de placas por foto, consulta das leituras e das câmeras, com a chave de API do espaço em Authorization: Bearer e webhooks assinados.",
+    "title": "API do Alpr.sh",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/cameras": {
+      "get": {
+        "description": "As câmeras do espaço, cadastradas no painel. Escopo: `cameras:read`.",
+        "operationId": "cameras:list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraList"
+                }
+              }
+            },
+            "description": "As câmeras do espaço."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+          },
+          "429": {
+            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Listar as câmeras",
+        "tags": [
+          "Câmeras"
+        ],
+        "x-arandu-route-name": "api.cameras"
+      }
+    },
+    "/api/v1/detect": {
+      "post": {
+        "description": "Responde só onde estão as placas, sem o texto. Não guarda nada e não gasta crédito. Escopo: `recognitions:write`.",
+        "operationId": "photos:detect",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "image": {
+                    "description": "A foto, JPEG ou PNG, até 10 MB e 8000 px.",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "lpr_confidence": {
+                    "description": "Piso do detector, de 0 a 1.",
+                    "type": "number"
+                  },
+                  "min_ocr_confidence": {
+                    "description": "Piso da leitura, de 0 a 1.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "image"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectResult"
+                }
+              }
+            },
+            "description": "As placas encontradas, com caixa e confiança."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Sem foto, foto inválida ou opção fora de 0 a 1."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Mais de 10 MB ou 8000 px."
+          },
+          "429": {
+            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Leitura indisponível no momento."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Localizar as placas de uma foto",
+        "tags": [
+          "Leitura por foto"
+        ],
+        "x-arandu-route-name": "api.detect"
+      }
+    },
+    "/api/v1/detections/{id}/image": {
+      "get": {
+        "description": "Responde um link temporário para a imagem da leitura: a foto, quando guardada, ou o recorte da placa. O link vale expiresIn segundos e não precisa da chave. Escopo: `recognitions:read`.",
+        "operationId": "detections:image",
+        "parameters": [
+          {
+            "description": "O ID da leitura.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionImage"
+                }
+              }
+            },
+            "description": "O link da imagem."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Leitura de outro espaço ou inexistente (not_found), ou sem imagem guardada (image_unavailable)."
+          },
+          "429": {
+            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Armazenamento indisponível no momento (storage_unavailable)."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Imagem de uma leitura",
+        "tags": [
+          "Leituras"
+        ],
+        "x-arandu-route-name": "api.detections.image"
+      }
+    },
+    "/api/v1/ocr": {
+      "post": {
+        "description": "Para uma imagem que já é a placa. Gasta 1 crédito por placa lida; sem leitura, nada é cobrado. Escopo: `recognitions:write`.",
+        "operationId": "photos:ocr",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "image": {
+                    "description": "A foto, JPEG ou PNG, até 10 MB e 8000 px.",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "image"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrResult"
+                }
+              }
+            },
+            "description": "A placa lida."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Sem foto ou foto inválida."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Sem créditos (insufficient_credits)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Nenhuma placa lida na imagem; nada foi cobrado (no_plate)."
+          },
+          "429": {
+            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Leitura indisponível no momento."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Ler uma placa já recortada",
+        "tags": [
+          "Leitura por foto"
+        ],
+        "x-arandu-route-name": "api.ocr"
+      }
+    },
+    "/api/v1/recognitions": {
+      "get": {
+        "description": "Leituras das câmeras e da API por foto, das mais novas para as mais antigas, 50 por página. Escopo: `recognitions:read`.",
+        "operationId": "recognitions:list",
+        "parameters": [
+          {
+            "description": "Prefixo da placa; traço e caixa não importam.",
+            "in": "query",
+            "name": "plate",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ID da câmera.",
+            "in": "query",
+            "name": "camera",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Origem da leitura: camera ou api.",
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "enum": [
+                "camera",
+                "api"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "O valor next da página anterior.",
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionList"
+                }
+              }
+            },
+            "description": "Uma página de leituras."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+          },
+          "429": {
+            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Listar as leituras",
+        "tags": [
+          "Leituras"
+        ],
+        "x-alpr-pagination": {
+          "cursor": "before",
+          "item_schema": "Recognition",
+          "next": "next",
+          "type": "cursor"
+        },
+        "x-arandu-route-name": "api.recognitions"
+      }
+    },
+    "/api/v1/recognize": {
+      "post": {
+        "description": "Envie a foto como multipart (`image`). Cada foto lida gasta 1 crédito; uma leitura que falha não é cobrada. Escopo: `recognitions:write`.",
+        "operationId": "photos:recognize",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "image": {
+                    "description": "A foto, JPEG ou PNG, até 10 MB e 8000 px.",
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "lpr_confidence": {
+                    "description": "Piso do detector, de 0 a 1.",
+                    "type": "number"
+                  },
+                  "min_ocr_confidence": {
+                    "description": "Piso da leitura, de 0 a 1.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "image"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognizeResult"
+                }
+              }
+            },
+            "description": "Leitura concluída. Sem placa, plates é []."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Sem foto, não é JPEG/PNG ou opção fora de 0 a 1 (missing image, invalid_image, invalid_option)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Sem créditos (insufficient_credits)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Mais de 10 MB ou 8000 px (image_too_large)."
+          },
+          "429": {
+            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Leitura indisponível no momento; nada foi cobrado (engine_unavailable)."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Ler as placas de uma foto",
+        "tags": [
+          "Leitura por foto"
+        ],
+        "x-arandu-route-name": "api.recognize"
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Produção.",
+      "url": "https://alpr.sh"
+    }
+  ],
+  "webhooks": {
+    "alert.triggered": {
+      "post": {
+        "description": "Enviado por POST ao endereço cadastrado no painel. Cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (sha256= e o HMAC-SHA256 hexadecimal de \"{timestamp}.{delivery-id}.{corpo}\" com o segredo whsec_ do endereço). Responda 2xx; 408, 425, 429 e 5xx são repetidos em 5 s, 30 s, 2 min e 10 min.",
+        "operationId": "webhooks:alert.triggered",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertTriggered"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          }
+        },
+        "summary": "Uma regra de alerta disparou.",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "recognition.created": {
+      "post": {
+        "description": "Enviado por POST ao endereço cadastrado no painel. Cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (sha256= e o HMAC-SHA256 hexadecimal de \"{timestamp}.{delivery-id}.{corpo}\" com o segredo whsec_ do endereço). Responda 2xx; 408, 425, 429 e 5xx são repetidos em 5 s, 30 s, 2 min e 10 min.",
+        "operationId": "webhooks:recognition.created",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecognitionCreated"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          }
+        },
+        "summary": "Uma câmera ou a API leu uma placa.",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "webhook.test": {
+      "post": {
+        "description": "Enviado por POST ao endereço cadastrado no painel. Cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (sha256= e o HMAC-SHA256 hexadecimal de \"{timestamp}.{delivery-id}.{corpo}\" com o segredo whsec_ do endereço). Responda 2xx; 408, 425, 429 e 5xx são repetidos em 5 s, 30 s, 2 min e 10 min.",
+        "operationId": "webhooks:webhook.test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookTest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          }
+        },
+        "summary": "Entrega de teste, enviada pelo botão Testar do painel.",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    }
+  }
+}

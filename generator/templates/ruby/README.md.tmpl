@@ -1,0 +1,52 @@
+# Alpr.sh SDK para Ruby
+
+SDK oficial da API da Alpr.sh para Ruby 3.1+, sem dependências: só `net/http`, `json` e `openssl`. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+gem install alpr-sdk
+```
+
+```ruby
+require "alpr"
+
+alpr = Alpr::Client.new(ENV.fetch("ALPR_API_KEY")) # prk_test_… ou prk_live_…
+
+product = alpr.products.create({ name: "Curso" }, idempotency_key: "produto-curso")
+
+alpr.products.list_iter.each do |product|
+  puts product.name
+end
+```
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+{{- range .Services}}
+| `alpr.{{snake .Name}}` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{snake $m.Name}}`{{if $m.Paginated}}, `{{snake $m.Name}}_iter`{{end}}{{end}} |
+{{- end}}
+
+Os modelos são objetos imutáveis com leitores em snake_case (`payment.amount_cents`). O corpo de uma escrita é a classe de parâmetros do método (`Alpr::ProductsCreateParams.new(name: "Curso")`) ou um `Hash` com os mesmos nomes; um campo opcional não informado fica fora do JSON. Os métodos `_iter` devolvem um `Enumerator` que percorre todas as páginas a partir de `page:` (ou recebem um bloco).
+
+As escritas aceitam `idempotency_key:`, e todas aceitam `api_key:` para usar a chave de outra organização numa chamada. `Alpr::Client.new` aceita `base_url:`, `timeout:` (30 segundos) e `transport:`. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+
+## Erros
+
+Uma recusa da API levanta `Alpr::Error`, com `status`, `code` (`invalid_request`, `not_found`…), `message`, `fields` (o problema de cada campo) e, num 429, `retry_after` em segundos.
+
+## Webhooks
+
+```ruby
+event = Alpr.verify_webhook(ENV.fetch("ALPR_WEBHOOK_SECRET"), request.headers, request.raw_post)
+case event
+when Alpr::OrderWebhookEvent then puts event.type, event.data.id, event.data.installments
+when Alpr::DisputeWebhookEvent then puts event.data.provider_dispute_id
+when Alpr::UnknownWebhookEvent then nil # um tipo que esta versão ainda não conhece: event.data é o JSON
+end
+```
+
+A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. Passe o corpo cru, antes de interpretar; os cabeçalhos podem vir num `Hash` ou no env do Rack. Uma assinatura que não confere levanta `Alpr::WebhookVerificationError`.
+
+O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `Alpr.verify_webhook_signature` só confere a assinatura.
+
+Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

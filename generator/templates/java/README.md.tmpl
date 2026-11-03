@@ -1,0 +1,65 @@
+# Alpr.sh SDK para Java
+
+SDK oficial da API da Alpr.sh para Java 11+, sem dependências: só `java.net.http` e um leitor de JSON próprio. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```xml
+<dependency>
+    <groupId>sh.alpr</groupId>
+    <artifactId>sdk</artifactId>
+    <version>{{.Version}}</version>
+</dependency>
+```
+
+```kotlin
+implementation("sh.alpr:sdk:{{.Version}}") // Gradle
+```
+
+```java
+import sh.alpr.Alpr;
+import sh.alpr.Product;
+import sh.alpr.ProductsService;
+import sh.alpr.RequestOptions;
+
+Alpr alpr = new Alpr(System.getenv("ALPR_API_KEY")); // prk_test_… ou prk_live_…
+
+Product product = alpr.products().create(
+        ProductsService.CreateParams.builder().name("Curso").build(),
+        RequestOptions.builder().idempotencyKey("produto-curso").build());
+
+for (Product each : alpr.products().listIter()) {
+    System.out.println(each.getName());
+}
+```
+
+`Alpr.builder(apiKey).baseUrl(…).timeout(…).transport(…).build()` troca o endereço, o tempo de espera (30 s por padrão) ou o HTTP (`HttpTransport` recebe um `HttpClient` seu). O cliente pode ser compartilhado entre threads.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+{{- range .Services}}
+| `alpr.{{javaName .Name}}()` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{camel $m.Name}}`{{if $m.Paginated}}, `{{camel $m.Name}}Iter`{{end}}{{end}} |
+{{- end}}
+
+Os modelos são imutáveis, com getters em camelCase (`payment.getAmountCents()`) e os valores enumerados como constantes (`Product.STATUS_ACTIVE`). O corpo de cada escrita é um builder aninhado no serviço (`ProductsService.CreateParams`); um campo opcional não definido fica fora da requisição. As listas aceitam `ListParams` (`page`, `limit` e os filtros) e o `…Iter` devolve um `Iterable` que percorre todas as páginas. As escritas aceitam `RequestOptions` com `idempotencyKey`, e todas aceitam `apiKey` para usar a chave de outra organização numa chamada. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+
+## Erros
+
+Uma recusa da API lança `AlprException` (não verificada), com `getStatus()`, `getCode()` (`invalid_request`, `not_found`…), `getApiMessage()`, `getFields()` (o problema de cada campo) e, num 429, `getRetryAfter()` em segundos. Uma falha de rede lança `UncheckedIOException`.
+
+## Webhooks
+
+```java
+WebhookEvent event = Webhook.verify(System.getenv("ALPR_WEBHOOK_SECRET"), headers, body);
+if (event instanceof OrderWebhookEvent) {
+    Order order = ((OrderWebhookEvent) event).getData(); // order.created, order.paid…
+} else if (event instanceof UnknownWebhookEvent) {
+    // um tipo que esta versão do SDK ainda não conhece: getData() é o JSON
+}
+```
+
+A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. Passe o corpo cru (`byte[]`), antes de interpretar, e os cabeçalhos num `Map` (valores `String` ou listas). Uma assinatura inválida lança `WebhookVerificationException`.
+
+O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `Webhook.verifySignature` só confere a assinatura.
+
+Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

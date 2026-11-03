@@ -1,0 +1,55 @@
+# Alpr.sh SDK para TypeScript
+
+SDK oficial da API da Alpr.sh para TypeScript e JavaScript (Node 20.3+, Deno, Bun e navegadores com `fetch`), sem dependências. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+npm install @alpr-sh/sdk
+```
+
+```ts
+import { Alpr } from "@alpr-sh/sdk";
+
+const alpr = new Alpr({ apiKey: process.env.ALPR_API_KEY! }); // prk_test_… ou prk_live_…
+
+const product = await alpr.products.create({ name: "Curso" }, { idempotencyKey: "produto-curso" });
+
+for await (const product of alpr.products.listIter()) {
+  console.log(product.name);
+}
+```
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+{{- range .Services}}
+| `alpr.{{camel .Name}}` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{camel $m.Name}}`{{if $m.Paginated}}, `{{camel $m.Name}}Iter`{{end}}{{end}} |
+{{- end}}
+
+Cada método aceita, por último, `{ idempotencyKey, apiKey, signal }`. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+
+## Erros
+
+Uma recusa da API lança `AlprError`, com `status`, `code` (`invalid_request`, `not_found`…), `fields` (o problema de cada campo) e, num 429, `retryAfter` em segundos.
+
+## Webhooks
+
+```ts
+import { verifyWebhook } from "@alpr-sh/sdk";
+
+const event = await verifyWebhook(process.env.ALPR_WEBHOOK_SECRET!, request.headers, await request.text());
+switch (event.type) {
+  case "order.paid":
+    console.log(event.data.id, event.data.installments); // event.data é um Order
+    break;
+  case "dispute.opened":
+    console.log(event.data.provider_dispute_id); // event.data é um WebhookDispute
+    break;
+}
+```
+
+A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. Passe o corpo cru, antes de interpretar.
+
+O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como veio, fora da união. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `verifyWebhookSignature` só confere a assinatura.
+
+Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

@@ -1,0 +1,36 @@
+{
+  "name": "@alpr-sh/sdk",
+  "version": "{{.Version}}",
+  "description": "Alpr.sh's SDK for TypeScript and JavaScript: products, customers, checkouts, payments, subscriptions and webhooks.",
+  "license": "MIT",
+  "homepage": "https://alpr.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alpr-sh/sdk.git",
+    "directory": "typescript"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.3"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

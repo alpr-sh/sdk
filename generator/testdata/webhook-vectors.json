@@ -1,0 +1,48 @@
+{
+  "_comment": "Webhook vectors every SDK's tests check. The secret is used as the whole text, whsec_ included. Headers: X-Alprsh-Delivery-Id, X-Alprsh-Timestamp, X-Alprsh-Signature. Signed text: timestamp + '.' + delivery id + '.' + body.",
+  "secrets": {
+    "new": "whsec_SDK-test-secret-new-0123456789",
+    "old": "whsec_SDK-test-secret-old-0123456789",
+    "other": "whsec_SDK-test-secret-other-012345678"
+  },
+  "signedAt": 1792670400,
+  "nowWithinTolerance": 1792670520,
+  "deliveryIds": {
+    "recognition": "del_0001",
+    "alert": "del_0002",
+    "test": "del_0003",
+    "unknown": "del_0004"
+  },
+  "bodies": {
+    "recognition": "{\"event\":\"recognition.created\",\"id\":\"rec_1\",\"tenant_id\":\"ws_1\",\"source\":\"camera\",\"camera_id\":\"cam_1\",\"plate\":\"BRA2E19\",\"confidence\":0.97,\"captured_at\":\"2026-10-22T11:59:58Z\"}",
+    "alert": "{\"event\":\"alert.triggered\",\"id\":\"alt_1\",\"tenant_id\":\"ws_1\",\"rule_id\":\"rule_1\",\"rule_name\":\"Veículo bloqueado\",\"recognition_id\":\"rec_1\",\"plate\":\"BRA2E19\",\"camera_id\":\"cam_1\",\"confidence\":0.97,\"captured_at\":\"2026-10-22T11:59:58Z\"}",
+    "test": "{\"event\":\"webhook.test\",\"id\":\"evt_1\",\"tenant_id\":\"ws_1\",\"sent_at\":\"2026-10-22T12:00:00Z\"}",
+    "unknown": "{\"event\":\"payout.sent\",\"id\":\"po_1\",\"tenant_id\":\"ws_1\"}"
+  },
+  "signatures": {
+    "recognition": {
+      "new": "sha256=97deaf1c8a9348f3a7d64ce68943f4e6b4cc44590df4caea4c16d6373fa7d623",
+      "old": "sha256=12b70f2a8838157260e3b9470befa2627c16c42fe5e4b1d80fb841e206f8c781"
+    },
+    "alert": {
+      "new": "sha256=0b84627fa4564b006237b52feca68ca3c8dfebc54d4e271e881105f75e2a962a",
+      "old": "sha256=3a6facfaee138fb0c73ce133c7882000f86878591403c49e31dad703c1dc95db"
+    },
+    "test": {
+      "new": "sha256=f3064f502ba3ffe3e409d9186c89ce7e425ad1dcad34b73edbeb1ad8e0633245",
+      "old": "sha256=5e3cd0b773c0604771b3dd0f4783c6163a5ad8609d7223a9ad38a2e8d74d1598"
+    },
+    "unknown": {
+      "new": "sha256=cb5b4f83462c974ea9706723b97a28de5d591d2093aa62e8dc8e388997daa0d6",
+      "old": "sha256=a8f5c57a5d66606eca247e97c959e58ed96d4a784928b019e9bdf5a673a5c7ad"
+    }
+  },
+  "rotation": {
+    "header": "sha256=12b70f2a8838157260e3b9470befa2627c16c42fe5e4b1d80fb841e206f8c781,sha256=97deaf1c8a9348f3a7d64ce68943f4e6b4cc44590df4caea4c16d6373fa7d623",
+    "note": "One header value, comma separated, old secret first; both secrets verify it. A sender may also write them as two header lines."
+  },
+  "plusSignTimestamp": {
+    "timestamp": "+1792670400",
+    "signature": "sha256=ceef0f02180106de386c85b403f2b448142e897911c1e6075725b7e8d2912771"
+  }
+}

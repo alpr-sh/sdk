@@ -1,0 +1,68 @@
+# Alpr.sh SDK para Dart
+
+SDK oficial da API da Alpr.sh para Dart 3.8+ e Flutter (Android, iOS, desktop e web), só com `http` e `crypto`, os pacotes da equipe do Dart. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+dart pub add alpr_sdk     # ou: flutter pub add alpr_sdk
+```
+
+```dart
+import 'dart:io';
+
+import 'package:alpr_sdk/alpr_sdk.dart';
+
+final alpr = Alpr(Platform.environment['ALPR_API_KEY']!); // prk_test_… ou prk_live_…
+
+final product = await alpr.products.create(
+  const ProductsCreateParams(name: 'Curso'),
+  idempotencyKey: 'produto-curso',
+);
+
+await for (final product in alpr.products.listIter()) {
+  print(product.name);
+}
+
+alpr.close();
+```
+
+A chave da API é da organização e dá acesso a ela inteira: use o SDK no servidor. Num app Flutter, chame o seu backend em vez de embutir a chave.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+{{- range .Services}}
+| `alpr.{{dartName .Name}}` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{dartName $m.Name}}`{{if $m.Paginated}}, `{{dartName $m.Name}}Iter`{{end}}{{end}} |
+{{- end}}
+
+Os modelos são classes imutáveis com campos em camelCase (`payment.amountCents`) e `fromJson`/`toJson` com os nomes da API; os corpos das escritas são classes `…Params`, e um campo opcional deixado nulo não é enviado. As listas devolvem uma `Page` (`items`, `pagination.totalCount`, `pagination.maxPage`), e o `…Iter` devolve um `Stream` que percorre todas as páginas. As escritas aceitam `idempotencyKey:`, e todas aceitam `apiKey:` para usar a chave de outra organização numa chamada. `Alpr(…, baseUrl:, httpClient:, timeout:)` troca o endereço, o `http.Client` (por exemplo, um `MockClient` nos testes) e o limite de 30 segundos. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+
+## Erros
+
+Uma recusa da API lança `AlprException`, com `status`, `code` (`invalid_request`, `not_found`…), `message`, `fields` (o problema de cada campo) e, num 429, `retryAfter` em segundos.
+
+## Webhooks
+
+```dart
+import 'package:alpr_sdk/alpr_sdk.dart';
+
+final event = verifyWebhook(
+  Platform.environment['ALPR_WEBHOOK_SECRET']!,
+  request.headers, // Map<String, String>
+  await request.readAsString(),
+);
+switch (event) {
+  case OrderWebhookEvent(type: 'order.paid', :final data):
+    print('${data.id} ${data.installments}');
+  case DisputeWebhookEvent(:final data):
+    print(data.providerDisputeId);
+  case _:
+    break;
+}
+```
+
+A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos; uma assinatura que não confere lança `WebhookVerificationException`. Passe o corpo cru, `String` ou bytes, antes de interpretar.
+
+O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `verifyWebhookSignature` só confere a assinatura.
+
+Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

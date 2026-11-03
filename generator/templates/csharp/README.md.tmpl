@@ -1,0 +1,60 @@
+# Alpr.sh SDK para .NET
+
+SDK oficial da API da Alpr.sh para C# e .NET 8+ (LTS), sem dependências: `HttpClient`, `System.Text.Json` com serialização gerada em compilação (compatível com trimming e Native AOT) e `HMACSHA256`. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+dotnet add package AlprSh.Sdk
+```
+
+```csharp
+using Alpr;
+
+var alpr = new AlprClient(Environment.GetEnvironmentVariable("ALPR_API_KEY")!); // prk_test_… ou prk_live_…
+
+var product = await alpr.Products.CreateAsync(
+    new ProductsCreateParams { Name = "Curso" },
+    new RequestOptions { IdempotencyKey = "produto-curso" });
+
+await foreach (var each in alpr.Products.ListIterAsync())
+{
+    Console.WriteLine(each.Name);
+}
+```
+
+`new AlprClient(apiKey, new AlprClientOptions { BaseUrl = …, Timeout = …, HttpClient = … })` troca o endereço, o tempo de espera (30 s por padrão) ou o HTTP (um `HttpClient` do `IHttpClientFactory`, ou um `Handler`). O cliente pode ser compartilhado entre threads.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+{{- range .Services}}
+| `alpr.{{pascal .Name}}` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{pascal $m.Name}}Async`{{if $m.Paginated}}, `{{pascal $m.Name}}IterAsync`{{end}}{{end}} |
+{{- end}}
+
+Os modelos são `record`s imutáveis em PascalCase (`payment.AmountCents`), com os valores enumerados como constantes (`Product.StatusActive`). O corpo de cada escrita é um `record` com membros `required` (`ProductsCreateParams`); um campo opcional nulo fica fora da requisição. As listas aceitam `…ListParams` (`Page`, `Limit` e os filtros) e o `…IterAsync` devolve um `IAsyncEnumerable` que percorre todas as páginas. Todo método aceita, por último, `RequestOptions` (`IdempotencyKey` nas escritas, `ApiKey` para usar a chave de outra organização numa chamada) e um `CancellationToken`. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+
+## Erros
+
+Uma recusa da API lança `AlprException`, com `Status`, `Code` (`invalid_request`, `not_found`…), `ApiMessage`, `Fields` (o problema de cada campo) e, num 429, `RetryAfter` em segundos. Uma falha de rede lança `HttpRequestException`; o tempo esgotado, `TimeoutException`.
+
+## Webhooks
+
+```csharp
+var body = await new StreamReader(Request.Body).ReadToEndAsync();
+var webhook = Webhook.Verify(Environment.GetEnvironmentVariable("ALPR_WEBHOOK_SECRET")!, Request.Headers, body);
+switch (webhook)
+{
+    case OrderWebhookEvent { Type: "order.paid" } paid:
+        Console.WriteLine($"{paid.Data.Id} {paid.Data.Installments}");
+        break;
+    case UnknownWebhookEvent unknown:
+        // um tipo que esta versão do SDK ainda não conhece: unknown.Data é o JSON
+        break;
+}
+```
+
+A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. Passe o corpo cru, antes de interpretar; os cabeçalhos podem ser os do ASP.NET, de um `HttpHeaders` ou um dicionário. Uma assinatura inválida lança `WebhookVerificationException`.
+
+O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `Webhook.VerifySignature` só confere a assinatura.
+
+Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    net8.0 and net10.0 are the LTS releases: System.Text.Json, HMACSHA256 and
+    IAsyncEnumerable are in the box there, so the package depends on nothing.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>Alpr</RootNamespace>
+    <AssemblyName>Alpr</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <PackageId>AlprSh.Sdk</PackageId>
+    <Version>{{.Version}}</Version>
+    <Authors>Alpr.sh</Authors>
+    <Company>Alpr.sh</Company>
+    <Description>Alpr.sh's SDK for .NET: products, customers, checkouts, payments, subscriptions and webhooks.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://alpr.sh</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/alpr-sh/sdk</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>alpr;payments;pix;boleto;checkout;subscriptions;webhooks</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

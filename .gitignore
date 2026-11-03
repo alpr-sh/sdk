@@ -1,0 +1,7 @@
+.DS_Store
+.claude/
+erl_crash.dump
+# SwiftPM, building the root Package.swift
+/.build/
+/.swiftpm/
+/Package.resolved

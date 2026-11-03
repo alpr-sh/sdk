@@ -1,0 +1,25 @@
+[package]
+name = "alpr-sdk"
+version = "{{.Version}}"
+edition = "2021"
+rust-version = "1.88"
+description = "Alpr.sh's SDK for Rust: products, customers, checkouts, payments, subscriptions and webhooks."
+license = "MIT"
+homepage = "https://alpr.sh"
+repository = "https://github.com/alpr-sh/sdk"
+documentation = "https://docs.rs/alpr-sdk"
+readme = "README.md"
+keywords = ["alpr", "payments", "pix", "api", "webhooks"]
+categories = ["api-bindings", "web-programming::http-client"]
+
+[lib]
+# The crate is alpr-sdk; the code says `use alpr::…`.
+name = "alpr"
+
+[dependencies]
+base64 = "0.23"
+hmac = "0.13"
+serde = { version = "1.0.200", features = ["derive"] }
+serde_json = "1.0.100"
+sha2 = "0.11"
+ureq = { version = "3", default-features = false, features = ["rustls"] }

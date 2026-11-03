@@ -1,0 +1,50 @@
+# Alpr.sh SDK para PHP
+
+SDK oficial da API da Alpr.sh para PHP 8.1+, só com as extensões `curl` e `json`. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+composer require alpr-sh/sdk
+```
+
+```php
+$alpr = new Alpr\Alpr(getenv('ALPR_API_KEY')); // prk_test_… ou prk_live_…
+
+$product = $alpr->products->create(['name' => 'Curso'], idempotencyKey: 'produto-curso');
+
+foreach ($alpr->products->listIter() as $product) {
+    echo $product->name, PHP_EOL;
+}
+```
+
+Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+{{- range .Services}}
+| `$alpr->{{phpName .Name}}` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{camel $m.Name}}`{{if $m.Paginated}}, `{{camel $m.Name}}Iter`{{end}}{{end}} |
+{{- end}}
+
+Os modelos são classes com propriedades `readonly` em camelCase (`$payment->amountCents`); os corpos das escritas são arrays com os nomes da API (`['product_id' => …]`), descritos para o PHPStan.
+
+## Erros
+
+Uma recusa da API lança `Alpr\AlprException`, com `status`, `errorCode` (`invalid_request`, `not_found`…), `fields` (o problema de cada campo) e, num 429, `retryAfter` em segundos.
+
+## Webhooks
+
+```php
+$event = Alpr\Webhook::verify(getenv('ALPR_WEBHOOK_SECRET'), getallheaders(), file_get_contents('php://input'));
+if ($event instanceof Alpr\OrderWebhookEvent && $event->type === 'order.paid') {
+    echo $event->data->id, $event->data->installments;
+} elseif ($event instanceof Alpr\UnknownWebhookEvent) {
+    // um tipo que esta versão do SDK ainda não conhece: $event->data é o JSON
+}
+```
+
+A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. Passe o corpo cru, antes de interpretar.
+
+O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `Webhook::verifySignature` só confere a assinatura.
+
+Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}
