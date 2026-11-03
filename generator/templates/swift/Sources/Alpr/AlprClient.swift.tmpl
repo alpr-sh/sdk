@@ -6,25 +6,24 @@ import Foundation
     import FoundationNetworking
 #endif
 
-/// Alpr.sh's API with one organization's API key. The key says the
-/// organization and the environment: `prk_test_…` is the test environment,
-/// `prk_live_…` the live one.
+/// Alpr.sh's API with one workspace's API key (`alpr_live_…`), which says the
+/// workspace and the scopes the calls may use.
 ///
 ///     let alpr = AlprClient(apiKey: ProcessInfo.processInfo.environment["ALPR_API_KEY"]!)
-///     let product = try await alpr.products.create(ProductsCreateParams(name: "Curso"))
-///     for try await product in alpr.products.listIter() { … }
+///     let result = try await alpr.photos.recognize(PhotosRecognizeParams(image: photo))
+///     for try await reading in alpr.recognitions.listIter() { … }
 public final class AlprClient: Sendable {
 {{- range .Services}}
     /// The API's {{.Name}}.
     public let {{swName .Name}}: {{pascal .Name}}Service
 {{- end}}
 
-    /// A client for the organization `apiKey` belongs to.
+    /// A client for the workspace `apiKey` belongs to.
     ///
     /// - Parameters:
     ///   - baseURL: another address, such as a local server. It must be https;
     ///     http is accepted only for localhost, 127.0.0.0/8 and ::1, and any
-    ///     other makes every call throw a `AlprError` before sending anything.
+    ///     other makes every call throw an `AlprError` before sending anything.
     ///   - timeout: how long a call may take, 30 seconds by default.
     ///   - transport: what sends the requests; a `URLSession` that refuses redirects by default.
     public init(

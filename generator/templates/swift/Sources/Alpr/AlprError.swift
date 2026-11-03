@@ -6,10 +6,12 @@ import Foundation
 
 /// A request the API refused.
 ///
-/// `code` is the API's: invalid_credential, forbidden, not_found,
-/// invalid_request, conflict, idempotency_conflict, body_too_large or
-/// unavailable. `fields` says, for invalid_request, what is wrong with each
-/// field. `retryAfter` is how long to wait on a 429.
+/// `code` is the API's: invalid_api_key, insufficient_scope,
+/// insufficient_credits, missing image, invalid_image, invalid_option,
+/// image_too_large, no_plate, not_found, image_unavailable, rate_limited,
+/// engine_unavailable or storage_unavailable. `fields` says, when the API
+/// names them, what is wrong with each field; it is empty otherwise.
+/// `retryAfter` is how many seconds to wait on a 429.
 public struct AlprError: Error, Sendable, Hashable, CustomStringConvertible, LocalizedError {
     /// The HTTP status.
     public let status: Int
@@ -17,7 +19,7 @@ public struct AlprError: Error, Sendable, Hashable, CustomStringConvertible, Loc
     public let code: String
     /// What went wrong, for a person to read.
     public let message: String
-    /// The problems of each field of the request.
+    /// The problems of each field of the request, when the API names them.
     public let fields: [String: [String]]
     /// How many seconds to wait before trying again.
     public let retryAfter: TimeInterval?

@@ -33,8 +33,9 @@ func init() {
 		"required":  requiredFields,
 		"optional":  optionalFields,
 		"swLiteral": swLiteral,
-		// swData is the Swift type of a webhook's data.
-		"swData": func(t *TypeRef) string { return swBase(nil, nil, nil, t) },
+		// swText is the Swift expression that writes a multipart text field's
+		// value from expr, a non-optional value of type t.
+		"swText": swText,
 		// swLower writes BenefitGrant as benefitGrant, an enumeration case.
 		"swLower": func(name string) string { return swIdent(strings.ToLower(name[:1]) + name[1:]) },
 	}})
@@ -96,10 +97,30 @@ func swBase(models []*Model, model *Model, field *Field, t *TypeRef) string {
 		return "[" + swBase(models, model, field, t.Items) + "]"
 	case "map":
 		return "[String: " + swBase(models, model, field, t.Items) + "]"
+	case "binary":
+		return "Data"
 	case "any":
 		return "JSONValue"
 	}
 	return "String"
+}
+
+// swText is the Swift expression that turns expr, of type t, into the text of
+// a multipart field.
+func swText(t *TypeRef, expr string) string {
+	switch t.Kind {
+	case "integer":
+		return "String(" + expr + ")"
+	case "number":
+		return "formatNumber(" + expr + ")"
+	case "boolean":
+		return "(" + expr + " ? \"true\" : \"false\")"
+	case "string":
+		if len(t.Enum) > 0 {
+			return expr + ".rawValue"
+		}
+	}
+	return expr
 }
 
 // swType is a field's Swift type: optional when the API may answer null or

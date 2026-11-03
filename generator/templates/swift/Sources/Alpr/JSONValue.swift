@@ -1,8 +1,7 @@
 import Foundation
 
 /// A free-form JSON value: what a field holds when the API's contract leaves
-/// its type open, such as the metadata of a benefit. It decodes anything JSON
-/// can say, and encodes back to it.
+/// its type open. It decodes anything JSON can say, and encodes back to it.
 public enum JSONValue: Codable, Sendable, Hashable {
     case null
     case bool(Bool)

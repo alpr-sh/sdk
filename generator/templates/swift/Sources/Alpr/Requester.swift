@@ -18,18 +18,29 @@ struct Requester: Sendable {
     /// Why the base URL is refused; every call throws it before sending anything.
     var baseURLError: AlprError?
 
-    /// Calls the API and answers what it wrapped in `data`; a refusal throws
+    /// Calls the API and decodes the whole answer; a refusal throws
     /// `AlprError`.
     func request<T: Decodable>(
         _ method: String,
         _ path: String,
         query: [(String, String?)] = [],
-        body: (any Encodable & Sendable)? = nil,
-        idempotencyKey: String? = nil,
+        form: MultipartForm? = nil,
         apiKey: String? = nil
     ) async throws -> T {
-        let data = try await send(method, path, query: query, body: body, idempotencyKey: idempotencyKey, apiKey: apiKey)
-        return try JSONDecoder().decode(Envelope<T>.self, from: data).data
+        let data = try await send(method, path, query: query, form: form, apiKey: apiKey)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Calls the API for an answer that is a list, `{"data": [item]}`, and
+    /// answers its items.
+    func requestList<Item: Decodable>(
+        _ method: String,
+        _ path: String,
+        query: [(String, String?)] = [],
+        apiKey: String? = nil
+    ) async throws -> [Item] {
+        let data = try await send(method, path, query: query, form: nil, apiKey: apiKey)
+        return try JSONDecoder().decode(Envelope<[Item]>.self, from: data).data
     }
 
     /// Calls the API for an answer that is a 204 with no body; a refusal
@@ -37,19 +48,17 @@ struct Requester: Sendable {
     func requestNoContent(
         _ method: String,
         _ path: String,
-        body: (any Encodable & Sendable)? = nil,
-        idempotencyKey: String? = nil,
+        form: MultipartForm? = nil,
         apiKey: String? = nil
     ) async throws {
-        _ = try await send(method, path, query: [], body: body, idempotencyKey: idempotencyKey, apiKey: apiKey)
+        _ = try await send(method, path, query: [], form: form, apiKey: apiKey)
     }
 
     private func send(
         _ method: String,
         _ path: String,
         query: [(String, String?)],
-        body: (any Encodable & Sendable)?,
-        idempotencyKey: String?,
+        form: MultipartForm?,
         apiKey: String?
     ) async throws -> Data {
         if let baseURLError {
@@ -72,17 +81,10 @@ struct Requester: Sendable {
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("alpr-swift/\(AlprClient.version)", forHTTPHeaderField: "User-Agent")
-        if let body {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.withoutEscapingSlashes]
-            request.httpBody = try encoder.encode(body)
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        }
-        // A POST is sent with a key of its own, one a call, unless the caller gave one.
-        if let idempotencyKey, !idempotencyKey.isEmpty {
-            request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
-        } else if method == "POST" {
-            request.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "Idempotency-Key")
+        if let form {
+            let (body, contentType) = form.encode()
+            request.httpBody = body
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
         let (data, response) = try await transport(request)
         if response.statusCode >= 300 {
