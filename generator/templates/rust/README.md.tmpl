@@ -6,19 +6,48 @@ SDK oficial da API da Alpr.sh para Rust 1.88+ (edição 2021), síncrono, com HT
 cargo add alpr-sdk
 ```
 
+## Começando
+
+A chave de API (`alpr_live_…`) é a do espaço de trabalho; não há ambiente de teste.
+
 ```rust
-use alpr::{Client, ProductsCreateParams, ProductsListParams};
+use alpr::{Client, PhotosRecognizeParams, RecognitionsListParams};
 
-let client = Client::new(std::env::var("ALPR_API_KEY")?); // prk_test_… ou prk_live_…
+let client = Client::new(std::env::var("ALPR_API_KEY")?);
 
-let product = client
-    .products()
-    .idempotency_key("produto-curso")
-    .create(&ProductsCreateParams::new("Curso").description("Curso online"))?;
-
-for product in client.products().list_iter(ProductsListParams::new()) {
-    println!("{}", product?.name);
+// Ler as placas de uma foto.
+let photo = std::fs::read("carro.jpg")?;
+let result = client.photos().recognize(&PhotosRecognizeParams::new(photo))?;
+for plate in &result.plates {
+    println!("{} ({:.1})", plate.plate, plate.conf);
 }
+
+// Listar as leituras, da mais nova para a mais antiga, página a página.
+for reading in client
+    .recognitions()
+    .list_iter(RecognitionsListParams::new().plate("BRA2E19"))
+{
+    println!("{}", reading?.captured_at);
+}
+
+// Listar as câmeras.
+for camera in client.cameras().list()? {
+    println!("{} {}", camera.id, camera.name);
+}
+
+// O link temporário da imagem de uma leitura.
+let image = client.detections().image("det_123")?;
+println!("{} (vale {} s)", image.image_url, image.expires_in);
+```
+
+`Client::builder(chave)` aceita `base_url` (https; http só para `localhost`, `127.0.0.0/8` e `::1`), `timeout` (30 s por padrão) e `transport`, para usar outro cliente HTTP ou testar sem rede. Os redirecionamentos nunca são seguidos, para a chave não viajar: um 3xx é um `Error::Api`. Antes da chamada, `.api_key(…)` usa a chave de outro espaço de trabalho. Não há repetição automática de chamadas.
+
+## A foto
+
+A foto é o `Vec<u8>` (ou o `&[u8]`) dos bytes do arquivo, JPEG ou PNG, e vai como `multipart/form-data`. O nome e o tipo da parte vêm dos primeiros bytes: JPEG vira `photo.jpg` (`image/jpeg`), PNG vira `photo.png` (`image/png`) e qualquer outra coisa vai como `photo` (`application/octet-stream`), para a API recusar. Os campos opcionais (`lpr_confidence`, `min_ocr_confidence`) têm um método cada, e um campo que não foi definido não é enviado:
+
+```rust
+let params = PhotosRecognizeParams::new(photo).lpr_confidence(0.5);
 ```
 
 ## Recursos
@@ -29,27 +58,44 @@ for product in client.products().list_iter(ProductsListParams::new()) {
 | `client.{{rsName .Name}}()` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{rsName $m.Name}}`{{if $m.Paginated}}, `{{rsName $m.Name}}_iter`{{end}}{{end}} |
 {{- end}}
 
-Os corpos das escritas são structs com `new(obrigatórios…)` e um método por campo opcional; os campos opcionais não definidos não são enviados. Os campos enumerados são enums (`ProductStatus::Active`) que guardam em `Unrecognized` um valor que esta versão ainda não conhece. Antes da chamada, `.idempotency_key(…)` torna uma escrita segura para repetir, e `.api_key(…)` usa a chave de outra organização. `Client::builder(chave)` aceita `base_url`, `timeout` (30 s por padrão) e `transport`, para usar outro cliente HTTP ou testar sem rede. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+`list` de uma lista paginada devolve uma `Page` (`items` e `next`, o cursor da próxima página, `None` na última); `list_iter` é um `Iterator` que parte do cursor dado (sem cursor, da mais nova), entrega cada item, segue `next` até acabar, para quando o cursor não anda e termina no primeiro erro. Os campos enumerados são enums (`RecognitionSource::Api`) que guardam em `Unrecognized` um valor que esta versão ainda não conhece.
 
 ## Erros
 
-Uma recusa da API é `Error::Api(ApiError)`, com `status`, `code` (`invalid_request`, `not_found`…), `message`, `fields` (o problema de cada campo) e, num 429, `retry_after`. Falhas de rede são `Error::Transport`, e respostas ilegíveis, `Error::Json`.
+Uma recusa da API é `Error::Api(ApiError)`, com `status`, `code`, `message`, `fields` (vazio, a não ser que a resposta traga o objeto `fields`) e, num 429, `retry_after` (do cabeçalho `Retry-After`, em segundos). Um corpo de erro que não é JSON continua sendo um erro, só com o status. Falhas de rede são `Error::Transport`, e respostas ilegíveis, `Error::Json`.
+
+| Código | Status |
+|---|---|
+| `invalid_api_key` | 401 |
+| `insufficient_scope` | 403 |
+| `insufficient_credits` | 402 |
+| `missing image`, `invalid_image`, `invalid_option` | 400 |
+| `image_too_large` | 413 |
+| `no_plate` | 422 |
+| `not_found`, `image_unavailable` | 404 |
+| `rate_limited` | 429 |
+| `engine_unavailable`, `storage_unavailable` | 503 |
 
 ## Webhooks
 
 ```rust
 let event = alpr::verify_webhook(&std::env::var("ALPR_WEBHOOK_SECRET")?, &headers, &body)?;
 match event {
-    alpr::WebhookEvent::Order(order) if order.type_ == "order.paid" => {
-        println!("{} {}", order.data.id, order.data.installments);
+    alpr::WebhookEvent::RecognitionCreated(reading) => {
+        println!("{} {}", reading.plate, reading.captured_at);
     }
-    alpr::WebhookEvent::Dispute(dispute) => println!("{}", dispute.data.provider_dispute_id),
+    alpr::WebhookEvent::AlertTriggered(alert) => println!("{}", alert.rule_name),
+    alpr::WebhookEvent::Unknown(unknown) => println!("{}", unknown.event),
     _ => {}
 }
 ```
 
-A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. `headers` pode ser um `http::HeaderMap`, um `HashMap` ou uma lista de pares. Passe o corpo cru, antes de interpretar; uma assinatura inválida ou antiga é `WebhookError::InvalidSignature`.
+A Alpr.sh assina cada entrega com três cabeçalhos: `X-Alprsh-Delivery-Id`, `X-Alprsh-Timestamp` (segundos Unix) e `X-Alprsh-Signature`. A assinatura é `sha256=` e os 64 caracteres hexadecimais do HMAC-SHA256 de `timestamp + "." + delivery-id + "." + corpo`, com o segredo do endpoint como ele é (o texto `whsec_…` inteiro, sem decodificar). `headers` pode ser um `HashMap`, uma lista de pares ou um `http::HeaderMap` por referência, com os nomes em qualquer caixa. Passe o corpo cru, antes de interpretar.
 
-O evento é tipado: uma variante para cada dado que o webhook carrega (`WebhookEvent::Order` traz um `Order`, `WebhookEvent::Dispute` a disputa, `WebhookEvent::Identifiers` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `WebhookEvent::Unknown`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `verify_webhook_signature` só confere a assinatura.
+Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, numa linha separada por vírgulas ou em várias linhas (no máximo 6), e basta uma conferir. Uma assinatura mal formada recusa a requisição inteira. O timestamp só pode ter dígitos ASCII e fica a no máximo `WEBHOOK_TOLERANCE` (300 s) de agora. Uma assinatura inválida, ausente ou antiga é `WebhookError::InvalidSignature`; um segredo vazio é `WebhookError::EmptySecret`, erro de configuração; um corpo assinado que não é um evento é `WebhookError::InvalidPayload`. `verify_webhook_signature` só confere a assinatura.
+
+O evento é tipado: uma variante para cada carga (`RecognitionCreated`, `AlertTriggered`, `WebhookTest`), com os campos do corpo como vieram, sem `data` nem `type`, e `event_name()` diz o nome. Um evento que esta versão do SDK ainda não conhece chega como `WebhookEvent::Unknown`, com `event`, `id` e o corpo decodificado; não é um erro.
+
+O `id` do corpo é o da leitura ou do alerta, não o da entrega: elimine entregas repetidas pelo cabeçalho `X-Alprsh-Delivery-Id`.
 
 Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

@@ -1,14 +1,13 @@
 use std::fmt;
-use std::hash::{BuildHasher, Hasher, RandomState};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use ureq::RequestExt;
 
 use crate::error::{ApiError, Error};
+use crate::multipart::Form;
 use crate::version::{DEFAULT_BASE_URL, VERSION};
 
 /// Any error a [`Transport`] answers.
@@ -24,7 +23,7 @@ pub struct HttpRequest {
     pub url: String,
     /// The headers, in the order they are sent.
     pub headers: Vec<(String, String)>,
-    /// The JSON body of a write, if it has one.
+    /// The body of a call that sends one: a multipart form.
     pub body: Option<Vec<u8>>,
     /// How long the call may take.
     pub timeout: Duration,
@@ -162,21 +161,15 @@ impl Transport for UreqTransport {
     }
 }
 
-/// Options of one call: the key it is made with and, for a write, the key
-/// that makes it safe to repeat.
+/// Options of one call.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RequestOptions {
-    /// Makes a write safe to repeat: the same key with the same body answers
-    /// the first response again; with another body, a 409. A POST without one
-    /// is sent with a random key of its own, one a call.
-    pub idempotency_key: Option<String>,
-    /// Sends the call with another organization's key.
+    /// Sends the call with another workspace's key.
     pub api_key: Option<String>,
 }
 
-/// Alpr.sh's API with one organization's API key. The key says the
-/// organization and the environment: `prk_test_…` is the test environment,
-/// `prk_live_…` the live one.
+/// Alpr.sh's API with one workspace's API key (`alpr_live_…`), which says the
+/// workspace and the scopes the calls may use.
 ///
 /// A client is cheap to clone, and its clones share one connection pool.
 #[derive(Clone)]
@@ -248,18 +241,19 @@ impl ClientBuilder {
     }
 }
 
+/// The `{"data": [...]}` an answer wraps a list in.
 #[derive(Deserialize)]
-struct Envelope<T> {
-    data: T,
+pub(crate) struct Data<T> {
+    pub(crate) data: T,
 }
 
 impl Client {
-    /// A client for the organization `api_key` belongs to.
+    /// A client for the workspace `api_key` belongs to.
     pub fn new(api_key: impl Into<String>) -> Self {
         Self::builder(api_key).build()
     }
 
-    /// Configures a client for the organization `api_key` belongs to.
+    /// Configures a client for the workspace `api_key` belongs to.
     pub fn builder(api_key: impl Into<String>) -> ClientBuilder {
         ClientBuilder {
             api_key: api_key.into(),
@@ -269,20 +263,16 @@ impl Client {
         }
     }
 
-    /// Calls the API and answers what it wrapped in `data`; a refusal is
+    /// Calls the API and reads the whole answer as a `T`; a refusal is
     /// [`Error::Api`].
-    pub(crate) fn request<T, B>(
+    pub(crate) fn request<T: DeserializeOwned>(
         &self,
         method: &str,
         path: &str,
         query: &[(&str, String)],
-        body: Option<&B>,
+        form: Option<Form<'_>>,
         options: &RequestOptions,
-    ) -> Result<T, Error>
-    where
-        T: DeserializeOwned,
-        B: Serialize + ?Sized,
-    {
+    ) -> Result<T, Error> {
         if !secure_base_url(&self.base_url) {
             return Err(Error::InsecureBaseUrl);
         }
@@ -302,22 +292,11 @@ impl Client {
             ("Accept".to_owned(), "application/json".to_owned()),
             ("User-Agent".to_owned(), format!("alpr-rust/{VERSION}")),
         ];
-        let body = match body {
-            Some(body) => {
-                headers.push(("Content-Type".to_owned(), "application/json".to_owned()));
-                Some(serde_json::to_vec(body).map_err(Error::Json)?)
-            }
-            None => None,
-        };
-        let key = options
-            .idempotency_key
-            .as_deref()
-            .filter(|key| !key.is_empty())
-            .map(str::to_owned)
-            .or_else(|| (method == "POST").then(new_idempotency_key));
-        if let Some(key) = key {
-            headers.push(("Idempotency-Key".to_owned(), key));
-        }
+        let body = form.map(|form| {
+            let (body, content_type) = form.encode();
+            headers.push(("Content-Type".to_owned(), content_type));
+            body
+        });
         let request = HttpRequest {
             method: method.to_owned(),
             url,
@@ -333,8 +312,7 @@ impl Client {
             // No body: only a request for `()` can read it.
             return serde_json::from_slice(b"null").map_err(Error::Json);
         }
-        let envelope: Envelope<T> = serde_json::from_slice(&response.body).map_err(Error::Json)?;
-        Ok(envelope.data)
+        serde_json::from_slice(&response.body).map_err(Error::Json)
     }
 }
 
@@ -357,35 +335,6 @@ fn secure_base_url(base_url: &str) -> bool {
         Some("http") => loopback,
         _ => false,
     }
-}
-
-/// A random UUID (version 4). The standard library has no CSPRNG and the SDK
-/// takes no dependency for one, so the bytes are SipHash outputs under keys the
-/// operating system seeds for each [`RandomState`], mixed with a counter and
-/// the clock: a key has to be unique, not secret.
-fn new_idempotency_key() -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_nanos());
-    let mut bytes = [0u8; 16];
-    for half in bytes.chunks_mut(8) {
-        let mut hasher = RandomState::new().build_hasher();
-        hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
-        hasher.write_u128(nanos);
-        half.copy_from_slice(&hasher.finish().to_be_bytes());
-    }
-    bytes[6] = bytes[6] & 0x0f | 0x40;
-    bytes[8] = bytes[8] & 0x3f | 0x80;
-    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
 }
 
 /// A path parameter or a query value, escaped: everything but letters,

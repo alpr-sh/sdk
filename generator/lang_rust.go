@@ -26,8 +26,7 @@ func init() {
 		"rsType": rsType,
 		"rsArg":  rsArg,
 		"rsDoc":  rsDoc,
-		// rsWebhookNames are the event types a group is named by, in the order
-		// rustfmt sorts imports: BenefitGrant before Benefit.
+		// rsWebhookNames are the event types a group is named by, sorted.
 		"rsWebhookNames": func(groups []*WebhookGroup) []string {
 			names := make([]string, len(groups))
 			for i, group := range groups {
@@ -45,18 +44,11 @@ func init() {
 		"rsInit":      rsInit,
 		"required":    requiredFields,
 		"optional":    optionalFields,
-		// rsData is the Rust type of a webhook's data.
-		"rsData": func(t *TypeRef) string {
-			if t.Kind == "model" {
-				return t.Model
-			}
-			return rsBase(nil, nil, nil, t)
-		},
 	}})
 }
 
 // EnumType is a string field's allowed values as one type the SDK declares:
-// ProductStatus for Product.status.
+// RecognitionSource for Recognition.source.
 type EnumType struct {
 	Name        string
 	Model       string
@@ -95,8 +87,7 @@ func enumOf(t *TypeRef) *TypeRef {
 }
 
 // enumName names a field's enumeration: the model and the field, and Kind
-// after them when that is already a model's name (Payment.method would be
-// PaymentMethod, which is the saved card).
+// after them when that is already a model's name.
 func enumName(models []*Model, model *Model, field *Field) string {
 	name := model.Name + upperWords(field.Wire)
 	for _, other := range models {
@@ -124,7 +115,7 @@ func upperWords(name string) string {
 	return out
 }
 
-// snakeCase writes customerId, customer-id or customer_id as customer_id.
+// snakeCase writes detectionId, detection-id or detection_id as detection_id.
 func snakeCase(name string) string {
 	var b strings.Builder
 	for i, r := range name {
@@ -167,6 +158,8 @@ func rsBase(models []*Model, model *Model, field *Field, t *TypeRef) string {
 		return "f64"
 	case "boolean":
 		return "bool"
+	case "binary":
+		return "Vec<u8>"
 	case "model":
 		return t.Model
 	case "array":
@@ -190,10 +183,11 @@ func rsType(models []*Model, model *Model, field *Field) string {
 }
 
 // rsArg is a field as the argument of a request body's constructor or
-// setter: text and enumerations take anything that converts into them.
+// setter: text, enumerations and the photo take anything that converts into
+// them.
 func rsArg(models []*Model, model *Model, field *Field) string {
 	base := rsBase(models, model, field, field.Type)
-	if field.Type.Kind == "string" {
+	if field.Type.Kind == "string" || field.Type.Kind == "binary" {
 		base = "impl Into<" + base + ">"
 	}
 	if field.Nullable && field.Required {
@@ -204,10 +198,11 @@ func rsArg(models []*Model, model *Model, field *Field) string {
 
 // rsInto is how a constructor or setter stores its argument.
 func rsInto(field *Field, arg string) string {
+	bytes := field.Type.Kind == "string" || field.Type.Kind == "binary"
 	switch {
-	case field.Type.Kind == "string" && field.Nullable && field.Required:
+	case bytes && field.Nullable && field.Required:
 		return arg + ".map(Into::into)"
-	case field.Type.Kind == "string":
+	case bytes:
 		return arg + ".into()"
 	}
 	return arg
@@ -262,7 +257,7 @@ func rsPath(m *Method) string {
 // rsPathOwned is a method's path as a String, for an iterator to keep.
 func rsPathOwned(m *Method) string {
 	if len(m.PathParams) == 0 {
-		return `String::from("` + m.Path + `")`
+		return "String::from(" + rustQuote(m.Path) + ")"
 	}
 	return rsFormat(m)
 }

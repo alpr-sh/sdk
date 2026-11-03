@@ -6,6 +6,6 @@ pub const VERSION: &str = {{quote .Version}};
 /// The contract this SDK was generated from.
 pub const API_VERSION: &str = {{quote .APIVersion}};
 
-/// Alpr.sh's API. The environment, test or live, is the API key's:
-/// `prk_test_…` or `prk_live_…`.
+/// Alpr.sh's API. There is one environment: the API key (`alpr_live_…`) says
+/// the workspace.
 pub const DEFAULT_BASE_URL: &str = {{quote .BaseURL}};

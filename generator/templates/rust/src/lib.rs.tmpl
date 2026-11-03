@@ -2,23 +2,23 @@
 
 //! Alpr.sh's SDK for Rust, generated from Alpr.sh's API contract.
 //!
-//! A [`Client`] calls the API with one organization's API key: `prk_test_…`
-//! is the test environment, `prk_live_…` the live one. Every answer is the
-//! resource the API wrapped in `data`; a refusal is [`Error::Api`].
+//! A [`Client`] calls the API with one workspace's API key
+//! (`alpr_live_…`). A refusal is [`Error::Api`].
 //!
 //! ```no_run
-//! use alpr::{Client, ProductsCreateParams, ProductsListParams};
+//! use alpr::{Client, PhotosRecognizeParams, RecognitionsListParams};
 //!
 //! # fn main() -> Result<(), alpr::Error> {
-//! let client = Client::new("prk_test_…");
+//! let client = Client::new("alpr_live_…");
 //!
-//! let product = client
-//!     .products()
-//!     .idempotency_key("produto-curso")
-//!     .create(&ProductsCreateParams::new("Curso"))?;
+//! let photo = std::fs::read("carro.jpg").unwrap();
+//! let result = client.photos().recognize(&PhotosRecognizeParams::new(photo))?;
+//! for plate in &result.plates {
+//!     println!("{} ({})", plate.plate, plate.conf);
+//! }
 //!
-//! for product in client.products().list_iter(ProductsListParams::new()) {
-//!     println!("{}", product?.name);
+//! for reading in client.recognitions().list_iter(RecognitionsListParams::new()) {
+//!     println!("{}", reading?.plate);
 //! }
 //! # Ok(())
 //! # }
@@ -31,6 +31,7 @@
 
 mod client;
 mod error;
+mod multipart;
 // The models, services and webhooks are written by the generator, which lays
 // them out itself.
 #[rustfmt::skip]
@@ -53,7 +54,7 @@ pub use services::*;
 pub use version::{API_VERSION, DEFAULT_BASE_URL, VERSION};
 pub use webhooks::{
     verify_webhook, verify_webhook_at, verify_webhook_signature, verify_webhook_signature_at,
-    UnknownWebhookEvent, WebhookError, WebhookEvent, WebhookMessage, WEBHOOK_TOLERANCE,
+    UnknownWebhookEvent, WebhookError, WebhookEvent, WEBHOOK_TOLERANCE,
 };
 
 // The event of each kind of data a webhook carries.
