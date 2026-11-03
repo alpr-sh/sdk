@@ -1,0 +1,120 @@
+# Alpr.sh SDK para Python
+
+SDK oficial da API da Alpr.sh para Python 3.11+, sem dependências. É gerado a partir do contrato da API (`openapi.json`, na raiz de [alpr-sh/sdk](https://github.com/alpr-sh/sdk)) por `generator/`. Não edite os arquivos desta pasta: regenere.
+
+```sh
+pip install alpr-sdk
+```
+
+## Começando
+
+A chave de API (`alpr_live_…`) é a do espaço de trabalho: ela diz de quem são as leituras e quais escopos a chamada pode usar. Não há ambiente de teste.
+
+```python
+import os
+from alpr import Alpr
+
+alpr = Alpr(os.environ["ALPR_API_KEY"])
+
+# Lê as placas de uma foto.
+with open("portaria.jpg", "rb") as file:
+    result = alpr.photos.recognize({"image": file.read(), "lpr_confidence": 0.5})
+for plate in result.plates:
+    print(plate.plate, plate.conf, plate.plate_type)
+
+# Percorre as leituras, da mais nova para a mais antiga, com filtros.
+for reading in alpr.recognitions.list_iter(plate="BRA", source="camera"):
+    print(reading.id, reading.plate, reading.captured_at)
+
+# Lista as câmeras.
+for camera in alpr.cameras.list():
+    print(camera.id, camera.name, camera.enabled)
+
+# O link temporário da imagem de uma leitura.
+image = alpr.detections.image("det_123")
+print(image.image_url, image.expires_in)
+```
+
+`Alpr(api_key, base_url=…, timeout=30, transport=…)`: o endereço-base é `https://alpr.sh`; `http` só é aceito para `localhost`, `127.0.0.0/8` e `::1`, e qualquer outro endereço levanta `ValueError` antes de qualquer envio, para a chave nunca cruzar a rede em texto claro. A chamada que precisa de outra chave aceita `api_key=`. Redirecionamentos nunca são seguidos (a chave não viaja): um 3xx é um `AlprError`. O SDK não repete chamadas sozinho.
+
+## A foto
+
+Passe os **bytes** da foto (`bytes`). O SDK envia `multipart/form-data` no campo `image`, com o nome e o tipo definidos pelos primeiros bytes: JPEG (`FF D8 FF`) vira `photo.jpg` (`image/jpeg`), PNG vira `photo.png` (`image/png`) e qualquer outra coisa vai como `photo` (`application/octet-stream`), para a API recusar. As opções `lpr_confidence` e `min_ocr_confidence` (de 0 a 1) são opcionais e só são enviadas quando você as passa; `ocr` aceita apenas `image`.
+
+## Páginas
+
+`alpr.recognitions.list(before=…, plate=…, camera=…, source=…)` busca uma página e devolve `Page` com `items` e `next`, o cursor da página seguinte (`None` na última). `list_iter(...)` é um gerador que percorre todas as páginas, começando do cursor `before` que você passar (sem ele, da mais nova), e termina no primeiro erro ou quando o cursor deixa de andar.
+
+## Recursos
+
+| Serviço | Métodos |
+|---|---|
+| `alpr.cameras` | `list` |
+| `alpr.detections` | `image` |
+| `alpr.photos` | `detect`, `ocr`, `recognize` |
+| `alpr.recognitions` | `list`, `list_iter` |
+
+## Erros
+
+Uma recusa da API levanta `AlprError`, com `status`, `code`, `message`, `fields` (vazio, a menos que a resposta traga o problema de cada campo) e, num 429, `retry_after` em segundos (do cabeçalho `Retry-After`). Uma resposta de erro que não é JSON continua sendo um erro, só com o `status`. Os códigos:
+
+| Status | `code` |
+|---|---|
+| 400 | `missing image`, `invalid_image`, `invalid_option` |
+| 401 | `invalid_api_key` |
+| 402 | `insufficient_credits` |
+| 403 | `insufficient_scope` |
+| 404 | `not_found`, `image_unavailable` |
+| 413 | `image_too_large` |
+| 422 | `no_plate` |
+| 429 | `rate_limited` |
+| 503 | `engine_unavailable`, `storage_unavailable` |
+
+```python
+from alpr import AlprError
+
+try:
+    alpr.photos.recognize({"image": photo})
+except AlprError as error:
+    if error.code == "rate_limited":
+        time.sleep(error.retry_after or 1)
+```
+
+## Webhooks
+
+A Alpr.sh envia os eventos para o endereço que você cadastrou, assinados. Os cabeçalhos:
+
+- `X-Alprsh-Delivery-Id`: o id da entrega. **Deduplique as entregas por ele**: o `id` do corpo é o da leitura ou do alerta, não o da entrega.
+- `X-Alprsh-Timestamp`: segundos desde 1970 (só dígitos ASCII).
+- `X-Alprsh-Signature`: `sha256=` e os 64 caracteres hexadecimais do HMAC-SHA256 de `timestamp + "." + delivery-id + "." + corpo`, com o segredo do endpoint (`whsec_…`) usado como está, em UTF-8, sem decodificar.
+
+```python
+from alpr import (
+    AlertTriggeredWebhookEvent,
+    RecognitionCreatedWebhookEvent,
+    UnknownWebhookEvent,
+    WebhookVerificationError,
+    verify_webhook,
+)
+
+try:
+    event = verify_webhook(os.environ["ALPR_WEBHOOK_SECRET"], request.headers, request.get_data())
+except WebhookVerificationError:
+    return "assinatura inválida", 400
+
+match event:
+    case RecognitionCreatedWebhookEvent(plate=plate, camera_id=camera_id):
+        print(event.event, plate, camera_id, event.captured_at)
+    case AlertTriggeredWebhookEvent(rule_name=rule_name):
+        print(rule_name, event.recognition_id)
+    case UnknownWebhookEvent():
+        pass  # um evento que esta versão do SDK ainda não conhece: event.body é o JSON
+```
+
+Passe o corpo cru, exatamente como chegou, e verifique antes de interpretar. Os cabeçalhos podem ser um dicionário (a busca ignora maiúsculas) ou uma lista de pares `(nome, valor)`, para os frameworks que repetem um cabeçalho. A tolerância do relógio é de `WEBHOOK_TOLERANCE_SECONDS` (300 segundos, para os dois lados; exatamente 300 passa, 301 não).
+
+Durante a rotação do segredo o cabeçalho de assinatura traz mais de uma, numa linha separada por vírgulas ou em linhas repetidas (até 6); basta uma conferir, mas uma assinatura malformada recusa a requisição inteira. `verify_webhook_signature` só confere a assinatura. Uma assinatura que não confere levanta `WebhookVerificationError`; um segredo vazio é um erro de configuração (`ValueError`), não de assinatura.
+
+O evento é tipado: um tipo por carga (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `WebhookTestWebhookEvent`), com os campos da carga na raiz (`event`, `id`, `tenant_id`, `plate`…), sem `data` nem `type`. Um nome de evento que esta versão do SDK não conhece chega como `UnknownWebhookEvent` (`event`, `id` e o `body` inteiro), e não é um erro. Um corpo que não é um objeto com `event` levanta `ValueError`.
+
+Versão do SDK: 0.1.0 · contrato da API: 1.0.0
