@@ -9,151 +9,162 @@ using System.Text.Json;
 
 namespace Alpr;
 
-/// <summary>Verifying the webhooks Alpr.sh sends, as Standard Webhooks signs them.</summary>
+/// <summary>Verifying the webhooks Alpr.sh sends.</summary>
 public static class Webhook
 {
+    /// <summary>How far from now a webhook's timestamp may be, in seconds.</summary>
+    public const int ToleranceSeconds = 300;
+
     /// <summary>How far from now a webhook's timestamp may be.</summary>
-    public static readonly TimeSpan Tolerance = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan Tolerance = TimeSpan.FromSeconds(ToleranceSeconds);
+
+    // How many signatures a request may list: one for the secret in use and
+    // one for each secret still signing during a rotation.
+    private const int MaxSignatures = 6;
+
+    private const string SignaturePrefix = "sha256=";
 
     /// <summary>
-    /// Checks a webhook Alpr.sh sent and answers its event. The signature is an
-    /// HMAC-SHA256 of <c>{webhook-id}.{webhook-timestamp}.{body}</c> under the
-    /// key the endpoint's <c>whsec_</c> secret encodes, one of the signatures
-    /// in the <c>webhook-signature</c> header, which carries more than one
-    /// while a secret is rotated. Pass the body exactly as it arrived, before
-    /// parsing it. Match the answer on its record: <c>OrderWebhookEvent</c>…
+    /// Checks a webhook Alpr.sh sent and answers its event. Alpr.sh signs the
+    /// headers <c>X-Alprsh-Timestamp</c> and <c>X-Alprsh-Delivery-Id</c> and the
+    /// body: <c>X-Alprsh-Signature</c> carries <c>sha256=</c> and the hex
+    /// HMAC-SHA256 of <c>{timestamp}.{delivery-id}.{body}</c> under the
+    /// endpoint's secret (the whole <c>whsec_…</c> text, as it is), and more
+    /// than one signature while a secret is rotated -- one matching is enough.
+    /// Pass the body exactly as it arrived, before parsing it, and deduplicate
+    /// deliveries by the <c>X-Alprsh-Delivery-Id</c> header. Match the answer
+    /// on its record: <c>RecognitionCreatedWebhookEvent</c>…
     /// </summary>
     /// <typeparam name="TValue">A header's value: a string, or several of them (ASP.NET's StringValues, HttpHeaders' lists).</typeparam>
-    /// <param name="secret">The endpoint's secret, <c>whsec_</c> and a base64 key.</param>
+    /// <param name="secret">The endpoint's secret.</param>
     /// <param name="headers">The request's headers, by any case.</param>
     /// <param name="body">The raw body.</param>
-    /// <param name="now">The moment the timestamp is checked against; the current time when null.</param>
     /// <returns>The event.</returns>
     /// <exception cref="WebhookVerificationException">Alpr.sh did not sign the request, or signed it too long ago.</exception>
-    /// <exception cref="ArgumentException">The secret is not <c>whsec_</c> and a base64 key.</exception>
-    public static WebhookEvent Verify<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, byte[] body, DateTimeOffset? now = null)
+    /// <exception cref="ArgumentException">The secret is empty.</exception>
+    /// <exception cref="JsonException">The verified body is not an event.</exception>
+    public static IWebhookEvent Verify<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, byte[] body) =>
+        VerifyAt(secret, headers, body, DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// <see cref="Verify{TValue}(string, IEnumerable{KeyValuePair{string, TValue}}, byte[])"/>
+    /// with the body as text, encoded in UTF-8.
+    /// </summary>
+    /// <typeparam name="TValue">A header's value: a string, or several of them.</typeparam>
+    /// <param name="secret">The endpoint's secret.</param>
+    /// <param name="headers">The request's headers, by any case.</param>
+    /// <param name="body">The raw body.</param>
+    /// <returns>The event.</returns>
+    /// <exception cref="WebhookVerificationException">Alpr.sh did not sign the request, or signed it too long ago.</exception>
+    /// <exception cref="ArgumentException">The secret is empty.</exception>
+    /// <exception cref="JsonException">The verified body is not an event.</exception>
+    public static IWebhookEvent Verify<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, string body)
     {
-        VerifySignature(secret, headers, body, now);
-        return Event(body);
+        ArgumentNullException.ThrowIfNull(body);
+        return Verify(secret, headers, Encoding.UTF8.GetBytes(body));
     }
 
     /// <summary>
     /// Checks a webhook's signature as
-    /// <see cref="Verify{TValue}(string, IEnumerable{KeyValuePair{string, TValue}}, byte[], DateTimeOffset?)"/>
+    /// <see cref="Verify{TValue}(string, IEnumerable{KeyValuePair{string, TValue}}, byte[])"/>
     /// does, without reading its body.
     /// </summary>
     /// <typeparam name="TValue">A header's value: a string, or several of them.</typeparam>
-    /// <param name="secret">The endpoint's secret, <c>whsec_</c> and a base64 key.</param>
+    /// <param name="secret">The endpoint's secret.</param>
     /// <param name="headers">The request's headers, by any case.</param>
     /// <param name="body">The raw body.</param>
-    /// <param name="now">The moment the timestamp is checked against; the current time when null.</param>
     /// <exception cref="WebhookVerificationException">Alpr.sh did not sign the request, or signed it too long ago.</exception>
-    /// <exception cref="ArgumentException">The secret is not <c>whsec_</c> and a base64 key.</exception>
-    public static void VerifySignature<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, byte[] body, DateTimeOffset? now = null)
+    /// <exception cref="ArgumentException">The secret is empty.</exception>
+    public static void VerifySignature<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, byte[] body) =>
+        VerifySignatureAt(secret, headers, body, DateTimeOffset.UtcNow);
+
+    internal static IWebhookEvent VerifyAt<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, byte[] body, DateTimeOffset now)
+    {
+        VerifySignatureAt(secret, headers, body, now);
+        return Event(body);
+    }
+
+    internal static void VerifySignatureAt<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, byte[] body, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(secret);
         ArgumentNullException.ThrowIfNull(headers);
         ArgumentNullException.ThrowIfNull(body);
-        byte[] key;
-        try
+        if (secret.Length == 0)
         {
-            key = Convert.FromBase64String(secret.StartsWith("whsec_", StringComparison.Ordinal) ? secret[6..] : secret);
+            throw new ArgumentException("alpr: the webhook secret is empty", nameof(secret));
         }
-        catch (FormatException)
-        {
-            key = [];
-        }
-        if (key.Length == 0)
-        {
-            throw new ArgumentException("alpr: the webhook secret is whsec_ and a base64 key", nameof(secret));
-        }
-        var id = Header(headers, "webhook-id");
-        var stamp = Header(headers, "webhook-timestamp");
+        var id = Header(headers, "X-Alprsh-Delivery-Id");
+        var stamp = Header(headers, "X-Alprsh-Timestamp");
+        // Only ASCII digits: the signer never sends a sign, a space or a digit of another script.
         if (id.Length == 0 || stamp.Length is 0 or > 18 || !Digits(stamp))
         {
             throw new WebhookVerificationException();
         }
-        var at = (now ?? DateTimeOffset.UtcNow).ToUnixTimeSeconds();
-        if (Math.Abs(at - long.Parse(stamp, NumberStyles.None, CultureInfo.InvariantCulture)) > (long)Tolerance.TotalSeconds)
+        var seconds = long.Parse(stamp, NumberStyles.None, CultureInfo.InvariantCulture);
+        if (Math.Abs(now.ToUnixTimeSeconds() - seconds) > ToleranceSeconds)
         {
             throw new WebhookVerificationException();
         }
-        var prefix = Encoding.UTF8.GetBytes(id + "." + stamp + ".");
+        var listed = Header(headers, "X-Alprsh-Signature").Split(',');
+        if (listed.Length > MaxSignatures)
+        {
+            throw new WebhookVerificationException();
+        }
+        var prefix = Encoding.UTF8.GetBytes(stamp + "." + id + ".");
         var signed = new byte[prefix.Length + body.Length];
         prefix.CopyTo(signed, 0);
         body.CopyTo(signed, prefix.Length);
-        var expected = HMACSHA256.HashData(key, signed);
-        foreach (var signature in Header(headers, "webhook-signature").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        var expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), signed);
+        var matched = false;
+        foreach (var each in listed)
         {
-            var comma = signature.IndexOf(',', StringComparison.Ordinal);
-            if (comma < 0 || signature[..comma] != "v1")
+            var signature = each.Trim(' ', '\t');
+            // One malformed signature refuses the request, as Alpr.sh's own
+            // verifier does; every listed signature is compared, in constant time.
+            if (!signature.StartsWith(SignaturePrefix, StringComparison.Ordinal) || signature.Length != SignaturePrefix.Length + 2 * expected.Length
+                || !Hex(signature.AsSpan(SignaturePrefix.Length)))
             {
-                continue;
+                throw new WebhookVerificationException();
             }
-            byte[] decoded;
-            try
+            if (CryptographicOperations.FixedTimeEquals(Convert.FromHexString(signature.AsSpan(SignaturePrefix.Length)), expected))
             {
-                decoded = Convert.FromBase64String(signature[(comma + 1)..]);
-            }
-            catch (FormatException)
-            {
-                continue;
-            }
-            if (CryptographicOperations.FixedTimeEquals(decoded, expected))
-            {
-                return;
+                matched = true;
             }
         }
-        throw new WebhookVerificationException();
+        if (!matched)
+        {
+            throw new WebhookVerificationException();
+        }
     }
 
-    /// <summary>
-    /// <see cref="Verify{TValue}(string, IEnumerable{KeyValuePair{string, TValue}}, byte[], DateTimeOffset?)"/>
-    /// with the body as text, encoded in UTF-8.
-    /// </summary>
-    /// <typeparam name="TValue">A header's value: a string, or several of them.</typeparam>
-    /// <param name="secret">The endpoint's secret, <c>whsec_</c> and a base64 key.</param>
-    /// <param name="headers">The request's headers, by any case.</param>
-    /// <param name="body">The raw body.</param>
-    /// <param name="now">The moment the timestamp is checked against; the current time when null.</param>
-    /// <returns>The event.</returns>
-    /// <exception cref="WebhookVerificationException">Alpr.sh did not sign the request, or signed it too long ago.</exception>
-    public static WebhookEvent Verify<TValue>(string secret, IEnumerable<KeyValuePair<string, TValue>> headers, string body, DateTimeOffset? now = null)
-    {
-        ArgumentNullException.ThrowIfNull(body);
-        return Verify(secret, headers, Encoding.UTF8.GetBytes(body), now);
-    }
-
-    private static WebhookEvent Event(byte[] body)
+    private static IWebhookEvent Event(byte[] body)
     {
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object)
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("event", out var named) || named.ValueKind != JsonValueKind.String)
         {
             throw new JsonException("alpr: the webhook body is not an event");
         }
-        var id = Text(root, "id");
-        var type = Text(root, "type");
-        var timestamp = Text(root, "timestamp");
-        var data = root.TryGetProperty("data", out var sent) && sent.ValueKind == JsonValueKind.Object
-            ? sent.Clone()
-            : EmptyObject;
-{{- range .Webhooks}}
-        if ({{.Name}}WebhookEvent.Types.Contains(type))
+        var name = named.GetString()!;
+        try
         {
-            return new {{.Name}}WebhookEvent(id, type, timestamp, data.Deserialize(AlprJson.Default.{{csTypeInfo .Data}})
-                ?? throw new JsonException("alpr: the webhook has no data"));
-        }
+            switch (name)
+            {
+{{- range .Webhooks}}
+                case {{range $i, $t := .Types}}{{if $i}} or {{end}}{{quote $t}}{{end}}:
+                    return root.Deserialize(AlprJson.Default.{{.Name}}WebhookEvent)
+                        ?? throw new JsonException("alpr: the webhook body is not a " + name + " event");
 {{- end}}
-        return new UnknownWebhookEvent(id, type, timestamp, data);
+            }
+        }
+        catch (JsonException e)
+        {
+            throw new JsonException("alpr: the webhook body is not a " + name + " event: " + e.Message, e);
+        }
+        var id = root.TryGetProperty("id", out var sent) && sent.ValueKind == JsonValueKind.String ? sent.GetString()! : "";
+        return new UnknownWebhookEvent(name, id, root.Clone());
     }
-
-    private static readonly JsonElement EmptyObject = JsonDocument.Parse("{}").RootElement.Clone();
-
-    private static string Text(JsonElement root, string name) =>
-        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()!
-            : throw new JsonException("alpr: the webhook has no " + name);
 
     private static bool Digits(string text)
     {
@@ -167,22 +178,44 @@ public static class Webhook
         return true;
     }
 
+    private static bool Hex(ReadOnlySpan<char> text)
+    {
+        foreach (var c in text)
+        {
+            if (!char.IsAsciiHexDigit(c))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // A header's values, by any case; every line of a repeated header is
+    // joined with a comma, as HTTP says it means the same.
     private static string Header<TValue>(IEnumerable<KeyValuePair<string, TValue>> headers, string name)
     {
+        var found = new List<string>();
         foreach (var header in headers)
         {
             if (!string.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
-            return header.Value switch
+            switch (header.Value)
             {
-                null => "",
-                string text => text,
-                IEnumerable<string> values => string.Join(' ', values),
-                var other => other.ToString() ?? "",
-            };
+                case null:
+                    break;
+                case string text:
+                    found.Add(text);
+                    break;
+                case IEnumerable<string> values:
+                    found.AddRange(values);
+                    break;
+                case var other:
+                    found.Add(other.ToString() ?? "");
+                    break;
+            }
         }
-        return "";
+        return string.Join(',', found);
     }
 }

@@ -15,12 +15,12 @@
     <Version>{{.Version}}</Version>
     <Authors>Alpr.sh</Authors>
     <Company>Alpr.sh</Company>
-    <Description>Alpr.sh's SDK for .NET: products, customers, checkouts, payments, subscriptions and webhooks.</Description>
+    <Description>Alpr.sh's SDK for .NET: license plate recognition from photos, readings, cameras, detection images and webhook verification.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://alpr.sh</PackageProjectUrl>
     <RepositoryUrl>https://github.com/alpr-sh/sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>alpr;payments;pix;boleto;checkout;subscriptions;webhooks</PackageTags>
+    <PackageTags>alpr;lpr;anpr;license-plate;ocr;webhooks</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="Alpr.Tests" />
   </ItemGroup>
 
 </Project>

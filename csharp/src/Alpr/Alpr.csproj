@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    net8.0 and net10.0 are the LTS releases: System.Text.Json, HMACSHA256 and
+    IAsyncEnumerable are in the box there, so the package depends on nothing.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>Alpr</RootNamespace>
+    <AssemblyName>Alpr</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <PackageId>AlprSh.Sdk</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Alpr.sh</Authors>
+    <Company>Alpr.sh</Company>
+    <Description>Alpr.sh's SDK for .NET: license plate recognition from photos, readings, cameras, detection images and webhook verification.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://alpr.sh</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/alpr-sh/sdk</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>alpr;lpr;anpr;license-plate;ocr;webhooks</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="Alpr.Tests" />
+  </ItemGroup>
+
+</Project>
