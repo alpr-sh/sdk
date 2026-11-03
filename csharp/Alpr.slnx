@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Alpr/Alpr.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Alpr.Tests/Alpr.Tests.csproj" />
+  </Folder>
+</Solution>
