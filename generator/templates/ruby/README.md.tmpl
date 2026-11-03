@@ -6,16 +6,45 @@ SDK oficial da API da Alpr.sh para Ruby 3.1+, sem dependências: só `net/http`,
 gem install alpr-sdk
 ```
 
+## Começando
+
+A chave de API (`alpr_live_…`) é a do espaço de trabalho e diz quais escopos as chamadas podem usar. Não há ambiente de teste.
+
 ```ruby
 require "alpr"
 
-alpr = Alpr::Client.new(ENV.fetch("ALPR_API_KEY")) # prk_test_… ou prk_live_…
+alpr = Alpr::Client.new(ENV.fetch("ALPR_API_KEY")) # alpr_live_…
 
-product = alpr.products.create({ name: "Curso" }, idempotency_key: "produto-curso")
+# Ler as placas de uma foto.
+result = alpr.photos.recognize({ image: File.binread("foto.jpg"), lpr_confidence: 0.5 })
+result.plates.each { |plate| puts "#{plate.plate} (#{plate.conf})" }
 
-alpr.products.list_iter.each do |product|
-  puts product.name
+# Percorrer as leituras, da mais nova para a mais antiga, página a página.
+alpr.recognitions.list_iter(plate: "BRA2E19").each do |reading|
+  puts "#{reading.captured_at} #{reading.plate}"
 end
+
+# Listar as câmeras do espaço.
+alpr.cameras.list.each { |camera| puts camera.name }
+
+# O link temporário da imagem de uma leitura.
+image = alpr.detections.image("det_123")
+puts image.image_url, image.expires_in
+```
+
+## A foto
+
+A foto é uma `String` com os **bytes** do arquivo (`File.binread`), nunca o caminho. O SDK envia `multipart/form-data` e dá nome e tipo ao arquivo pelos primeiros bytes: JPEG (`FF D8 FF`) vai como `photo.jpg` (`image/jpeg`), PNG como `photo.png` (`image/png`) e qualquer outra coisa como `photo` (`application/octet-stream`), para a API recusar. O corpo é a classe de parâmetros do método (`Alpr::PhotosRecognizeParams.new(image: bytes, lpr_confidence: 0.5)`) ou um `Hash` com os mesmos nomes; um campo opcional não informado não é enviado.
+
+`lpr_confidence` e `min_ocr_confidence` são números de 0 a 1 (`ocr` só aceita `image`).
+
+## Leituras e páginas
+
+`alpr.recognitions.list(before: nil, plate: nil, camera: nil, source: nil)` devolve uma página (`Alpr::Page`, com `items` e `next_cursor`, que é `nil` na última). `list_iter` aceita os mesmos argumentos, devolve um `Enumerator` (ou recebe um bloco) e percorre todas as páginas a partir do cursor `before:` dado (sem ele, da leitura mais nova), seguindo `next_cursor` até o fim. Ele para se o cursor não avançar e no primeiro erro.
+
+```ruby
+page = alpr.recognitions.list(camera: "cam_1")
+page = alpr.recognitions.list(camera: "cam_1", before: page.next_cursor) if page.next_cursor
 ```
 
 ## Recursos
@@ -26,27 +55,65 @@ end
 | `alpr.{{snake .Name}}` | {{range $i, $m := .Methods}}{{if $i}}, {{end}}`{{snake $m.Name}}`{{if $m.Paginated}}, `{{snake $m.Name}}_iter`{{end}}{{end}} |
 {{- end}}
 
-Os modelos são objetos imutáveis com leitores em snake_case (`payment.amount_cents`). O corpo de uma escrita é a classe de parâmetros do método (`Alpr::ProductsCreateParams.new(name: "Curso")`) ou um `Hash` com os mesmos nomes; um campo opcional não informado fica fora do JSON. Os métodos `_iter` devolvem um `Enumerator` que percorre todas as páginas a partir de `page:` (ou recebem um bloco).
+Os modelos são objetos imutáveis com leitores em snake_case (`result.credits_remaining`, `plate.coordinate_left`). Um campo opcional que a API não enviou, ou que veio `null`, é `nil`. Todo método aceita `api_key:` para usar outra chave numa chamada. `Alpr::Client.new` aceita `base_url:`, `timeout:` (30 segundos) e `transport:`.
 
-As escritas aceitam `idempotency_key:`, e todas aceitam `api_key:` para usar a chave de outra organização numa chamada. `Alpr::Client.new` aceita `base_url:`, `timeout:` (30 segundos) e `transport:`. Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria (UUID v4 aleatório, uma por chamada); passe a sua para poder repetir a mesma operação com segurança.
+O `base_url` precisa ser `https`; `http` só vale para `localhost`, `127.0.0.0/8` e `::1`, e qualquer outro endereço levanta `ArgumentError`, para a chave nunca viajar em texto puro. Redirecionamentos nunca são seguidos: um 3xx é um `Alpr::Error`. Não há repetição automática de chamadas.
 
 ## Erros
 
-Uma recusa da API levanta `Alpr::Error`, com `status`, `code` (`invalid_request`, `not_found`…), `message`, `fields` (o problema de cada campo) e, num 429, `retry_after` em segundos.
+Uma recusa da API levanta `Alpr::Error`, com `status`, `code`, `message`, `fields` (vazio, a não ser que a resposta traga o objeto `fields`) e, num 429, `retry_after` em segundos (do cabeçalho `Retry-After`). Uma resposta de erro que não é JSON também é um erro, só com o `status`.
 
-## Webhooks
+| Status | `code` |
+|---|---|
+| 401 | `invalid_api_key` |
+| 403 | `insufficient_scope` |
+| 402 | `insufficient_credits` |
+| 400 | `missing image`, `invalid_image`, `invalid_option` |
+| 413 | `image_too_large` |
+| 422 | `no_plate` |
+| 404 | `not_found`, `image_unavailable` |
+| 429 | `rate_limited` (com `retry_after`) |
+| 503 | `engine_unavailable`, `storage_unavailable` |
 
 ```ruby
-event = Alpr.verify_webhook(ENV.fetch("ALPR_WEBHOOK_SECRET"), request.headers, request.raw_post)
-case event
-when Alpr::OrderWebhookEvent then puts event.type, event.data.id, event.data.installments
-when Alpr::DisputeWebhookEvent then puts event.data.provider_dispute_id
-when Alpr::UnknownWebhookEvent then nil # um tipo que esta versão ainda não conhece: event.data é o JSON
+begin
+  alpr.photos.recognize({ image: bytes })
+rescue Alpr::Error => e
+  sleep e.retry_after if e.code == "rate_limited"
+  warn "#{e.status} #{e.code}: #{e.message}"
 end
 ```
 
-A assinatura é a do Standard Webhooks (`webhook-id`, `webhook-timestamp`, `webhook-signature`), com tolerância de 5 minutos. Passe o corpo cru, antes de interpretar; os cabeçalhos podem vir num `Hash` ou no env do Rack. Uma assinatura que não confere levanta `Alpr::WebhookVerificationError`.
+## Webhooks
 
-O evento é tipado: um tipo para cada dado que o webhook carrega (`OrderWebhookEvent` traz um `Order`, `DisputeWebhookEvent` a disputa, `IdentifiersWebhookEvent` os identificadores…), e o `type` diz o que aconteceu; um tipo que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com os dados como vieram. Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, e basta uma conferir. `Alpr.verify_webhook_signature` só confere a assinatura.
+A Alpr.sh assina cada entrega com três cabeçalhos (a busca ignora maiúsculas):
+
+- `X-Alprsh-Delivery-Id`: o id da entrega;
+- `X-Alprsh-Timestamp`: segundos Unix do envio;
+- `X-Alprsh-Signature`: `sha256=` e o HMAC-SHA256 em hexadecimal (64 caracteres) de `timestamp + "." + delivery-id + "." + corpo`, com o segredo do endpoint (`whsec_…`) **inteiro, como está**, sem decodificar.
+
+Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, numa linha separada por vírgulas ou em várias linhas; basta uma conferir (no máximo 6; uma assinatura malformada recusa a requisição). O timestamp precisa ter só dígitos ASCII e estar a no máximo 300 segundos (`Alpr::WEBHOOK_TOLERANCE`) de agora. Passe o corpo cru, exatamente como chegou, e verifique antes de interpretar; os cabeçalhos podem vir num `Hash` (um valor pode ser uma lista, uma linha de cabeçalho cada) ou no env do Rack.
+
+```ruby
+begin
+  event = Alpr.verify_webhook(ENV.fetch("ALPR_WEBHOOK_SECRET"), request.headers, request.raw_post)
+rescue Alpr::WebhookVerificationError
+  head :bad_request
+  return
+end
+
+case event
+when Alpr::RecognitionCreatedWebhookEvent then puts event.plate, event.captured_at
+when Alpr::AlertTriggeredWebhookEvent then puts event.rule_name, event.recognition_id
+when Alpr::WebhookTestWebhookEvent then puts event.sent_at
+when Alpr::UnknownWebhookEvent then puts event.event_name # um evento que esta versão ainda não conhece: event.body é o JSON
+end
+```
+
+`Alpr.verify_webhook` confere a assinatura e interpreta o corpo; `Alpr.verify_webhook_signature` só confere a assinatura. Um segredo vazio levanta `ArgumentError` (erro de configuração, não de assinatura); uma assinatura que não confere levanta `Alpr::WebhookVerificationError`; um corpo assinado que não é um evento (não é um objeto, ou não tem `event` em texto) levanta `Alpr::WebhookParseError`.
+
+O evento é tipado e traz os campos da carga direto, sem `data` nem `type`: `event_name`, `id`, `tenant_id`, `plate`… Um evento de nome desconhecido é um `Alpr::UnknownWebhookEvent` (com `event`, `id` e o corpo todo em `body`), não um erro.
+
+**Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`.** O `id` do corpo é o da leitura ou do alerta, não o da entrega.
 
 Versão do SDK: {{.Version}} · contrato da API: {{.APIVersion}}

@@ -20,7 +20,7 @@ module Alpr
       freeze
     end
 
-    # Builds a {{.Name}} from the API's JSON.
+    # Builds {{article .Name}} from the API's JSON.
     def self.from_hash(data)
       new(
 {{- range $j, $f := .Fields}}{{if $j}},{{end}}

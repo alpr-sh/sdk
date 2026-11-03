@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Alpr.sh's Ruby SDK tests, with nothing to install: ruby -Ilib -Itest test/alpr_test.rb
+# Alpr.sh's Ruby SDK tests, with nothing to install: ruby -w -Ilib -Itest test/alpr_test.rb
 
 require "minitest/autorun"
 require "json"
@@ -9,55 +9,239 @@ require "socket"
 require "uri"
 require "alpr"
 
+# A server on 127.0.0.1 that records every request it gets and answers what the
+# block says: [status, headers, body].
+class FakeServer
+  Request = Struct.new(:method, :target, :path, :query, :headers, :body)
+
+  attr_reader :requests, :base_url
+
+  def initialize(&answer)
+    @answer = answer
+    @requests = []
+    @server = TCPServer.new("127.0.0.1", 0)
+    @base_url = "http://127.0.0.1:#{@server.addr[1]}"
+    @thread = Thread.new { serve }
+    @thread.report_on_exception = false
+  end
+
+  def stop
+    @thread.kill
+    @server.close
+  end
+
+  private
+
+  def serve
+    loop do
+      socket = @server.accept
+      begin
+        handle(socket)
+      ensure
+        socket.close
+      end
+    end
+  end
+
+  def handle(socket)
+    line = socket.gets.to_s
+    verb, target, = line.split(" ", 3)
+    headers = {}
+    while (header = socket.gets) && header != "\r\n"
+      name, value = header.split(":", 2)
+      headers[name.downcase] = value.strip
+    end
+    body = socket.read(headers["content-length"].to_i).to_s
+    path, query = target.split("?", 2)
+    request = Request.new(verb, target, path, URI.decode_www_form(query.to_s).to_h, headers, body)
+    @requests << request
+    status, extra, payload = @answer.call(request)
+    lines = (extra || {}).map { |name, value| "#{name}: #{value}\r\n" }.join
+    payload = payload.to_s.b
+    socket.write("HTTP/1.1 #{status} X\r\nContent-Type: application/json\r\n#{lines}Content-Length: #{payload.bytesize}\r\nConnection: close\r\n\r\n")
+    socket.write(payload)
+  end
+end
+
 class AlprTest < Minitest::Test
-  # Records each request and answers what the test says.
-  class Recorder
-    attr_reader :seen
+  KEY = "alpr_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-    def initialize(&answer)
-      @answer = answer
-      @seen = []
-    end
+  JPEG = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01].pack("C*")
+  PNG = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52].pack("C*")
 
-    def call(method, url, headers, body, _timeout)
-      request = { method: method, url: URI(url), headers: headers, body: body }
-      @seen << request
-      status, payload, extra = @answer.call(request)
-      [status, extra, payload.nil? ? "" : JSON.generate(payload)]
-    end
+  RECOGNIZED = '{"creditsRemaining":41,"imageHeight":720,"imageWidth":1280,"plates":[{"charConfs":"0.99,0.98,0.97,0.96,0.97,0.96,0.96","conf":97.3,"coordinateBottom":361,"coordinateLeft":120,"coordinateRight":300,"coordinateTop":301,"createdAt":"2026-10-22T12:00:00-03:00","plate":"BRA2E19","plateType":"mercosul","time":"2026-10-22T12:00:00-03:00"}],"processingTimeMs":84}'
+
+  def teardown
+    (@servers || []).each(&:stop)
   end
 
+  # Starts a server answering with the block, and a client pointed at it.
   def client(&answer)
-    recorder = Recorder.new(&answer)
-    [Alpr::Client.new("prk_test_key", base_url: "https://alpr.test/", transport: recorder), recorder]
+    server = FakeServer.new(&answer)
+    (@servers ||= []) << server
+    [Alpr::Client.new(KEY, base_url: server.base_url), server]
   end
 
-  def product(id)
-    { "id" => id, "name" => "Curso", "description" => "", "status" => "active", "created_at" => "2026-10-17T00:00:00Z" }
+  def ok(body)
+    [200, {}, body]
   end
 
-  def query(request)
-    URI.decode_www_form(request[:url].query.to_s).to_h
+  # The parts of a multipart body: name, file name, content type and data.
+  def parts(request)
+    boundary = request.headers["content-type"][/\Amultipart\/form-data; boundary=(.+)\z/, 1]
+    refute_nil boundary, "multipart content type with a boundary"
+    chunks = request.body.b.split("--#{boundary}".b)
+    assert_equal "--\r\n".b, chunks.last
+    chunks[1...-1].map do |chunk|
+      head, data = chunk.delete_prefix("\r\n".b).delete_suffix("\r\n".b).split("\r\n\r\n".b, 2)
+      lines = head.split("\r\n".b)
+      disposition = lines.first
+      { name: disposition[/ name="([^"]*)"/, 1], filename: disposition[/filename="([^"]*)"/, 1],
+        type: lines[1]&.then { |line| line[/\AContent-Type: (.+)\z/i, 1] }, data: data }
+    end
   end
 
-  def test_a_call_carries_the_key_and_unwraps_the_data
-    alpr, recorder = client { [200, { "data" => product("prod_1") }, {}] }
-    got = alpr.products.get("prod_1")
-    assert_equal "prod_1", got.id
-    assert_equal "active", got.status
-    seen = recorder.seen.first
-    assert_equal "GET", seen[:method]
-    assert_equal "/api/v1/products/prod_1", seen[:url].path
-    assert_equal "Bearer prk_test_key", seen[:headers]["Authorization"]
+  def test_a_call_carries_the_key_and_unwraps_the_list
+    alpr, server = client do
+      ok('{"data":[{"createdAt":"2026-10-01T09:00:00-03:00","enabled":true,"id":"cam_1","location":"Portaria","name":"Portão","protocol":"rtsp","readingArea":null},{"createdAt":"2026-10-01T09:00:00-03:00","enabled":false,"id":"cam_2","location":"","name":"Garagem","protocol":"rtsp","readingArea":{"box":{"height":0.5,"width":0.5,"x":0.1,"y":0.2},"points":[[0.1,0.2],[0.6,0.2],[0.6,0.7]]}}]}')
+    end
+    cameras = alpr.cameras.list
+    request = server.requests.first
+    assert_equal ["GET", "/api/v1/cameras", "Bearer #{KEY}", "application/json"], [request.method, request.path, request.headers["authorization"], request.headers["accept"]]
+    assert_match(%r{\Aalpr-ruby/}, request.headers["user-agent"])
+    refute request.headers.key?("idempotency-key"), "the API does not take an Idempotency-Key"
+    assert_equal 2, cameras.size
+    assert_equal ["cam_1", true, nil], [cameras[0].id, cameras[0].enabled, cameras[0].reading_area]
+    assert_equal "Portão", cameras[0].name
+    area = cameras[1].reading_area
+    assert_equal [0.1, 3, 0.6], [area.box.x, area.points.size, area.points[1][0]]
   end
 
-  def test_a_write_sends_its_body_and_idempotency_key
-    alpr, recorder = client { [201, { "data" => product("prod_1") }, {}] }
-    alpr.products.create(Alpr::ProductsCreateParams.new(name: "Curso"), idempotency_key: "create-1")
-    seen = recorder.seen.first
-    assert_equal "POST", seen[:method]
-    assert_equal "create-1", seen[:headers]["Idempotency-Key"]
-    assert_equal({ "name" => "Curso" }, JSON.parse(seen[:body]))
+  def test_a_photo_goes_as_multipart
+    alpr, server = client { ok(RECOGNIZED) }
+    result = alpr.photos.recognize(Alpr::PhotosRecognizeParams.new(image: JPEG, lpr_confidence: 0.5))
+    request = server.requests.first
+    assert_equal ["POST", "/api/v1/recognize"], [request.method, request.path]
+    sent = parts(request)
+    image = sent.find { |part| part[:name] == "image" }
+    assert_equal [JPEG.b, "photo.jpg", "image/jpeg"], [image[:data], image[:filename], image[:type]]
+    assert_equal "0.5", sent.find { |part| part[:name] == "lpr_confidence" }[:data]
+    assert_nil(sent.find { |part| part[:name] == "min_ocr_confidence" }, "an option left out was sent")
+    assert_equal 2, sent.size
+    assert_equal 41, result.credits_remaining
+    assert_equal 1, result.plates.size
+    plate = result.plates[0]
+    assert_equal ["BRA2E19", 97.3, 120], [plate.plate, plate.conf, plate.coordinate_left]
+    assert_equal "0.99,0.98,0.97,0.96,0.97,0.96,0.96", plate.char_confs
+  end
+
+  def test_a_hash_of_params_is_a_body_too
+    alpr, server = client { ok(RECOGNIZED) }
+    alpr.photos.recognize({ image: JPEG, min_ocr_confidence: 1.0 })
+    assert_equal "1", parts(server.requests.first).find { |part| part[:name] == "min_ocr_confidence" }[:data]
+  end
+
+  def test_a_photo_is_named_by_its_bytes
+    { "jpeg" => [JPEG, "photo.jpg", "image/jpeg"], "png" => [PNG, "photo.png", "image/png"],
+      "other" => ["not an image", "photo", "application/octet-stream"] }.each do |name, (data, filename, type)|
+      alpr, server = client { ok('{"imageHeight":10,"imageWidth":20,"plates":[],"processingTimeMs":3}') }
+      result = alpr.photos.detect(Alpr::PhotosDetectParams.new(image: data))
+      image = parts(server.requests.first).find { |part| part[:name] == "image" }
+      assert_equal [filename, type, data.b], [image[:filename], image[:type], image[:data]], name
+      assert_equal [20, []], [result.image_width, result.plates], name
+    end
+  end
+
+  def test_a_plate_image_is_read_by_ocr
+    alpr, server = client { ok('{"confidence":0.91,"creditsRemaining":40,"detectionId":null,"latencyMs":12,"plate":"ABC1234"}') }
+    result = alpr.photos.ocr(Alpr::PhotosOCRParams.new(image: PNG))
+    assert_equal "/api/v1/ocr", server.requests.first.path
+    assert_equal ["ABC1234", nil, 0.91], [result.plate, result.detection_id, result.confidence]
+  end
+
+  def test_a_detection_image_is_a_link
+    alpr, server = client { ok('{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}') }
+    image = alpr.detections.image("a/b")
+    assert_equal "/api/v1/detections/a%2Fb/image", server.requests.first.path
+    assert_equal ["a/b", 300], [image.detection_id, image.expires_in]
+    assert image.image_url.start_with?("https://alpr.sh/")
+  end
+
+  def reading(id)
+    %({"cameraId":null,"capturedAt":"2026-10-22T12:00:00-03:00","conf":90,"id":"#{id}","plate":"BRA2E19","source":"api"})
+  end
+
+  def test_iterating_walks_every_page_by_cursor
+    alpr, server = client do |request|
+      case request.query["before"]
+      when nil then ok(%({"data":[#{reading("r3")},#{reading("r2")}],"next":"c2"}))
+      when "c2" then ok(%({"data":[#{reading("r1")}],"next":null}))
+      else [500, {}, "{}"]
+      end
+    end
+    ids = alpr.recognitions.list_iter(plate: "BRA", source: "api").map(&:id)
+    assert_equal %w[r3 r2 r1], ids
+    assert_equal [{ "plate" => "BRA", "source" => "api" }, { "before" => "c2", "plate" => "BRA", "source" => "api" }], server.requests.map(&:query)
+    assert_equal 90.0, alpr.recognitions.list_iter.first.conf
+    assert_instance_of Float, alpr.recognitions.list_iter.first.conf
+    page = alpr.recognitions.list(before: "c2")
+    assert_equal({ "before" => "c2" }, server.requests.last.query)
+    assert_equal [1, nil, nil], [page.items.size, page.next_cursor, page.items[0].camera_id]
+  end
+
+  def test_a_cursor_that_does_not_move_ends_the_walk
+    alpr, server = client do
+      ok('{"data":[{"cameraId":"cam_1","capturedAt":"2026-10-22T12:00:00-03:00","conf":90,"id":"r1","plate":"ABC1234","source":"camera"}],"next":"same"}')
+    end
+    assert_equal 2, alpr.recognitions.list_iter.count
+    assert_equal 2, server.requests.size
+  end
+
+  def test_a_walk_ends_at_the_first_error
+    seen = 0
+    alpr, = client do
+      seen += 1
+      seen == 1 ? ok(%({"data":[#{reading("r1")}],"next":"c2"})) : [503, {}, '{"error":"storage_unavailable","message":"later"}']
+    end
+    ids = []
+    error = assert_raises(Alpr::Error) { alpr.recognitions.list_iter { |item| ids << item.id } }
+    assert_equal [%w[r1], 503], [ids, error.status]
+  end
+
+  def test_a_refusal_is_a_typed_error
+    alpr, = client do |request|
+      if request.path == "/api/v1/recognize"
+        [402, {}, '{"error":"insufficient_credits","message":"This workspace has no credits left."}']
+      else
+        [429, { "Retry-After" => "7" }, '{"error":"rate_limited","message":"Too many requests."}']
+      end
+    end
+    refused = assert_raises(Alpr::Error) { alpr.photos.recognize({ image: JPEG }) }
+    assert_equal [402, "insufficient_credits", "This workspace has no credits left.", {}], [refused.status, refused.code, refused.message, refused.fields]
+    limited = assert_raises(Alpr::Error) { alpr.cameras.list }
+    assert_equal [429, "rate_limited", 7], [limited.status, limited.code, limited.retry_after]
+  end
+
+  def test_an_error_body_that_is_not_json_is_still_an_error
+    alpr, = client { [502, {}, "<html>bad gateway</html>"] }
+    error = assert_raises(Alpr::Error) { alpr.cameras.list }
+    assert_equal [502, "", nil], [error.status, error.code, error.retry_after]
+  end
+
+  def test_a_call_can_use_another_key
+    alpr, server = client { ok('{"data":[]}') }
+    assert_equal [], alpr.cameras.list(api_key: "alpr_live_other")
+    alpr.cameras.list
+    assert_equal ["Bearer alpr_live_other", "Bearer #{KEY}"], server.requests.map { |request| request.headers["authorization"] }
+  end
+
+  def test_a_redirect_is_refused_and_the_key_never_follows_it
+    elsewhere = FakeServer.new { ok("{}") }
+    (@servers ||= []) << elsewhere
+    alpr, = client { [302, { "Location" => "#{elsewhere.base_url}/steal" }, ""] }
+    error = assert_raises(Alpr::Error) { alpr.cameras.list }
+    assert_equal 302, error.status
+    assert_empty elsewhere.requests
   end
 
   def test_a_base_url_must_be_https_unless_it_is_loopback
@@ -70,169 +254,136 @@ class AlprTest < Minitest::Test
     end
   end
 
-  def test_a_discount_goes_through_create_get_list_and_delete
-    discount = ->(id) { JSON.parse(%q({"id":"__ID__","name":"Black","code":null,"type":"percentage","basis_points":1000,"amount_cents":0,"currency":"BRL","duration":"once","duration_in_months":0,"max_redemptions":null,"max_redemptions_per_customer":null,"redemptions_count":0,"starts_at":"2026-10-17T00:00:00Z","ends_at":null,"status":"active","product_ids":["prod_1"],"created_at":"2026-10-17T00:00:00Z","modified_at":"2026-10-17T00:00:00Z"}).sub("__ID__", id)) }
-    alpr, recorder = client do |request|
-      case request[:method]
-      when "POST" then [201, { "data" => discount.call("disc_1") }, {}]
-      when "DELETE" then [204, nil, {}]
-      else
-        if request[:url].path == "/api/v1/discounts"
-          page = query(request)["page"]
-          [200, { "data" => { "items" => [discount.call("disc_#{page}")], "pagination" => { "total_count" => 2, "max_page" => 2 } } }, {}]
-        else
-          [200, { "data" => discount.call("disc_1") }, {}]
-        end
-      end
-    end
-    created = alpr.discounts.create({ name: "Black", type: "percentage", duration: "once", basis_points: 1000 })
-    assert_equal ["disc_1", nil, ["prod_1"]], [created.id, created.code, created.product_ids]
-    assert_equal "Black", alpr.discounts.get("disc_1").name
-    assert_equal %w[disc_1 disc_2], alpr.discounts.list_iter(limit: 1).map(&:id)
-    assert_nil alpr.discounts.delete("disc_1")
-    assert_equal [["POST", "/api/v1/discounts"], ["GET", "/api/v1/discounts/disc_1"], ["GET", "/api/v1/discounts"], ["GET", "/api/v1/discounts"], ["DELETE", "/api/v1/discounts/disc_1"]],
-                 recorder.seen.map { |seen| [seen[:method], seen[:url].path] }
-    assert_equal({ "name" => "Black", "type" => "percentage", "duration" => "once", "basis_points" => 1000 }, JSON.parse(recorder.seen.first[:body]))
-  end
-
-  def test_a_free_form_value_decodes_nested
-    state = JSON.parse('{"id":"cus_1","name":"Ana","email":"ana@example.com","external_id":"","status":"active","created_at":"2026-10-17T00:00:00Z","active_subscriptions":[],"granted_benefits":[{"id":"gr_1","granted_at":"2026-10-17T00:00:00Z","benefit_id":"ben_1","benefit_type":"feature_flag","benefit_metadata":{"flags":{"beta":true,"limits":{"seats":5,"tiers":["a",2,null,1.5]}}},"properties":{"links":[{"url":"https://example.com","expires":null}]}}]}')
-    alpr, = client { [200, { "data" => state }, {}] }
-    grant = alpr.customers.get_state("cus_1").granted_benefits.first
-    assert_equal({ "flags" => { "beta" => true, "limits" => { "seats" => 5, "tiers" => ["a", 2, nil, 1.5] } } }, grant.benefit_metadata)
-    assert_equal({ "links" => [{ "url" => "https://example.com", "expires" => nil }] }, grant.properties)
-  end
-
-  def test_a_post_without_a_key_is_sent_with_its_own_a_get_with_none
-    alpr, recorder = client { [201, { "data" => product("prod_1") }, {}] }
-    2.times { alpr.products.create(Alpr::ProductsCreateParams.new(name: "Curso")) }
-    alpr.products.create(Alpr::ProductsCreateParams.new(name: "Curso"), idempotency_key: "mine")
-    alpr.products.get("prod_1")
-    keys = recorder.seen.map { |seen| seen[:headers]["Idempotency-Key"] }
-    uuid = /\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
-    assert_match uuid, keys[0]
-    assert_match uuid, keys[1]
-    refute_equal keys[0], keys[1]
-    assert_equal ["mine", nil], keys[2..]
-  end
-
-  def test_iterating_walks_every_page
-    alpr, recorder = client do |request|
-      page = query(request)["page"]
-      [200, { "data" => { "items" => [product("prod_#{page}")], "pagination" => { "total_count" => 3, "max_page" => 3 } } }, {}]
-    end
-    assert_equal %w[prod_1 prod_2 prod_3], alpr.products.list_iter(limit: 1).map(&:id)
-    assert_equal "1", query(recorder.seen.first)["limit"]
-  end
-
-  def test_a_refusal_is_a_typed_error
-    alpr, = client do |request|
-      if request[:url].path == "/api/v1/customers"
-        [422, { "error" => "invalid_request", "fields" => { "email" => ["send an e-mail"] } }, {}]
-      else
-        [429, nil, { "retry-after" => "7" }]
-      end
-    end
-    refused = assert_raises(Alpr::Error) { alpr.customers.create({ name: "x", email: "x" }) }
-    assert_equal [422, "invalid_request"], [refused.status, refused.code]
-    assert_equal ["send an e-mail"], refused.fields["email"]
-    limited = assert_raises(Alpr::Error) { alpr.products.list }
-    assert_equal [429, 7], [limited.status, limited.retry_after]
-  end
-
-  # The webhook vectors every SDK checks: Standard Webhooks' own example, and
+  # The webhook vectors every SDK checks (generator/testdata/webhook-vectors.json):
   # Alpr.sh events signed under two secrets, as while one is rotated.
-  REFERENCE_SECRET = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
-  OLD_SECRET = "whsec_cGVyYXRhLXNkay1vbGQta2V5LTAxMjM0NTY3ODlhYmM="
-  NEW_SECRET = "whsec_cGVyYXRhLXNkay1uZXcta2V5LTAxMjM0NTY3ODlhYmM="
-  ORDER_PAID = '{"id":"msg_2","type":"order.paid","timestamp":"2026-10-22T12:00:00Z","data":{"id":"ord_1","customer_id":"cus_1","product_id":"prod_1","price_id":"price_1","amount_cents":12000,"currency":"BRL","status":"succeeded","paid_at":"2026-10-22T12:00:00Z","installments":3,"installment_interest_cents":360}}'
-  USAGE_RECORDED = '{"id":"msg_3","type":"usage_event.recorded","timestamp":"2026-10-22T12:00:00Z","data":{"event_id":"ue_1","aggregate":"usage_event","aggregate_id":"ue_1","merchant_id":"mer_1","environment":"test"}}'
-  PAYOUT_SENT = '{"id":"msg_4","type":"payout.sent","timestamp":"2026-10-22T12:00:00Z","data":{"payout_id":"po_1","amount_cents":5000}}'
+  NEW_SECRET = "whsec_SDK-test-secret-new-0123456789"
+  OLD_SECRET = "whsec_SDK-test-secret-old-0123456789"
+  OTHER_SECRET = "whsec_SDK-test-secret-other-012345678"
   SIGNED_AT = 1_792_670_400
+  STAMP = SIGNED_AT.to_s
+  NOW = Time.at(SIGNED_AT + 120)
 
-  def webhook_headers(id, at, signature)
-    { "Webhook-Id" => id, "webhook-timestamp" => at.to_s, "webhook-signature" => signature }
+  RECOGNITION_BODY = '{"event":"recognition.created","id":"rec_1","tenant_id":"ws_1","source":"camera","camera_id":"cam_1","plate":"BRA2E19","confidence":0.97,"captured_at":"2026-10-22T11:59:58Z"}'
+  RECOGNITION_NEW = "sha256=97deaf1c8a9348f3a7d64ce68943f4e6b4cc44590df4caea4c16d6373fa7d623"
+  RECOGNITION_OLD = "sha256=12b70f2a8838157260e3b9470befa2627c16c42fe5e4b1d80fb841e206f8c781"
+  ALERT_BODY = '{"event":"alert.triggered","id":"alt_1","tenant_id":"ws_1","rule_id":"rule_1","rule_name":"Veículo bloqueado","recognition_id":"rec_1","plate":"BRA2E19","camera_id":"cam_1","confidence":0.97,"captured_at":"2026-10-22T11:59:58Z"}'
+  ALERT_NEW = "sha256=0b84627fa4564b006237b52feca68ca3c8dfebc54d4e271e881105f75e2a962a"
+  TEST_BODY = '{"event":"webhook.test","id":"evt_1","tenant_id":"ws_1","sent_at":"2026-10-22T12:00:00Z"}'
+  TEST_NEW = "sha256=f3064f502ba3ffe3e409d9186c89ce7e425ad1dcad34b73edbeb1ad8e0633245"
+  UNKNOWN_BODY = '{"event":"payout.sent","id":"po_1","tenant_id":"ws_1"}'
+  UNKNOWN_NEW = "sha256=cb5b4f83462c974ea9706723b97a28de5d591d2093aa62e8dc8e388997daa0d6"
+  PLUS_SIGNATURE = "sha256=ceef0f02180106de386c85b403f2b448142e897911c1e6075725b7e8d2912771"
+
+  # A request's headers; several signatures are several header lines.
+  def webhook_headers(id, stamp, *signatures)
+    { "x-alprsh-delivery-id" => id, "X-Alprsh-Timestamp" => stamp, "X-Alprsh-Signature" => signatures }
   end
 
-  def test_the_standard_webhooks_vector_verifies
-    body = '{"test": 2432232314}'
-    headers = webhook_headers("msg_p5jXN8AQM9LWM0D4loKWxJek", 1_614_265_330, "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=")
-    at = Time.at(1_614_265_330)
-    assert_nil Alpr.verify_webhook_signature(REFERENCE_SECRET, headers, body, now: at)
-    [[REFERENCE_SECRET, "#{body} ", at], [REFERENCE_SECRET, body, at + 301], [NEW_SECRET, body, at]].each do |secret, payload, now|
-      assert_raises(Alpr::WebhookVerificationError) { Alpr.verify_webhook_signature(secret, headers, payload, now: now) }
-    end
+  def refused?(secret, headers, body, now: NOW)
+    Alpr.verify_webhook_signature(secret, headers, body, now: now)
+    false
+  rescue Alpr::WebhookVerificationError
+    true
+  end
+
+  def test_the_webhook_vector_verifies
+    headers = webhook_headers("del_0001", STAMP, RECOGNITION_NEW)
+    assert_nil Alpr.verify_webhook_signature(NEW_SECRET, headers, RECOGNITION_BODY, now: NOW)
+    assert_nil Alpr.verify_webhook_signature(NEW_SECRET, headers, RECOGNITION_BODY.b, now: NOW), "the body as raw bytes"
+    assert refused?(NEW_SECRET, headers, "#{RECOGNITION_BODY} "), "a changed body verified"
+    assert refused?(NEW_SECRET, webhook_headers("del_0009", STAMP, RECOGNITION_NEW), RECOGNITION_BODY), "another delivery id verified"
+    assert refused?(NEW_SECRET, headers, RECOGNITION_BODY, now: Time.at(SIGNED_AT + 301)), "a stale webhook verified"
+    assert refused?(NEW_SECRET, headers, RECOGNITION_BODY, now: Time.at(SIGNED_AT - 301)), "a webhook from the future verified"
+    assert_nil Alpr.verify_webhook_signature(NEW_SECRET, headers, RECOGNITION_BODY, now: Time.at(SIGNED_AT + 300))
+    assert_nil Alpr.verify_webhook_signature(NEW_SECRET, headers, RECOGNITION_BODY, now: Time.at(SIGNED_AT - 300))
+    assert refused?(OTHER_SECRET, headers, RECOGNITION_BODY), "another secret verified"
+    assert refused?(NEW_SECRET, {}, RECOGNITION_BODY), "a request with no headers verified"
+    assert_equal 300, Alpr::WEBHOOK_TOLERANCE
+  end
+
+  def test_an_empty_secret_is_a_configuration_error
+    headers = webhook_headers("del_0001", STAMP, RECOGNITION_NEW)
+    error = assert_raises(ArgumentError) { Alpr.verify_webhook_signature("", headers, RECOGNITION_BODY, now: NOW) }
+    refute_kind_of Alpr::WebhookVerificationError, error
+    assert_raises(ArgumentError) { Alpr.verify_webhook("", headers, RECOGNITION_BODY, now: NOW) }
+  end
+
+  def test_headers_are_found_in_any_case_and_in_a_rack_env
+    env = { "HTTP_X_ALPRSH_DELIVERY_ID" => "del_0001", "HTTP_X_ALPRSH_TIMESTAMP" => STAMP, "HTTP_X_ALPRSH_SIGNATURE" => RECOGNITION_NEW }
+    assert_nil Alpr.verify_webhook_signature(NEW_SECRET, env, RECOGNITION_BODY, now: NOW)
+    upper = { "X-ALPRSH-DELIVERY-ID" => "del_0001", "x-alprsh-timestamp" => STAMP, "x-Alprsh-signature" => RECOGNITION_NEW }
+    assert_nil Alpr.verify_webhook_signature(NEW_SECRET, upper, RECOGNITION_BODY, now: NOW)
   end
 
   def test_a_timestamp_that_is_not_plain_digits_is_refused
-    body = '{"test": 2432232314}'
-    [["+1614265330", "JQsSpSSK1m9NI2FueDRZN3FL/jU9336idQcq6VmF+c8="], ["²", "PEggIsKE32VQ8J4ZIk9apRhPy7w+a20bxGpjk1K4/HY="], ["", "x"], ["1_6", "x"]].each do |stamp, signature|
-      headers = webhook_headers("msg_p5jXN8AQM9LWM0D4loKWxJek", stamp, "v1,#{signature}")
-      assert_raises(Alpr::WebhookVerificationError, stamp) { Alpr.verify_webhook_signature(REFERENCE_SECRET, headers, body, now: Time.at(1_614_265_330)) }
+    ["+1792670400", "²", "", "1_7", " 1792670400", "1792670400 ", "1792670400\n", "１７９２６７０４００"].each do |stamp|
+      assert refused?(NEW_SECRET, webhook_headers("del_0001", stamp, PLUS_SIGNATURE), RECOGNITION_BODY), "#{stamp.inspect} verified"
+    end
+    assert refused?(NEW_SECRET, { "X-Alprsh-Timestamp" => STAMP, "X-Alprsh-Signature" => RECOGNITION_NEW }, RECOGNITION_BODY), "no delivery id"
+    assert refused?(NEW_SECRET, { "x-alprsh-delivery-id" => "del_0001", "X-Alprsh-Signature" => RECOGNITION_NEW }, RECOGNITION_BODY), "no timestamp"
+  end
+
+  def test_more_than_one_signature_verifies_during_a_rotation
+    {
+      "one value" => webhook_headers("del_0001", STAMP, "#{RECOGNITION_OLD},#{RECOGNITION_NEW}"),
+      "two lines" => webhook_headers("del_0001", STAMP, RECOGNITION_OLD, RECOGNITION_NEW),
+      "with spaces" => webhook_headers("del_0001", STAMP, "#{RECOGNITION_OLD}, #{RECOGNITION_NEW}")
+    }.each do |name, headers|
+      [NEW_SECRET, OLD_SECRET].each do |secret|
+        assert_nil Alpr.verify_webhook_signature(secret, headers, RECOGNITION_BODY, now: NOW), "#{name} under #{secret}"
+      end
+      assert refused?(OTHER_SECRET, headers, RECOGNITION_BODY), "#{name}: a secret that signed nothing verified"
+    end
+    {
+      "a malformed one beside a good one" => "sha256=zz,#{RECOGNITION_NEW}",
+      "no prefix" => RECOGNITION_NEW.delete_prefix("sha256="),
+      "a short one" => "sha256=97de",
+      "an empty one" => "#{RECOGNITION_NEW},",
+      "too many" => "#{RECOGNITION_OLD},#{RECOGNITION_OLD},#{RECOGNITION_OLD},#{RECOGNITION_OLD},#{RECOGNITION_OLD},#{RECOGNITION_OLD},#{RECOGNITION_NEW}"
+    }.each do |name, signature|
+      assert refused?(NEW_SECRET, webhook_headers("del_0001", STAMP, signature), RECOGNITION_BODY), "#{name} verified"
     end
   end
 
   def test_a_webhook_answers_its_typed_event
-    now = Time.at(SIGNED_AT + 120)
-    headers = webhook_headers("msg_2", SIGNED_AT, "v1,wYfYi9j4EexjSjLLsUssBYbtAFSwF9KVQBJ2o+qD6Jw= v1,0rD3K6HM83kGY+mZMPVidXSW2zXHHDvy3bMt2QzM8Ak=")
-    [NEW_SECRET, OLD_SECRET].each do |secret|
-      event = Alpr.verify_webhook(secret, headers, ORDER_PAID, now: now)
-      assert_instance_of Alpr::OrderWebhookEvent, event
-      assert_equal ["order.paid", "ord_1", 3, 360], [event.type, event.data.id, event.data.installments, event.data.installment_interest_cents]
-    end
-    assert_raises(Alpr::WebhookVerificationError) { Alpr.verify_webhook(REFERENCE_SECRET, headers, ORDER_PAID, now: now) }
-    usage = Alpr.verify_webhook(NEW_SECRET, webhook_headers("msg_3", SIGNED_AT, "v1,Z3E2vTbczigiySfkzakxuZotPn9FlBY1KAET6hPEZoU="), USAGE_RECORDED, now: now)
-    assert_instance_of Alpr::IdentifiersWebhookEvent, usage
-    assert_equal %w[msg_3 mer_1], [usage.id, usage.data["merchant_id"]]
-    unknown = Alpr.verify_webhook(NEW_SECRET, webhook_headers("msg_4", SIGNED_AT, "v1,Sa/yofA3h/58pFR+rIiWdIc8qXfcuqvyJSjxn4oJ1ZY="), PAYOUT_SENT, now: now)
-    assert_instance_of Alpr::UnknownWebhookEvent, unknown
-    assert_equal ["payout.sent", { "payout_id" => "po_1", "amount_cents" => 5000 }], [unknown.type, unknown.data]
+    event = Alpr.verify_webhook(NEW_SECRET, webhook_headers("del_0001", STAMP, RECOGNITION_NEW), RECOGNITION_BODY, now: NOW)
+    assert_instance_of Alpr::RecognitionCreatedWebhookEvent, event
+    assert_equal ["recognition.created", "rec_1", "BRA2E19", 0.97, "cam_1", "camera", "ws_1", "2026-10-22T11:59:58Z"],
+                 [event.event_name, event.id, event.plate, event.confidence, event.camera_id, event.source, event.tenant_id, event.captured_at]
+    event = Alpr.verify_webhook(NEW_SECRET, webhook_headers("del_0002", STAMP, ALERT_NEW), ALERT_BODY.b, now: NOW)
+    assert_instance_of Alpr::AlertTriggeredWebhookEvent, event
+    assert_equal ["Veículo bloqueado", "rec_1", "rule_1"], [event.rule_name, event.recognition_id, event.rule_id]
+    event = Alpr.verify_webhook(NEW_SECRET, webhook_headers("del_0003", STAMP, TEST_NEW), TEST_BODY, now: NOW)
+    assert_instance_of Alpr::WebhookTestWebhookEvent, event
+    assert_equal ["webhook.test", "2026-10-22T12:00:00Z"], [event.event_name, event.sent_at]
   end
 
-  def test_the_real_http_sends_and_reads_through_net_http
-    server = TCPServer.new("127.0.0.1", 0)
-    thread = Thread.new { loop { answer(server.accept) } }
-    base_url = "http://127.0.0.1:#{server.addr[1]}"
-    product = Alpr::Client.new("prk_test_key", base_url: base_url).products.create({ name: "Alpr.sh" }, idempotency_key: "create-1")
-    assert_equal ["Alpr.sh", "create-1", "POST /api/v1/products application/json"], [product.name, product.description, product.created_at]
-    detached = Alpr::Client.new("prk_test_key", base_url: base_url).payment_methods.detach("pm 1/2")
-    assert_equal "POST /api/v1/payment_methods/pm%201%2F2/detach -", detached.id
-    refused = assert_raises(Alpr::Error) { Alpr::Client.new("prk_test_other", base_url: base_url).products.get("prod_1") }
-    assert_equal [401, "invalid_credential", 3], [refused.status, refused.code, refused.retry_after]
-  ensure
-    thread&.kill
-    server&.close
+  def test_an_unknown_event_is_not_an_error
+    event = Alpr.verify_webhook(NEW_SECRET, webhook_headers("del_0004", STAMP, UNKNOWN_NEW), UNKNOWN_BODY, now: NOW)
+    assert_instance_of Alpr::UnknownWebhookEvent, event
+    assert_equal ["payout.sent", "po_1", JSON.parse(UNKNOWN_BODY)], [event.event_name, event.id, event.body]
+    assert_raises(Alpr::WebhookVerificationError) do
+      Alpr.verify_webhook(NEW_SECRET, webhook_headers("del_0005", STAMP, "sha256=#{"0" * 64}"), '{"id":"x"}', now: NOW)
+    end
   end
 
-  private
-
-  # Answers one connection as the API would: what it was sent, wrapped in
-  # data, or a 401 to another key.
-  def answer(socket)
-    request_line = socket.gets.to_s
-    headers = {}
-    while (line = socket.gets) && line != "\r\n"
-      name, value = line.split(":", 2)
-      headers[name.downcase] = value.strip
-    end
-    body = socket.read(headers["content-length"].to_i).to_s.force_encoding(Encoding::UTF_8)
-    status, extra, payload = respond(request_line.split[0, 2].join(" "), headers, body)
-    encoded = JSON.generate(payload).b
-    socket.write("HTTP/1.1 #{status} X\r\nContent-Type: application/json\r\n#{extra}Content-Length: #{encoded.bytesize}\r\nConnection: close\r\n\r\n")
-    socket.write(encoded)
-  ensure
-    socket.close
+  def sign(secret, id, body)
+    "sha256=#{OpenSSL::HMAC.hexdigest("SHA256", secret, "#{STAMP}.#{id}.#{body}")}"
   end
 
-  def respond(request, headers, body)
-    return [401, "Retry-After: 3\r\n", { "error" => "invalid_credential" }] if headers["authorization"] != "Bearer prk_test_key"
+  def test_a_signature_helper_matches_the_vectors
+    assert_equal RECOGNITION_NEW, sign(NEW_SECRET, "del_0001", RECOGNITION_BODY)
+    assert_equal RECOGNITION_OLD, sign(OLD_SECRET, "del_0001", RECOGNITION_BODY)
+  end
 
-    name = body.empty? ? "" : JSON.parse(body)["name"]
-    if request.end_with?("/detach")
-      return [200, "", { "data" => { "id" => "#{request} #{headers["content-type"] || "-"}", "detached" => true } }]
+  def test_a_verified_body_that_is_not_an_event_is_a_parse_error
+    ["[1]", '{"id":"x"}', '{"event":3}', '{"event":""}', "not json", '"event"'].each do |body|
+      headers = webhook_headers("del_0001", STAMP, sign(NEW_SECRET, "del_0001", body))
+      error = assert_raises(Alpr::WebhookParseError, body) { Alpr.verify_webhook(NEW_SECRET, headers, body, now: NOW) }
+      refute_kind_of Alpr::WebhookVerificationError, error
     end
-
-    [201, "", { "data" => { "id" => "prod_1", "name" => name, "description" => headers["idempotency-key"].to_s, "status" => "active",
-                            "created_at" => "#{request} #{headers["content-type"]}" } }]
+    body = '{"event":"recognition.created","id":"rec_1"}'
+    headers = webhook_headers("del_0001", STAMP, sign(NEW_SECRET, "del_0001", body))
+    assert_raises(Alpr::WebhookParseError) { Alpr.verify_webhook(NEW_SECRET, headers, body, now: NOW) }
   end
 end

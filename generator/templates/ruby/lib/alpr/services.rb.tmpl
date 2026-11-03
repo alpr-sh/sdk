@@ -14,23 +14,34 @@ module Alpr
 {{- range .Methods}}
 {{- if .Paginated}}
 
-    # {{.Summary}}. One page; +{{snake .Name}}_iter+ walks every page.
+    # {{.Summary}}. One page; +{{snake .Name}}_iter+ walks every page. +{{rbName .Cursor}}+ is the
+    # cursor the previous page answered as +next_cursor+; nil asks for the newest page.
     #
     # @return [Page<{{.Item}}>]
-    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}page: nil, limit: nil, {{range .Query}}{{rbName .Name}}: nil, {{end}}api_key: nil)
-      query = { "page" => page, "limit" => limit{{range .Query}}, {{quote .Name}} => {{rbName .Name}}{{end}} }
+    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}{{rbName .Cursor}}: nil, {{range .Query}}{{rbName .Name}}: nil, {{end}}api_key: nil)
+      query = { {{quote .Cursor}} => {{rbName .Cursor}}{{range .Query}}, {{quote .Name}} => {{rbName .Name}}{{end}} }
       data = @client.request({{quote .HTTPMethod}}, {{template "path" .}}, query: query, api_key: api_key)
-      Page.from_hash(data) { |item| {{.Item}}.from_hash(item) }
+      Page.from_hash(data, {{quote .Next}}) { |item| {{.Item}}.from_hash(item) }
     end
 
-    # Walks every page of {{.OperationID}} from +page+, item by item.
+    # Walks every page of {{.OperationID}} from the cursor +{{rbName .Cursor}}+ (the newest when
+    # nil), item by item, until the last page; it ends at the first error.
     #
     # @return [Enumerator<{{.Item}}>]
-    def {{snake .Name}}_iter({{range .PathParams}}{{rbName .}}, {{end}}page: nil, limit: nil, {{range .Query}}{{rbName .Name}}: nil, {{end}}api_key: nil, &block)
-      items = Page.iterate(page) do |at|
-        {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}page: at, limit: limit, {{range .Query}}{{rbName .Name}}: {{rbName .Name}}, {{end}}api_key: api_key)
+    def {{snake .Name}}_iter({{range .PathParams}}{{rbName .}}, {{end}}{{rbName .Cursor}}: nil, {{range .Query}}{{rbName .Name}}: nil, {{end}}api_key: nil, &block)
+      items = Page.iterate({{rbName .Cursor}}) do |at|
+        {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}{{rbName .Cursor}}: at, {{range .Query}}{{rbName .Name}}: {{rbName .Name}}, {{end}}api_key: api_key)
       end
       block ? items.each(&block) : items
+    end
+{{- else if .List}}
+
+    # {{.Summary}}.
+    #
+    # @return [Array<{{.Item}}>]
+    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}api_key: nil)
+      data = @client.request({{quote .HTTPMethod}}, {{template "path" .}}, api_key: api_key)
+      (data["data"] || []).map { |item| {{.Item}}.from_hash(item) }
     end
 {{- else if .NoContent}}
 
@@ -40,8 +51,8 @@ module Alpr
     # @param params [{{.Body.Name}}, Hash]
 {{- end}}
     # @return [nil]
-    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}{{if .Body}}params, {{end}}{{if .Write}}idempotency_key: nil, {{end}}api_key: nil)
-      @client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, body: {{.Body.Name}}.coerce(params).to_wire{{end}}{{if .Write}}, idempotency_key: idempotency_key{{end}}, api_key: api_key)
+    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}{{if .Body}}params, {{end}}api_key: nil)
+      @client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Multipart}}, form: {{.Body.Name}}.coerce(params).to_form{{end}}, api_key: api_key)
       nil
     end
 {{- else}}
@@ -52,8 +63,8 @@ module Alpr
     # @param params [{{.Body.Name}}, Hash]
 {{- end}}
     # @return [{{.Response}}]
-    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}{{if .Body}}params, {{end}}{{if .Write}}idempotency_key: nil, {{end}}api_key: nil)
-      data = @client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Body}}, body: {{.Body.Name}}.coerce(params).to_wire{{end}}{{if .Write}}, idempotency_key: idempotency_key{{end}}, api_key: api_key)
+    def {{snake .Name}}({{range .PathParams}}{{rbName .}}, {{end}}{{if .Body}}params, {{end}}api_key: nil)
+      data = @client.request({{quote .HTTPMethod}}, {{template "path" .}}{{if .Multipart}}, form: {{.Body.Name}}.coerce(params).to_form{{end}}, api_key: api_key)
       {{.Response}}.from_hash(data)
     end
 {{- end}}

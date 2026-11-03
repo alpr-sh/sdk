@@ -20,18 +20,10 @@ var rbReserved = map[string]bool{
 func init() {
 	register(Language{Name: "ruby", Funcs: template.FuncMap{
 		// quote writes a string literal, escaped the way ruby reads it.
-		"quote":   rubyQuote,
-		"rbName":  rbName,
-		"rbType":  rbType,
-		"rbRead":  rbRead,
-		"rbWrite": rbWrite,
-		// rbBuild builds expr into t, or takes it as it is.
-		"rbBuild": func(t *TypeRef, expr string) string {
-			if convert := rbConvert(t, expr, 0); convert != "" {
-				return convert
-			}
-			return expr
-		},
+		"quote":  rubyQuote,
+		"rbName": rbName,
+		"rbType": rbType,
+		"rbRead": rbRead,
 		// rbDoc writes a description as comment lines over a declaration, or
 		// nothing.
 		"rbDoc": func(indent, text string) string {
@@ -44,9 +36,10 @@ func init() {
 	}})
 }
 
-// rbName is a wire name as a Ruby reader and keyword argument.
+// rbName is a wire name as a Ruby reader and keyword argument: detectionId is
+// detection_id. The wire name is still what the JSON is read and written by.
 func rbName(name string) string {
-	name = strings.ReplaceAll(name, "-", "_")
+	name = strings.ToLower(strings.Join(words(name), "_"))
 	if rbReserved[name] {
 		return name + "_"
 	}
@@ -72,6 +65,8 @@ func rbType(t *TypeRef) string {
 		return "Float"
 	case "boolean":
 		return "Boolean"
+	case "binary":
+		return "String (the bytes)"
 	case "model":
 		return t.Model
 	case "array":
@@ -104,6 +99,9 @@ func rbRead(f *Field) string {
 func rbConvert(t *TypeRef, expr string, depth int) string {
 	each := "item" + strings.Repeat("_", depth)
 	switch t.Kind {
+	case "number":
+		// JSON writes 90 for a number that is 90.0: the reader is always a Float.
+		return "Float(" + expr + ")"
 	case "model":
 		return t.Model + ".from_hash(" + expr + ")"
 	case "array":
@@ -116,15 +114,4 @@ func rbConvert(t *TypeRef, expr string, depth int) string {
 		}
 	}
 	return ""
-}
-
-// rbWrite is the expression that writes a param's value as JSON reads it: a
-// nested model or list of them goes through Alpr.wire, a scalar as it is.
-func rbWrite(f *Field) string {
-	value := "@" + rbName(f.Wire)
-	switch f.Type.Kind {
-	case "model", "array", "map":
-		return "Alpr.wire(" + value + ")"
-	}
-	return value
 }
