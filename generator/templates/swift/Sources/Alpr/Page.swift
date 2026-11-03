@@ -1,46 +1,48 @@
-/// One page of a list, and where the list ends.
+/// One page of a list: its items, and the cursor of the next page.
 public struct Page<Item: Decodable & Sendable>: Decodable, Sendable {
     /// The page's items.
     public let items: [Item]
-    /// How many items and pages the list has.
-    public let pagination: Pagination
+    /// The cursor to ask the next page with; nil on the last page.
+    public let next: String?
 
-    public init(items: [Item], pagination: Pagination) {
+    public init(items: [Item], next: String? = nil) {
         self.items = items
-        self.pagination = pagination
+        self.next = next
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         items = try container.decodeIfPresent([Item].self, forKey: .items) ?? []
-        pagination = try container.decode(Pagination.self, forKey: .pagination)
+        let next = try container.decodeIfPresent(String.self, forKey: .next)
+        self.next = next?.isEmpty == true ? nil : next
     }
 
     enum CodingKeys: String, CodingKey {
-        case items
-        case pagination
+        case items = "data"
+        case next
     }
 }
 
-/// Walks pages from `first` (1 when nil) until the last one, as Polar's SDKs
-/// do, yielding every item. A page is fetched only when the items before it
-/// were taken, and an error ends the walk.
+/// Walks pages from the cursor `first` (nil asks for the newest page) until
+/// the last one, yielding every item. A page is fetched only when the items
+/// before it were taken. The walk ends at the first error, and when the next
+/// cursor is the one just used, which would ask for the same page forever.
 func iterate<Item: Decodable & Sendable>(
-    from first: Int?,
-    fetch: @escaping @Sendable (Int) async throws -> Page<Item>
+    from first: String?,
+    fetch: @escaping @Sendable (String?) async throws -> Page<Item>
 ) -> AsyncThrowingStream<Item, any Error> {
-    let pager = Pager(page: max(first ?? 1, 1), fetch: fetch)
+    let pager = Pager(cursor: first?.isEmpty == true ? nil : first, fetch: fetch)
     return AsyncThrowingStream { try await pager.next() }
 }
 
 private actor Pager<Item: Decodable & Sendable> {
-    private var page: Int
+    private var cursor: String?
     private var items: ArraySlice<Item> = []
     private var done = false
-    private let fetch: @Sendable (Int) async throws -> Page<Item>
+    private let fetch: @Sendable (String?) async throws -> Page<Item>
 
-    init(page: Int, fetch: @escaping @Sendable (Int) async throws -> Page<Item>) {
-        self.page = page
+    init(cursor: String?, fetch: @escaping @Sendable (String?) async throws -> Page<Item>) {
+        self.cursor = cursor
         self.fetch = fetch
     }
 
@@ -52,13 +54,19 @@ private actor Pager<Item: Decodable & Sendable> {
             if done {
                 return nil
             }
-            done = true
-            let result = try await fetch(page)
-            if page < result.pagination.maxPage {
-                page += 1
-                done = false
+            let used = cursor
+            do {
+                let result = try await fetch(used)
+                items = result.items[...]
+                if let next = result.next, next != used {
+                    cursor = next
+                } else {
+                    done = true
+                }
+            } catch {
+                done = true
+                throw error
             }
-            items = result.items[...]
         }
     }
 }
