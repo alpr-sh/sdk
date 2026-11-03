@@ -4,57 +4,20 @@ import Foundation
 
 // The resources Alpr.sh's API answers and the bodies its writes take.
 
-/// Carga de alert.triggered: a regra que disparou e a leitura que a disparou.
-public struct AlertTriggered: Codable, Sendable, Hashable {
-    public let cameraID: String?
-    public let capturedAt: String
-    public let confidence: Double
-    public let event: AlertTriggeredEvent
-    public let id: String
-    public let plate: String
-    public let recognitionID: String
-    public let ruleID: String
-    public let ruleName: String
-    public let tenantID: String
-
-    public init(capturedAt: String, confidence: Double, event: AlertTriggeredEvent, id: String, plate: String, recognitionID: String, ruleID: String, ruleName: String, tenantID: String, cameraID: String? = nil) {
-        self.cameraID = cameraID
-        self.capturedAt = capturedAt
-        self.confidence = confidence
-        self.event = event
-        self.id = id
-        self.plate = plate
-        self.recognitionID = recognitionID
-        self.ruleID = ruleID
-        self.ruleName = ruleName
-        self.tenantID = tenantID
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case cameraID = "camera_id"
-        case capturedAt = "captured_at"
-        case confidence
-        case event
-        case id
-        case plate
-        case recognitionID = "recognition_id"
-        case ruleID = "rule_id"
-        case ruleName = "rule_name"
-        case tenantID = "tenant_id"
-    }
-}
-
-/// Uma câmera do espaço, sem endereço nem credenciais.
+/// Camera is a resource of Alpr.sh's API.
 public struct Camera: Codable, Sendable, Hashable {
     public let createdAt: String
     public let enabled: Bool
     public let id: String
+    /// O endereço da câmera como texto; vazio se não foi informado.
     public let location: String
     public let name: String
-    public let `protocol`: String
+    /// Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
+    public let `protocol`: CameraProtocol
+    /// Nulo quando a câmera lê a imagem inteira.
     public let readingArea: ReadingArea?
 
-    public init(createdAt: String, enabled: Bool, id: String, location: String, name: String, `protocol`: String, readingArea: ReadingArea?) {
+    public init(createdAt: String, enabled: Bool, id: String, location: String, name: String, `protocol`: CameraProtocol, readingArea: ReadingArea?) {
         self.createdAt = createdAt
         self.enabled = enabled
         self.id = id
@@ -75,40 +38,19 @@ public struct Camera: Codable, Sendable, Hashable {
     }
 }
 
-/// Onde estão as placas de uma foto.
-public struct DetectResult: Codable, Sendable, Hashable {
-    public let imageHeight: Int
-    public let imageWidth: Int
-    public let plates: [DetectedPlate]
-    public let processingTimeMs: Int
-
-    public init(imageHeight: Int, imageWidth: Int, plates: [DetectedPlate], processingTimeMs: Int) {
-        self.imageHeight = imageHeight
-        self.imageWidth = imageWidth
-        self.plates = plates
-        self.processingTimeMs = processingTimeMs
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case imageHeight
-        case imageWidth
-        case plates
-        case processingTimeMs
-    }
-}
-
-/// Uma placa localizada na foto, sem o texto.
+/// DetectedPlate is a resource of Alpr.sh's API.
 public struct DetectedPlate: Codable, Sendable, Hashable {
+    /// Confiança do detector, de 0 a 100, com uma casa.
     public let conf: Double
     public let coordinateBottom: Int
     public let coordinateLeft: Int
     public let coordinateRight: Int
     public let coordinateTop: Int
     public let createdAt: String
-    public let plateType: String
+    public let plateType: DetectedPlatePlatetype
     public let time: String
 
-    public init(conf: Double, coordinateBottom: Int, coordinateLeft: Int, coordinateRight: Int, coordinateTop: Int, createdAt: String, plateType: String, time: String) {
+    public init(conf: Double, coordinateBottom: Int, coordinateLeft: Int, coordinateRight: Int, coordinateTop: Int, createdAt: String, plateType: DetectedPlatePlatetype, time: String) {
         self.conf = conf
         self.coordinateBottom = coordinateBottom
         self.coordinateLeft = coordinateLeft
@@ -131,11 +73,12 @@ public struct DetectedPlate: Codable, Sendable, Hashable {
     }
 }
 
-/// O link temporário da imagem de uma leitura.
-public struct DetectionImage: Codable, Sendable, Hashable {
+/// DetectionImageLink is a resource of Alpr.sh's API.
+public struct DetectionImageLink: Codable, Sendable, Hashable {
     public let detectionID: String
-    /// Segundos de validade do link.
+    /// Segundos de validade do link (300).
     public let expiresIn: Int
+    /// Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio.
     public let imageURL: String
 
     public init(detectionID: String, expiresIn: Int, imageURL: String) {
@@ -151,12 +94,66 @@ public struct DetectionImage: Codable, Sendable, Hashable {
     }
 }
 
-/// A placa lida de uma imagem já recortada.
-public struct OcrResult: Codable, Sendable, Hashable {
-    public let confidence: Double
+/// PhotoDetection is a resource of Alpr.sh's API.
+public struct PhotoDetection: Codable, Sendable, Hashable {
+    public let imageHeight: Int
+    public let imageWidth: Int
+    /// Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, [].
+    public let plates: [DetectedPlate]
+    public let processingTimeMs: Int
+
+    public init(imageHeight: Int, imageWidth: Int, plates: [DetectedPlate], processingTimeMs: Int) {
+        self.imageHeight = imageHeight
+        self.imageWidth = imageWidth
+        self.plates = plates
+        self.processingTimeMs = processingTimeMs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case imageHeight
+        case imageWidth
+        case plates
+        case processingTimeMs
+    }
+}
+
+/// PhotoRecognition is a resource of Alpr.sh's API.
+public struct PhotoRecognition: Codable, Sendable, Hashable {
+    /// Créditos que sobraram depois desta leitura.
     public let creditsRemaining: Int
+    public let imageHeight: Int
+    public let imageWidth: Int
+    /// Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, [].
+    public let plates: [RecognizedPlate]
+    public let processingTimeMs: Int
+
+    public init(creditsRemaining: Int, imageHeight: Int, imageWidth: Int, plates: [RecognizedPlate], processingTimeMs: Int) {
+        self.creditsRemaining = creditsRemaining
+        self.imageHeight = imageHeight
+        self.imageWidth = imageWidth
+        self.plates = plates
+        self.processingTimeMs = processingTimeMs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case creditsRemaining
+        case imageHeight
+        case imageWidth
+        case plates
+        case processingTimeMs
+    }
+}
+
+/// PlateReading is a resource of Alpr.sh's API.
+public struct PlateReading: Codable, Sendable, Hashable {
+    /// Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100).
+    public let confidence: Double
+    /// Créditos que sobraram depois desta leitura.
+    public let creditsRemaining: Int
+    /// Hoje sempre nulo: a leitura de uma placa recortada não é guardada.
     public let detectionID: String?
     public let latencyMs: Int
+    /// O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro.
     public let plate: String
 
     public init(confidence: Double, creditsRemaining: Int, detectionID: String?, latencyMs: Int, plate: String) {
@@ -176,12 +173,14 @@ public struct OcrResult: Codable, Sendable, Hashable {
     }
 }
 
-/// A área de leitura da câmera: placas fora do polígono são ignoradas.
+/// ReadingArea is a resource of Alpr.sh's API.
 public struct ReadingArea: Codable, Sendable, Hashable {
-    public let box: ReadingBox?
-    public let points: [[Double]]?
+    /// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+    public let box: ReadingAreaBox
+    /// Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas.
+    public let points: [[Double]]
 
-    public init(box: ReadingBox? = nil, points: [[Double]]? = nil) {
+    public init(box: ReadingAreaBox, points: [[Double]]) {
         self.box = box
         self.points = points
     }
@@ -192,14 +191,14 @@ public struct ReadingArea: Codable, Sendable, Hashable {
     }
 }
 
-/// A caixa envolvente da área de leitura, em frações da imagem.
-public struct ReadingBox: Codable, Sendable, Hashable {
-    public let height: Double?
-    public let width: Double?
-    public let x: Double?
-    public let y: Double?
+/// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+public struct ReadingAreaBox: Codable, Sendable, Hashable {
+    public let height: Double
+    public let width: Double
+    public let x: Double
+    public let y: Double
 
-    public init(height: Double? = nil, width: Double? = nil, x: Double? = nil, y: Double? = nil) {
+    public init(height: Double, width: Double, x: Double, y: Double) {
         self.height = height
         self.width = width
         self.x = x
@@ -214,14 +213,17 @@ public struct ReadingBox: Codable, Sendable, Hashable {
     }
 }
 
-/// Uma leitura de placa, de uma câmera ou da API por foto.
+/// Recognition is a resource of Alpr.sh's API.
 public struct Recognition: Codable, Sendable, Hashable {
+    /// Nulo numa leitura feita pela API por foto.
     public let cameraID: String?
+    /// Com o deslocamento do fuso do Alpr.sh.
     public let capturedAt: String
-    /// Confiança da leitura, de 0 a 100.
+    /// De 0 a 100, com uma casa.
     public let conf: Double
     public let id: String
     public let plate: String
+    /// camera: lida por uma câmera; api: enviada por foto.
     public let source: RecognitionSource
 
     public init(cameraID: String?, capturedAt: String, conf: Double, id: String, plate: String, source: RecognitionSource) {
@@ -243,81 +245,27 @@ public struct Recognition: Codable, Sendable, Hashable {
     }
 }
 
-/// Carga de recognition.created: os fatos no instante da leitura.
-public struct RecognitionCreated: Codable, Sendable, Hashable {
-    public let cameraID: String?
-    public let capturedAt: String
-    public let confidence: Double
-    public let event: RecognitionCreatedEvent
-    public let id: String
-    public let plate: String
-    public let source: RecognitionCreatedSource
-    public let tenantID: String
-
-    public init(capturedAt: String, confidence: Double, event: RecognitionCreatedEvent, id: String, plate: String, source: RecognitionCreatedSource, tenantID: String, cameraID: String? = nil) {
-        self.cameraID = cameraID
-        self.capturedAt = capturedAt
-        self.confidence = confidence
-        self.event = event
-        self.id = id
-        self.plate = plate
-        self.source = source
-        self.tenantID = tenantID
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case cameraID = "camera_id"
-        case capturedAt = "captured_at"
-        case confidence
-        case event
-        case id
-        case plate
-        case source
-        case tenantID = "tenant_id"
-    }
-}
-
-/// O resultado da leitura de uma foto. Sem placa, plates é [].
-public struct RecognizeResult: Codable, Sendable, Hashable {
-    public let creditsRemaining: Int
-    public let imageHeight: Int
-    public let imageWidth: Int
-    public let plates: [RecognizedPlate]
-    public let processingTimeMs: Int
-
-    public init(creditsRemaining: Int, imageHeight: Int, imageWidth: Int, plates: [RecognizedPlate], processingTimeMs: Int) {
-        self.creditsRemaining = creditsRemaining
-        self.imageHeight = imageHeight
-        self.imageWidth = imageWidth
-        self.plates = plates
-        self.processingTimeMs = processingTimeMs
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case creditsRemaining
-        case imageHeight
-        case imageWidth
-        case plates
-        case processingTimeMs
-    }
-}
-
-/// Uma placa lida na foto, com a caixa em pixels.
+/// RecognizedPlate is a resource of Alpr.sh's API.
 public struct RecognizedPlate: Codable, Sendable, Hashable {
-    /// Confiança de 0 a 1 de cada caractere, separadas por vírgula.
+    /// Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula ("0.99;0.98").
     public let charConfs: String
-    /// Confiança da leitura, de 0 a 100.
+    /// Confiança da placa, de 0 a 100, com uma casa.
     public let conf: Double
+    /// Pixels da foto enviada.
     public let coordinateBottom: Int
     public let coordinateLeft: Int
     public let coordinateRight: Int
     public let coordinateTop: Int
+    /// Igual a time.
     public let createdAt: String
+    /// Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul).
     public let plate: String
-    public let plateType: String
+    /// Sempre car; a API não informa país nem formato.
+    public let plateType: RecognizedPlatePlatetype
+    /// Instante da leitura, com o deslocamento do fuso do Alpr.sh.
     public let time: String
 
-    public init(charConfs: String, conf: Double, coordinateBottom: Int, coordinateLeft: Int, coordinateRight: Int, coordinateTop: Int, createdAt: String, plate: String, plateType: String, time: String) {
+    public init(charConfs: String, conf: Double, coordinateBottom: Int, coordinateLeft: Int, coordinateRight: Int, coordinateTop: Int, createdAt: String, plate: String, plateType: RecognizedPlatePlatetype, time: String) {
         self.charConfs = charConfs
         self.conf = conf
         self.coordinateBottom = coordinateBottom
@@ -344,7 +292,95 @@ public struct RecognizedPlate: Codable, Sendable, Hashable {
     }
 }
 
-/// Carga de webhook.test, enviada pelo botão Testar do painel.
+/// WebhookAlertTriggered is a resource of Alpr.sh's API.
+public struct WebhookAlertTriggered: Codable, Sendable, Hashable {
+    /// Ausente se a leitura não veio de uma câmera.
+    public let cameraID: String?
+    public let capturedAt: String
+    /// De 0 a 1.
+    public let confidence: Double
+    public let event: WebhookAlertTriggeredEvent
+    /// O id do disparo.
+    public let id: String
+    public let plate: String
+    /// A leitura que disparou o alerta.
+    public let recognitionID: String
+    public let ruleID: String
+    public let ruleName: String
+    /// Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:<id>, partner:<id>). Presente só quando algum foi excluído; é informação, não há o que fazer com ela.
+    public let skip: [String]?
+    public let tenantID: String
+
+    public init(capturedAt: String, confidence: Double, event: WebhookAlertTriggeredEvent, id: String, plate: String, recognitionID: String, ruleID: String, ruleName: String, tenantID: String, cameraID: String? = nil, skip: [String]? = nil) {
+        self.cameraID = cameraID
+        self.capturedAt = capturedAt
+        self.confidence = confidence
+        self.event = event
+        self.id = id
+        self.plate = plate
+        self.recognitionID = recognitionID
+        self.ruleID = ruleID
+        self.ruleName = ruleName
+        self.skip = skip
+        self.tenantID = tenantID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case cameraID = "camera_id"
+        case capturedAt = "captured_at"
+        case confidence
+        case event
+        case id
+        case plate
+        case recognitionID = "recognition_id"
+        case ruleID = "rule_id"
+        case ruleName = "rule_name"
+        case skip
+        case tenantID = "tenant_id"
+    }
+}
+
+/// WebhookRecognitionCreated is a resource of Alpr.sh's API.
+public struct WebhookRecognitionCreated: Codable, Sendable, Hashable {
+    /// Ausente numa leitura enviada por foto.
+    public let cameraID: String?
+    /// UTC, com fração de segundo.
+    public let capturedAt: String
+    /// De 0 a 1 (na API de chave, conf vai de 0 a 100).
+    public let confidence: Double
+    public let event: WebhookRecognitionCreatedEvent
+    /// O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image.
+    public let id: String
+    public let plate: String
+    /// camera: lida por uma câmera; api: enviada por foto.
+    public let source: WebhookRecognitionCreatedSource
+    /// O espaço de trabalho dono da leitura.
+    public let tenantID: String
+
+    public init(capturedAt: String, confidence: Double, event: WebhookRecognitionCreatedEvent, id: String, plate: String, source: WebhookRecognitionCreatedSource, tenantID: String, cameraID: String? = nil) {
+        self.cameraID = cameraID
+        self.capturedAt = capturedAt
+        self.confidence = confidence
+        self.event = event
+        self.id = id
+        self.plate = plate
+        self.source = source
+        self.tenantID = tenantID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case cameraID = "camera_id"
+        case capturedAt = "captured_at"
+        case confidence
+        case event
+        case id
+        case plate
+        case source
+        case tenantID = "tenant_id"
+    }
+}
+
+/// WebhookTest is a resource of Alpr.sh's API.
 public struct WebhookTest: Codable, Sendable, Hashable {
     public let event: WebhookTestEvent
     public let id: String
@@ -371,15 +407,18 @@ public struct WebhookTest: Codable, Sendable, Hashable {
 /// The initializer takes the required fields first; an optional field left
 /// nil is not sent.
 public struct PhotosDetectParams: Sendable, Hashable {
-    /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    /// A foto, JPEG ou PNG.
     public var image: Data
-    /// Piso do detector, de 0 a 1.
+    /// Só NONE é aceito.
+    public var imageMode: PhotosDetectParamsImageMode?
+    /// Piso de confiança do detector de placas.
     public var lprConfidence: Double?
-    /// Piso da leitura, de 0 a 1.
+    /// Piso de confiança da leitura dos caracteres.
     public var minOCRConfidence: Double?
 
-    public init(image: Data, lprConfidence: Double? = nil, minOCRConfidence: Double? = nil) {
+    public init(image: Data, imageMode: PhotosDetectParamsImageMode? = nil, lprConfidence: Double? = nil, minOCRConfidence: Double? = nil) {
         self.image = image
+        self.imageMode = imageMode
         self.lprConfidence = lprConfidence
         self.minOCRConfidence = minOCRConfidence
     }
@@ -390,7 +429,7 @@ public struct PhotosDetectParams: Sendable, Hashable {
 /// The initializer takes the required fields first; an optional field left
 /// nil is not sent.
 public struct PhotosOCRParams: Sendable, Hashable {
-    /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    /// A imagem da placa já recortada, JPEG ou PNG.
     public var image: Data
 
     public init(image: Data) {
@@ -403,24 +442,27 @@ public struct PhotosOCRParams: Sendable, Hashable {
 /// The initializer takes the required fields first; an optional field left
 /// nil is not sent.
 public struct PhotosRecognizeParams: Sendable, Hashable {
-    /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    /// A foto, JPEG ou PNG.
     public var image: Data
-    /// Piso do detector, de 0 a 1.
+    /// Só NONE é aceito.
+    public var imageMode: PhotosRecognizeParamsImageMode?
+    /// Piso de confiança do detector de placas.
     public var lprConfidence: Double?
-    /// Piso da leitura, de 0 a 1.
+    /// Piso de confiança da leitura dos caracteres.
     public var minOCRConfidence: Double?
 
-    public init(image: Data, lprConfidence: Double? = nil, minOCRConfidence: Double? = nil) {
+    public init(image: Data, imageMode: PhotosRecognizeParamsImageMode? = nil, lprConfidence: Double? = nil, minOCRConfidence: Double? = nil) {
         self.image = image
+        self.imageMode = imageMode
         self.lprConfidence = lprConfidence
         self.minOCRConfidence = minOCRConfidence
     }
 }
 
-/// The values of `AlertTriggered.event`.
+/// The values of `Camera.protocol`. Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
 ///
 /// A value this SDK does not know yet is kept as it came, in `rawValue`.
-public struct AlertTriggeredEvent: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+public struct CameraProtocol: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -431,11 +473,77 @@ public struct AlertTriggeredEvent: RawRepresentable, Codable, Sendable, Hashable
         self.rawValue = value
     }
 
-    /// `alert.triggered`
-    public static let alertTriggered = AlertTriggeredEvent(rawValue: "alert.triggered")
+    /// `rtsp`
+    public static let rtsp = CameraProtocol(rawValue: "rtsp")
+    /// `rtmp`
+    public static let rtmp = CameraProtocol(rawValue: "rtmp")
+    /// `hls`
+    public static let hls = CameraProtocol(rawValue: "hls")
+    /// `http`
+    public static let http = CameraProtocol(rawValue: "http")
+    /// `hikconnect`
+    public static let hikconnect = CameraProtocol(rawValue: "hikconnect")
+    /// `hikcloud`
+    public static let hikcloud = CameraProtocol(rawValue: "hikcloud")
+    /// `rtmppush`
+    public static let rtmppush = CameraProtocol(rawValue: "rtmppush")
 }
 
-/// The values of `Recognition.source`.
+/// The values of `DetectedPlate.plateType`.
+///
+/// A value this SDK does not know yet is kept as it came, in `rawValue`.
+public struct DetectedPlatePlatetype: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    /// `car`
+    public static let car = DetectedPlatePlatetype(rawValue: "car")
+}
+
+/// The values of `PhotosDetectParams.image_mode`. Só NONE é aceito.
+///
+/// A value this SDK does not know yet is kept as it came, in `rawValue`.
+public struct PhotosDetectParamsImageMode: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    /// `NONE`
+    public static let none = PhotosDetectParamsImageMode(rawValue: "NONE")
+}
+
+/// The values of `PhotosRecognizeParams.image_mode`. Só NONE é aceito.
+///
+/// A value this SDK does not know yet is kept as it came, in `rawValue`.
+public struct PhotosRecognizeParamsImageMode: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    /// `NONE`
+    public static let none = PhotosRecognizeParamsImageMode(rawValue: "NONE")
+}
+
+/// The values of `Recognition.source`. camera: lida por uma câmera; api: enviada por foto.
 ///
 /// A value this SDK does not know yet is kept as it came, in `rawValue`.
 public struct RecognitionSource: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
@@ -455,10 +563,46 @@ public struct RecognitionSource: RawRepresentable, Codable, Sendable, Hashable, 
     public static let api = RecognitionSource(rawValue: "api")
 }
 
-/// The values of `RecognitionCreated.event`.
+/// The values of `RecognizedPlate.plateType`. Sempre car; a API não informa país nem formato.
 ///
 /// A value this SDK does not know yet is kept as it came, in `rawValue`.
-public struct RecognitionCreatedEvent: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+public struct RecognizedPlatePlatetype: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    /// `car`
+    public static let car = RecognizedPlatePlatetype(rawValue: "car")
+}
+
+/// The values of `WebhookAlertTriggered.event`.
+///
+/// A value this SDK does not know yet is kept as it came, in `rawValue`.
+public struct WebhookAlertTriggeredEvent: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    /// `alert.triggered`
+    public static let alertTriggered = WebhookAlertTriggeredEvent(rawValue: "alert.triggered")
+}
+
+/// The values of `WebhookRecognitionCreated.event`.
+///
+/// A value this SDK does not know yet is kept as it came, in `rawValue`.
+public struct WebhookRecognitionCreatedEvent: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -470,13 +614,13 @@ public struct RecognitionCreatedEvent: RawRepresentable, Codable, Sendable, Hash
     }
 
     /// `recognition.created`
-    public static let recognitionCreated = RecognitionCreatedEvent(rawValue: "recognition.created")
+    public static let recognitionCreated = WebhookRecognitionCreatedEvent(rawValue: "recognition.created")
 }
 
-/// The values of `RecognitionCreated.source`.
+/// The values of `WebhookRecognitionCreated.source`. camera: lida por uma câmera; api: enviada por foto.
 ///
 /// A value this SDK does not know yet is kept as it came, in `rawValue`.
-public struct RecognitionCreatedSource: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
+public struct WebhookRecognitionCreatedSource: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -488,9 +632,9 @@ public struct RecognitionCreatedSource: RawRepresentable, Codable, Sendable, Has
     }
 
     /// `camera`
-    public static let camera = RecognitionCreatedSource(rawValue: "camera")
+    public static let camera = WebhookRecognitionCreatedSource(rawValue: "camera")
     /// `api`
-    public static let api = RecognitionCreatedSource(rawValue: "api")
+    public static let api = WebhookRecognitionCreatedSource(rawValue: "api")
 }
 
 /// The values of `WebhookTest.event`.

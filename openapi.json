@@ -1,697 +1,717 @@
 {
-  "components": {
-    "schemas": {
-      "AlertTriggered": {
-        "description": "Carga de alert.triggered: a regra que disparou e a leitura que a disparou.",
-        "properties": {
-          "camera_id": {
-            "type": "string"
-          },
-          "captured_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number"
-          },
-          "event": {
-            "enum": [
-              "alert.triggered"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "recognition_id": {
-            "type": "string"
-          },
-          "rule_id": {
-            "type": "string"
-          },
-          "rule_name": {
-            "type": "string"
-          },
-          "tenant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "captured_at",
-          "confidence",
-          "event",
-          "id",
-          "plate",
-          "recognition_id",
-          "rule_id",
-          "rule_name",
-          "tenant_id"
-        ],
-        "type": "object"
-      },
-      "Camera": {
-        "description": "Uma câmera do espaço, sem endereço nem credenciais.",
-        "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "string"
-          },
-          "location": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "protocol": {
-            "type": "string"
-          },
-          "readingArea": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ReadingArea"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "createdAt",
-          "enabled",
-          "id",
-          "location",
-          "name",
-          "protocol",
-          "readingArea"
-        ],
-        "type": "object"
-      },
-      "CameraList": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/Camera"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "type": "object"
-      },
-      "DetectResult": {
-        "description": "Onde estão as placas de uma foto.",
-        "properties": {
-          "imageHeight": {
-            "type": "integer"
-          },
-          "imageWidth": {
-            "type": "integer"
-          },
-          "plates": {
-            "items": {
-              "$ref": "#/components/schemas/DetectedPlate"
-            },
-            "type": "array"
-          },
-          "processingTimeMs": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "imageHeight",
-          "imageWidth",
-          "plates",
-          "processingTimeMs"
-        ],
-        "type": "object"
-      },
-      "DetectedPlate": {
-        "description": "Uma placa localizada na foto, sem o texto.",
-        "properties": {
-          "conf": {
-            "type": "number"
-          },
-          "coordinateBottom": {
-            "type": "integer"
-          },
-          "coordinateLeft": {
-            "type": "integer"
-          },
-          "coordinateRight": {
-            "type": "integer"
-          },
-          "coordinateTop": {
-            "type": "integer"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "plateType": {
-            "type": "string"
-          },
-          "time": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "conf",
-          "coordinateBottom",
-          "coordinateLeft",
-          "coordinateRight",
-          "coordinateTop",
-          "createdAt",
-          "plateType",
-          "time"
-        ],
-        "type": "object"
-      },
-      "DetectionImage": {
-        "description": "O link temporário da imagem de uma leitura.",
-        "properties": {
-          "detectionId": {
-            "type": "string"
-          },
-          "expiresIn": {
-            "description": "Segundos de validade do link.",
-            "type": "integer"
-          },
-          "imageUrl": {
-            "format": "uri",
-            "type": "string"
-          }
-        },
-        "required": [
-          "detectionId",
-          "expiresIn",
-          "imageUrl"
-        ],
-        "type": "object"
-      },
-      "Error": {
-        "properties": {
-          "error": {
-            "description": "Código do erro: invalid_api_key, insufficient_scope, insufficient_credits, missing image, invalid_image, invalid_option, image_too_large, no_plate, not_found, image_unavailable, rate_limited, engine_unavailable ou storage_unavailable.",
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "error",
-          "message"
-        ],
-        "type": "object"
-      },
-      "OcrResult": {
-        "description": "A placa lida de uma imagem já recortada.",
-        "properties": {
-          "confidence": {
-            "type": "number"
-          },
-          "creditsRemaining": {
-            "type": "integer"
-          },
-          "detectionId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "latencyMs": {
-            "type": "integer"
-          },
-          "plate": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "confidence",
-          "creditsRemaining",
-          "detectionId",
-          "latencyMs",
-          "plate"
-        ],
-        "type": "object"
-      },
-      "ReadingArea": {
-        "description": "A área de leitura da câmera: placas fora do polígono são ignoradas.",
-        "properties": {
-          "box": {
-            "$ref": "#/components/schemas/ReadingBox"
-          },
-          "points": {
-            "items": {
-              "items": {
-                "type": "number"
-              },
-              "type": "array"
-            },
-            "type": "array"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "ReadingBox": {
-        "description": "A caixa envolvente da área de leitura, em frações da imagem.",
-        "properties": {
-          "height": {
-            "type": "number"
-          },
-          "width": {
-            "type": "number"
-          },
-          "x": {
-            "type": "number"
-          },
-          "y": {
-            "type": "number"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "Recognition": {
-        "description": "Uma leitura de placa, de uma câmera ou da API por foto.",
-        "properties": {
-          "cameraId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "capturedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "conf": {
-            "description": "Confiança da leitura, de 0 a 100.",
-            "type": "number"
-          },
-          "id": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "source": {
-            "enum": [
-              "camera",
-              "api"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "cameraId",
-          "capturedAt",
-          "conf",
-          "id",
-          "plate",
-          "source"
-        ],
-        "type": "object"
-      },
-      "RecognitionCreated": {
-        "description": "Carga de recognition.created: os fatos no instante da leitura.",
-        "properties": {
-          "camera_id": {
-            "type": "string"
-          },
-          "captured_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number"
-          },
-          "event": {
-            "enum": [
-              "recognition.created"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "source": {
-            "enum": [
-              "camera",
-              "api"
-            ],
-            "type": "string"
-          },
-          "tenant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "captured_at",
-          "confidence",
-          "event",
-          "id",
-          "plate",
-          "source",
-          "tenant_id"
-        ],
-        "type": "object"
-      },
-      "RecognitionList": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/Recognition"
-            },
-            "type": "array"
-          },
-          "next": {
-            "description": "O cursor da próxima página (before); nulo na última.",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "data",
-          "next"
-        ],
-        "type": "object"
-      },
-      "RecognizeResult": {
-        "description": "O resultado da leitura de uma foto. Sem placa, plates é [].",
-        "properties": {
-          "creditsRemaining": {
-            "type": "integer"
-          },
-          "imageHeight": {
-            "type": "integer"
-          },
-          "imageWidth": {
-            "type": "integer"
-          },
-          "plates": {
-            "items": {
-              "$ref": "#/components/schemas/RecognizedPlate"
-            },
-            "type": "array"
-          },
-          "processingTimeMs": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "creditsRemaining",
-          "imageHeight",
-          "imageWidth",
-          "plates",
-          "processingTimeMs"
-        ],
-        "type": "object"
-      },
-      "RecognizedPlate": {
-        "description": "Uma placa lida na foto, com a caixa em pixels.",
-        "properties": {
-          "charConfs": {
-            "description": "Confiança de 0 a 1 de cada caractere, separadas por vírgula.",
-            "type": "string"
-          },
-          "conf": {
-            "description": "Confiança da leitura, de 0 a 100.",
-            "type": "number"
-          },
-          "coordinateBottom": {
-            "type": "integer"
-          },
-          "coordinateLeft": {
-            "type": "integer"
-          },
-          "coordinateRight": {
-            "type": "integer"
-          },
-          "coordinateTop": {
-            "type": "integer"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "plate": {
-            "type": "string"
-          },
-          "plateType": {
-            "type": "string"
-          },
-          "time": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "charConfs",
-          "conf",
-          "coordinateBottom",
-          "coordinateLeft",
-          "coordinateRight",
-          "coordinateTop",
-          "createdAt",
-          "plate",
-          "plateType",
-          "time"
-        ],
-        "type": "object"
-      },
-      "WebhookTest": {
-        "description": "Carga de webhook.test, enviada pelo botão Testar do painel.",
-        "properties": {
-          "event": {
-            "enum": [
-              "webhook.test"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "sent_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "tenant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "event",
-          "id",
-          "sent_at",
-          "tenant_id"
-        ],
-        "type": "object"
-      }
-    },
-    "securitySchemes": {
-      "apiKey": {
-        "bearerFormat": "Chave de API do espaço (formato: alpr_live_...)",
-        "scheme": "bearer",
-        "type": "http"
-      }
-    }
-  },
+  "openapi": "3.1.0",
   "info": {
-    "description": "Leitura de placas por foto, consulta das leituras e das câmeras, com a chave de API do espaço em Authorization: Bearer e webhooks assinados.",
-    "title": "API do Alpr.sh",
+    "title": "API Alpr.sh para desenvolvedores",
+    "description": "API de reconhecimento de placas do Alpr.sh: leitura por foto, consulta das leituras e das câmeras.\n\n**Autenticação.** Envie `Authorization: Bearer alpr_live_…`. A chave é criada no painel, em Chaves de API, age só no espaço onde foi criada e só com os escopos marcados nela. O segredo aparece uma única vez.\n\n**Respostas.** JSON com chaves em ordem alfabética. `conf` vai de 0 a 100 e `charConfs` de 0 a 1 por caractere. Erros trazem `error` e `message`.\n\n**Limites.** Valem para a API, por chave, por minuto: 60 em `/recognize`, 120 em `/detect`, 300 em `/ocr`, 300 na imagem de uma leitura e 300 nas demais rotas, com `X-RateLimit-Limit`, `X-RateLimit-Remaining` e `Retry-After` no 429. Câmeras ao vivo não têm limite de leituras.\n\n**Webhooks.** Eventos `recognition.created` e `alert.triggered`, cadastrados no painel. Cada entrega traz `X-Alprsh-Delivery-ID`, `X-Alprsh-Timestamp` e `X-Alprsh-Signature`: `sha256=` + HMAC-SHA256 de `timestamp.delivery-id.corpo` com o segredo do webhook. Um webhook que veio da versão anterior continua no formato dela, `{data, event}` assinado em `X-Signature-256` (HMAC-SHA256 do corpo, em hexadecimal), até ser trocado no painel.\n\n**API de parceiros.** As rotas `/api/partner/v1` são do widget e do servidor de um parceiro, com credenciais próprias: o servidor de um parceiro nativo usa HTTP Basic com o client OAuth, e o widget usa o token curto da conexão (`aws1…`, 15 minutos), só com as permissões que a conexão recebeu.\n\n**Tempo real.** `wss://alpr.sh/ws/v1/events?key=alpr_live_…\u0026image_mode=FULL` entrega cada leitura do espaço da chave, no mesmo envelope `{data, event}`, assim que ela é guardada. A chave vai na URL porque o WebSocket do navegador não envia cabeçalho: monte a URL no seu servidor. `image_mode` é `FULL`, `VEHICLE` ou `NONE`. Escopo: `recognitions:read`.",
     "version": "1.0.0"
   },
-  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "servers": [
+    {
+      "url": "https://alpr.sh"
+    }
+  ],
   "paths": {
-    "/api/v1/cameras": {
+    "/api/partner/v1/alerts": {
       "get": {
-        "description": "As câmeras do espaço, cadastradas no painel. Escopo: `cameras:read`.",
-        "operationId": "cameras:list",
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Listar os alertas disparados",
+        "description": "Os 50 alertas que as regras do espaço dispararam mais recentemente, sem os silenciados. Não há filtro nem paginação.\n\nPermissão da conexão: `alerts:read`.",
+        "operationId": "partner-widget:list-alerts",
         "responses": {
           "200": {
+            "description": "Os alertas, dos mais novos para os mais antigos.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CameraList"
+                  "$ref": "#/components/schemas/PartnerAlertList"
                 }
               }
-            },
-            "description": "As câmeras do espaço."
+            }
           },
           "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+            }
           },
           "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão alerts:read (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "O recurso não está disponível neste servidor (not_found).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+            }
           },
           "429": {
-            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         },
         "security": [
           {
-            "apiKey": []
+            "widgetToken": []
           }
         ],
-        "summary": "Listar as câmeras",
-        "tags": [
-          "Câmeras"
-        ],
-        "x-arandu-route-name": "api.cameras"
+        "x-arandu-route-name": "partner-api.alerts"
       }
     },
-    "/api/v1/detect": {
+    "/api/partner/v1/cameras": {
+      "get": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Listar as câmeras",
+        "description": "As câmeras do espaço da pessoa com o estado que o motor informa de cada uma. Nunca vêm endereço, usuário, senha nem URL do stream.\n\nPermissão da conexão: `cameras:read`.",
+        "operationId": "partner-widget:list-cameras",
+        "responses": {
+          "200": {
+            "description": "As câmeras.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCameraList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão cameras:read (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.cameras"
+      },
       "post": {
-        "description": "Responde só onde estão as placas, sem o texto. Não guarda nada e não gasta crédito. Escopo: `recognitions:write`.",
-        "operationId": "photos:detect",
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Cadastrar uma câmera",
+        "description": "Acrescenta uma câmera ao espaço da pessoa, ligada, com as configurações de leitura padrão. Ela passa a ser lida pelo Alpr.sh e conta como câmera do espaço.\n\nPermissão da conexão: `cameras:write`.",
+        "operationId": "partner-widget:create-camera",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "properties": {
-                  "image": {
-                    "description": "A foto, JPEG ou PNG, até 10 MB e 8000 px.",
-                    "format": "binary",
-                    "type": "string"
-                  },
-                  "lpr_confidence": {
-                    "description": "Piso do detector, de 0 a 1.",
-                    "type": "number"
-                  },
-                  "min_ocr_confidence": {
-                    "description": "Piso da leitura, de 0 a 1.",
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "image"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/PartnerCameraRequest"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
+            "description": "A câmera cadastrada, esperando o motor.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DetectResult"
+                  "$ref": "#/components/schemas/PartnerCamera"
                 }
               }
-            },
-            "description": "As placas encontradas, com caixa e confiança."
+            }
           },
           "400": {
+            "description": "O corpo não se lê (invalid_body).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Sem foto, foto inválida ou opção fora de 0 a 1."
+            }
           },
           "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+            }
           },
           "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão cameras:write (insufficient_permission).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
                 }
               }
-            },
-            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+            }
           },
-          "413": {
+          "422": {
+            "description": "Nome ou endereço inválidos (invalid_camera); message traz o primeiro motivo, em português.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Mais de 10 MB ou 8000 px."
+            }
           },
           "429": {
-            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
-          },
-          "503": {
-            "content": {
-              "application/json": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "integer"
                 }
               }
             },
-            "description": "Leitura indisponível no momento."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         },
         "security": [
           {
-            "apiKey": []
+            "widgetToken": []
           }
         ],
-        "summary": "Localizar as placas de uma foto",
-        "tags": [
-          "Leitura por foto"
-        ],
-        "x-arandu-route-name": "api.detect"
+        "x-arandu-route-name": "partner-api.cameras.store"
       }
     },
-    "/api/v1/detections/{id}/image": {
+    "/api/partner/v1/cameras/activity": {
       "get": {
-        "description": "Responde um link temporário para a imagem da leitura: a foto, quando guardada, ou o recorte da placa. O link vale expiresIn segundos e não precisa da chave. Escopo: `recognitions:read`.",
-        "operationId": "detections:image",
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "O monitor da pessoa",
+        "description": "As câmeras da pessoa com o estado e as leituras de cada uma, para o parceiro desenhar o monitor no próprio site. Só enquanto o espaço tem assinatura em vigor, isto é, ao menos uma câmera com termo de cobrança pago e não vencido, ou cortesia dentro do prazo; sem ela, 402 e nenhuma câmera. Com assinatura em vigor, uma câmera de termo vencido vem com `status: expired` e `online: false`. Nunca vêm endereço, usuário, senha, URL do stream, placa nem imagem.\n\nPermissão da conexão: `cameras:read`.",
+        "operationId": "partner-widget:list-camera-activity",
+        "responses": {
+          "200": {
+            "description": "As câmeras, por nome, no máximo 200.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCameraActivityList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Sem assinatura em vigor (subscription_required); renew_url leva a pessoa a renovar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionRequiredError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão cameras:read (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.cameras.activity"
+      }
+    },
+    "/api/partner/v1/cameras/{id}": {
+      "delete": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Remover uma câmera",
+        "description": "Apaga a câmera **e tudo dela, sem recuperação**: as leituras, o recorte e a imagem de cada uma, e os registros que só existem por causa delas.\n\nPermissão da conexão: `cameras:write`.",
+        "operationId": "partner-widget:delete-camera",
         "parameters": [
           {
-            "description": "O ID da leitura.",
-            "in": "path",
             "name": "id",
+            "in": "path",
+            "description": "O `id` da câmera.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Apagada; sem corpo."
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão cameras:write (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Câmera de outro espaço ou inexistente (not_found).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.cameras.destroy"
+      }
+    },
+    "/api/partner/v1/disconnect": {
+      "post": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Desconectar",
+        "description": "Encerra a conexão: os tokens do widget param de valer, o Alpr.sh descarta os tokens do parceiro e as entregas param. A conta, as câmeras e o histórico ficam, e uma nova conexão retoma de onde parou.",
+        "operationId": "partner-widget:disconnect",
+        "responses": {
+          "204": {
+            "description": "Desconectado; sem corpo."
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.disconnect"
+      }
+    },
+    "/api/partner/v1/login-links": {
+      "post": {
+        "tags": [
+          "Parceiro: servidor"
+        ],
+        "summary": "Levar a pessoa ao painel do Alpr.sh",
+        "description": "Um link de entrada para a pessoa, que o navegador dela abre em até 60 segundos, uma única vez, e cai logada em `return_to` no painel. Peça-o no clique; não o guarde, não o registre e não o envie por e-mail. Uma conta com verificação em duas etapas ainda informa o código. Cada entrada fica no registro de atividades da conta. O corpo também é aceito como formulário.\n\nServidor a servidor, sem CORS; a resposta não é guardada em cache. `external_user_id` é o `sub` da pessoa no userinfo do parceiro e vem da sessão do parceiro, nunca do navegador. Só um parceiro nativo ativo chama; uma aplicação de cliente recebe 401.",
+        "operationId": "partner-server:create-login-link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "O link.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "O corpo não se lê (invalid_body), ou return_to não é uma das páginas permitidas (invalid_return_to).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Client ou segredo ausente ou errado, parceiro inativo ou aplicação de cliente (invalid_client).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Basic realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A conta é da equipe do Alpr.sh, que entra só pelo console (account_not_allowed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "A pessoa nunca conectou, desconectou, a conexão espera nova autorização ou a conta foi encerrada (not_connected).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto, por client e endereço; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "O Alpr.sh não tem onde lembrar os links usados; tente mais tarde (unavailable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "partnerClient": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.login-links"
+      }
+    },
+    "/api/partner/v1/me": {
+      "get": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Descrever a conexão",
+        "description": "A pessoa, o parceiro, as permissões da conexão e como foi a última entrega de leitura. O widget usa `permissions` para esconder o que a conexão não pode fazer.",
+        "operationId": "partner-widget:show-connection",
+        "responses": {
+          "200": {
+            "description": "A conexão.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerConnection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.me"
+      }
+    },
+    "/api/partner/v1/people/{person}/cameras": {
+      "get": {
+        "tags": [
+          "Parceiro: servidor"
+        ],
+        "summary": "Listar as câmeras de uma pessoa",
+        "description": "As câmeras que o widget da pessoa mostra, com o estado e as leituras de cada uma, para o parceiro conferir a lista dele com a do Alpr.sh. Nunca vêm endereço, usuário, senha nem URL do stream.\n\nServidor a servidor, sem CORS; a resposta não é guardada em cache. `external_user_id` é o `sub` da pessoa no userinfo do parceiro e vem da sessão do parceiro, nunca do navegador. Só um parceiro nativo ativo chama; uma aplicação de cliente recebe 401.",
+        "operationId": "partner-server:list-person-cameras",
+        "parameters": [
+          {
+            "name": "person",
+            "in": "path",
+            "description": "O `sub` da pessoa no userinfo do parceiro, codificado no caminho.",
             "required": true,
             "schema": {
               "type": "string"
@@ -700,90 +720,451 @@
         ],
         "responses": {
           "200": {
+            "description": "As câmeras, por nome, no máximo 200.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DetectionImage"
+                  "$ref": "#/components/schemas/PartnerCameraActivityList"
                 }
               }
-            },
-            "description": "O link da imagem."
+            }
           },
           "401": {
+            "description": "Client ou segredo ausente ou errado, parceiro inativo ou aplicação de cliente (invalid_client).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Basic realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+            }
           },
           "403": {
+            "description": "A conexão não recebeu a permissão cameras:read (insufficient_permission).",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
                 }
               }
-            },
-            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+            }
           },
           "404": {
+            "description": "A pessoa nunca conectou, desconectou, a conexão espera nova autorização ou a conta foi encerrada (not_connected).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Leitura de outro espaço ou inexistente (not_found), ou sem imagem guardada (image_unavailable)."
+            }
           },
           "429": {
-            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
-          },
-          "503": {
-            "content": {
-              "application/json": {
+            "description": "Acima do limite por minuto, por client e endereço; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "type": "integer"
                 }
               }
             },
-            "description": "Armazenamento indisponível no momento (storage_unavailable)."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         },
         "security": [
           {
-            "apiKey": []
+            "partnerClient": []
           }
         ],
-        "summary": "Imagem de uma leitura",
-        "tags": [
-          "Leituras"
-        ],
-        "x-arandu-route-name": "api.detections.image"
+        "x-arandu-route-name": "partner-api.people.cameras"
       }
     },
-    "/api/v1/ocr": {
+    "/api/partner/v1/recognitions": {
+      "get": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Listar as leituras recentes",
+        "description": "As 20 leituras de câmera mais recentes do espaço da pessoa. Não há filtro nem paginação; o nome da câmera só vem a quem também tem `cameras:read`.\n\nPermissão da conexão: `recognitions:read`.",
+        "operationId": "partner-widget:list-recognitions",
+        "responses": {
+          "200": {
+            "description": "As leituras, das mais novas para as mais antigas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerRecognitionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão recognitions:read (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.recognitions"
+      }
+    },
+    "/api/partner/v1/recognitions/{id}/image": {
+      "get": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Imagem de uma leitura",
+        "description": "O recorte da placa ou a foto inteira da leitura, em JPEG. O token vai no cabeçalho: um `\u003cimg\u003e` não consegue enviá-lo, então busque a imagem com `fetch` e use um blob.\n\nPermissão da conexão: `recognitions:read`.",
+        "operationId": "partner-widget:get-recognition-image",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "O `id` da leitura.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "crop (o recorte, padrão) ou full (a foto inteira); outro valor é lido como crop.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "crop",
+                "full"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A imagem.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão recognitions:read (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Leitura de outro espaço ou inexistente, ou sem a imagem pedida (not_found).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.recognitions.image"
+      }
+    },
+    "/api/partner/v1/session": {
       "post": {
-        "description": "Para uma imagem que já é a placa. Gasta 1 crédito por placa lida; sem leitura, nada é cobrado. Escopo: `recognitions:write`.",
-        "operationId": "photos:ocr",
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Renovar o token do widget",
+        "description": "Troca um token ainda válido por um novo, de mais 15 minutos. Um token que venceu não renova: a pessoa conecta de novo (ou o servidor do parceiro pede outra sessão).",
+        "operationId": "partner-widget:renew-session",
+        "responses": {
+          "200": {
+            "description": "O novo token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerSession"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.session"
+      }
+    },
+    "/api/partner/v1/watchlist": {
+      "get": {
+        "tags": [
+          "Parceiro: widget"
+        ],
+        "summary": "Listar a lista de bloqueados",
+        "description": "As placas da lista de bloqueados do espaço, com a situação, a observação e quando foram vistas. Quem cadastrou e o telefone nunca vêm.\n\nPermissão da conexão: `watchlist:read`.",
+        "operationId": "partner-widget:list-watchlist",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "A página, a partir de 1 (padrão 1).",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Placas por página, de 1 a 100 (padrão 25); acima de 100 vale 100.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Uma página da lista.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerWatchlistPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token ausente, vencido, adulterado ou de uma conexão encerrada (invalid_token).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A origem do navegador não está cadastrada para este parceiro (origin_not_allowed), ou a conexão não recebeu a permissão watchlist:read (insufficient_permission).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerForbiddenError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "O recurso não está disponível neste servidor (not_found).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "widgetToken": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.watchlist"
+      }
+    },
+    "/api/partner/v1/widget-sessions": {
+      "post": {
+        "tags": [
+          "Parceiro: servidor"
+        ],
+        "summary": "Abrir a sessão do widget de uma pessoa",
+        "description": "O servidor do parceiro pede o token curto do widget para uma pessoa já conectada, para o widget abrir conectado em vez de pedir **Conectar** a cada visita. O token vale 15 minutos, é uma credencial (devolva-o só à própria pessoa, sem cache, e nunca o registre) e é o mesmo que o widget renova. O corpo também é aceito como formulário.\n\nServidor a servidor, sem CORS; a resposta não é guardada em cache. `external_user_id` é o `sub` da pessoa no userinfo do parceiro e vem da sessão do parceiro, nunca do navegador. Só um parceiro nativo ativo chama; uma aplicação de cliente recebe 401.",
+        "operationId": "partner-server:create-widget-session",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/json": {
               "schema": {
-                "properties": {
-                  "image": {
-                    "description": "A foto, JPEG ou PNG, até 10 MB e 8000 px.",
-                    "format": "binary",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "image"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/WidgetSessionRequest"
               }
             }
           },
@@ -791,77 +1172,158 @@
         },
         "responses": {
           "200": {
+            "description": "A sessão.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OcrResult"
+                  "$ref": "#/components/schemas/PartnerSession"
                 }
               }
-            },
-            "description": "A placa lida."
+            }
           },
           "400": {
+            "description": "O corpo não se lê (invalid_body).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Sem foto ou foto inválida."
+            }
           },
           "401": {
+            "description": "Client ou segredo ausente ou errado, parceiro inativo ou aplicação de cliente (invalid_client).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Basic realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+            }
           },
-          "402": {
+          "404": {
+            "description": "A pessoa nunca conectou, desconectou, a conexão espera nova autorização ou a conta foi encerrada (not_connected).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Sem créditos (insufficient_credits)."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "A chave não tem o escopo da rota (insufficient_scope)."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Nenhuma placa lida na imagem; nada foi cobrado (no_plate)."
+            }
           },
           "429": {
-            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+            "description": "Acima do limite por minuto, por client e endereço; espere os segundos de Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "partnerClient": []
+          }
+        ],
+        "x-arandu-route-name": "partner-api.widget-sessions"
+      }
+    },
+    "/api/v1/cameras": {
+      "get": {
+        "tags": [
+          "Câmeras"
+        ],
+        "summary": "Listar as câmeras",
+        "description": "As câmeras do espaço, cadastradas no painel, por nome, no máximo 200 (não há paginação: um espaço com mais câmeras só as 200 primeiras aparecem), sem endereço do stream, usuário nem senha. `readingArea` é a área de leitura: nulo quando a câmera lê a imagem inteira; senão, `box` (a caixa envolvente, em frações da imagem, que o motor lê) e `points` (de 3 a 16 pares [x, y] do polígono; placas fora dele são ignoradas). Escopo: `cameras:read`.",
+        "operationId": "cameras:list",
+        "responses": {
+          "200": {
+            "description": "As câmeras do espaço.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraList"
+                }
+              }
+            }
           },
-          "503": {
+          "401": {
+            "description": "Chave ausente, errada, revogada ou expirada, ou espaço encerrado (invalid_api_key).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
+            }
+          },
+          "403": {
+            "description": "A chave não tem o escopo cameras:read (insufficient_scope).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
             },
-            "description": "Leitura indisponível no momento."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -869,50 +1331,611 @@
             "apiKey": []
           }
         ],
-        "summary": "Ler uma placa já recortada",
+        "x-arandu-route-name": "api.cameras"
+      }
+    },
+    "/api/v1/detect": {
+      "post": {
         "tags": [
           "Leitura por foto"
+        ],
+        "summary": "Localizar as placas de uma foto",
+        "description": "Envie a foto como multipart (campo `image`), como JSON (`{\"image\": \"\u003cbase64\u003e\"}`, com ou sem o prefixo `data:`) ou como o corpo cru, com qualquer Content-Type. JPEG ou PNG, até 10 MB e 8000 px de cada lado. As opções são as de `/recognize`.\n\nResponde só onde estão as placas, sem o texto. Não guarda nada, não dispara webhook e não gasta crédito. Escopo: `recognitions:write`.",
+        "operationId": "photos:detect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoRequest"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "As placas encontradas, com caixa e confiança. Sem placa, plates é [].",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoDetection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Sem foto, ou o corpo não se lê (missing image); não é JPEG nem PNG (invalid_image); opção fora de 0 a 1 (invalid_option); image_mode diferente de NONE (unsupported_image_mode).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, errada, revogada ou expirada, ou espaço encerrado (invalid_api_key).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A chave não tem o escopo recognitions:write (insufficient_scope).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Mais de 10 MB ou 8000 px (image_too_large).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Leitura indisponível no momento (engine_unavailable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-arandu-route-name": "api.detect"
+      }
+    },
+    "/api/v1/detections/{id}/image": {
+      "get": {
+        "tags": [
+          "Leituras"
+        ],
+        "summary": "Imagem de uma leitura",
+        "description": "Responde um link temporário para a imagem da leitura: a foto, quando guardada, ou o recorte da placa. O link vale `expiresIn` segundos (300) e não precisa da chave: abra o `imageUrl` como veio. Escopo: `recognitions:read`.",
+        "operationId": "recognitions:image",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "O `id` da leitura, como `GET /api/v1/recognitions` o devolve.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "O link da imagem.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionImageLink"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, errada, revogada ou expirada, ou espaço encerrado (invalid_api_key).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A chave não tem o escopo recognitions:read (insufficient_scope).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Leitura de outro espaço ou inexistente (not_found), ou sem imagem guardada (image_unavailable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Armazenamento indisponível no momento (storage_unavailable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-arandu-route-name": "api.detections.image"
+      }
+    },
+    "/api/v1/detections/{id}/image/file": {
+      "get": {
+        "tags": [
+          "Leituras"
+        ],
+        "summary": "Baixar a imagem de um link",
+        "description": "O destino do `imageUrl` de `GET /api/v1/detections/{id}/image`. Não leva chave: a assinatura do link é a credencial, e ele vence em 300 segundos. Não monte este endereço, abra o `imageUrl` como veio. Responde a foto da leitura ou, se só há o recorte, o recorte, com `Cache-Control: private, max-age=300`.",
+        "operationId": "recognitions:image-file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "O `id` da leitura.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "w",
+            "in": "query",
+            "description": "O espaço dono da leitura; parte do link.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "e",
+            "in": "query",
+            "description": "Quando o link vence, em segundos Unix; parte do link.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "s",
+            "in": "query",
+            "description": "A assinatura do link.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A imagem.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "O link é inválido ou venceu, ou a leitura já não tem imagem (not_found).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Armazenamento indisponível no momento (storage_unavailable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-arandu-route-name": "api.detections.image.file"
+      }
+    },
+    "/api/v1/ocr": {
+      "post": {
+        "tags": [
+          "Leitura por foto"
+        ],
+        "summary": "Ler uma placa já recortada",
+        "description": "Envie a foto como multipart (campo `image`), como JSON (`{\"image\": \"\u003cbase64\u003e\"}`, com ou sem o prefixo `data:`) ou como o corpo cru, com qualquer Content-Type. JPEG ou PNG, até 10 MB e 8000 px de cada lado. A imagem é a placa já recortada; as opções são conferidas, mas não mudam a leitura.\n\nLê o texto sem procurar a placa na foto, e não o confere pelo formato brasileiro. Gasta 1 crédito; sem leitura, o crédito volta. Nada é guardado: `detectionId` é sempre nulo. Escopo: `recognitions:write`.",
+        "operationId": "photos:ocr",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlateImageRequest"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PlateImageForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A placa lida.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlateReading"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Sem foto, ou o corpo não se lê (missing image); não é JPEG nem PNG (invalid_image); opção fora de 0 a 1 (invalid_option); image_mode diferente de NONE (unsupported_image_mode).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Chave ausente, errada, revogada ou expirada, ou espaço encerrado (invalid_api_key).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Sem créditos (insufficient_credits).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A chave não tem o escopo recognitions:write (insufficient_scope).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Mais de 10 MB ou 8000 px (image_too_large).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Nenhuma placa lida na imagem; nada foi cobrado (no_plate).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Leitura indisponível no momento; nada foi cobrado (engine_unavailable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
         ],
         "x-arandu-route-name": "api.ocr"
       }
     },
     "/api/v1/recognitions": {
       "get": {
-        "description": "Leituras das câmeras e da API por foto, das mais novas para as mais antigas, 50 por página. Escopo: `recognitions:read`.",
+        "tags": [
+          "Leituras"
+        ],
+        "summary": "Listar as leituras",
+        "description": "Leituras das câmeras e da API por foto, das mais novas para as mais antigas, 50 por página. Para a página seguinte, passe em `before` o `next` da resposta; `next` é nulo na última. Um `before` desconhecido responde uma página vazia. Escopo: `recognitions:read`.",
         "operationId": "recognitions:list",
         "parameters": [
           {
-            "description": "Prefixo da placa; traço e caixa não importam.",
-            "in": "query",
             "name": "plate",
+            "in": "query",
+            "description": "Prefixo da placa; traço, espaço e caixa não importam.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "description": "ID da câmera.",
-            "in": "query",
             "name": "camera",
+            "in": "query",
+            "description": "ID da câmera.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "description": "Origem da leitura: camera ou api.",
-            "in": "query",
             "name": "source",
+            "in": "query",
+            "description": "Origem da leitura; outro valor é ignorado.",
             "schema": {
+              "type": "string",
               "enum": [
                 "camera",
                 "api"
-              ],
-              "type": "string"
+              ]
             }
           },
           {
-            "description": "O valor next da página anterior.",
-            "in": "query",
             "name": "before",
+            "in": "query",
+            "description": "O valor `next` da página anterior.",
             "schema": {
               "type": "string"
             }
@@ -920,37 +1943,74 @@
         ],
         "responses": {
           "200": {
-            "content": {
-              "application/json": {
+            "description": "Uma página de leituras.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
                 "schema": {
-                  "$ref": "#/components/schemas/RecognitionList"
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
                 }
               }
             },
-            "description": "Uma página de leituras."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionPage"
+                }
+              }
+            }
           },
           "401": {
+            "description": "Chave ausente, errada, revogada ou expirada, ou espaço encerrado (invalid_api_key).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+            }
           },
           "403": {
+            "description": "A chave não tem o escopo recognitions:read (insufficient_scope).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+            }
           },
           "429": {
-            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -958,46 +2018,45 @@
             "apiKey": []
           }
         ],
-        "summary": "Listar as leituras",
-        "tags": [
-          "Leituras"
-        ],
-        "x-alpr-pagination": {
-          "cursor": "before",
-          "item_schema": "Recognition",
-          "next": "next",
-          "type": "cursor"
-        },
         "x-arandu-route-name": "api.recognitions"
       }
     },
     "/api/v1/recognize": {
       "post": {
-        "description": "Envie a foto como multipart (`image`). Cada foto lida gasta 1 crédito; uma leitura que falha não é cobrada. Escopo: `recognitions:write`.",
+        "tags": [
+          "Leitura por foto"
+        ],
+        "summary": "Ler as placas de uma foto",
+        "description": "Envie a foto como multipart (campo `image`), como JSON (`{\"image\": \"\u003cbase64\u003e\"}`, com ou sem o prefixo `data:`) ou como o corpo cru, com qualquer Content-Type. JPEG ou PNG, até 10 MB e 8000 px de cada lado. Opções, no formulário ou no JSON: `lpr_confidence` (piso do detector, 0 a 1) e `min_ocr_confidence` (piso da leitura, 0 a 1); `image_mode` só aceita `NONE`, que é o que a resposta é.\n\nCada foto lida gasta 1 crédito, mesmo quando não há placa (`plates` vem `[]`); se o motor falha, o crédito volta. As placas válidas no Brasil (ABC1234 ou ABC1D23) são guardadas em Leituras, com origem `api`, e disparam os webhooks `recognition.created` e os alertas. Escopo: `recognitions:write`.",
         "operationId": "photos:recognize",
         "requestBody": {
           "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoRequest"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
             "multipart/form-data": {
               "schema": {
-                "properties": {
-                  "image": {
-                    "description": "A foto, JPEG ou PNG, até 10 MB e 8000 px.",
-                    "format": "binary",
-                    "type": "string"
-                  },
-                  "lpr_confidence": {
-                    "description": "Piso do detector, de 0 a 1.",
-                    "type": "number"
-                  },
-                  "min_ocr_confidence": {
-                    "description": "Piso da leitura, de 0 a 1.",
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "image"
-                ],
-                "type": "object"
+                "$ref": "#/components/schemas/PhotoForm"
               }
             }
           },
@@ -1005,77 +2064,114 @@
         },
         "responses": {
           "200": {
-            "content": {
-              "application/json": {
+            "description": "Leitura concluída, no formato público. Sem placa, plates é [].",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Quantas chamadas a chave faz por minuto nesta rota.",
                 "schema": {
-                  "$ref": "#/components/schemas/RecognizeResult"
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Quantas chamadas ainda cabem neste minuto.",
+                "schema": {
+                  "type": "integer"
                 }
               }
             },
-            "description": "Leitura concluída. Sem placa, plates é []."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoRecognition"
+                }
+              }
+            }
           },
           "400": {
+            "description": "Sem foto, ou o corpo não se lê (missing image); não é JPEG nem PNG (invalid_image); lpr_confidence ou min_ocr_confidence fora de 0 a 1 (invalid_option); image_mode diferente de NONE (unsupported_image_mode).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Sem foto, não é JPEG/PNG ou opção fora de 0 a 1 (missing image, invalid_image, invalid_option)."
+            }
           },
           "401": {
+            "description": "Chave ausente, errada, revogada ou expirada, ou espaço encerrado (invalid_api_key).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer realm=\"alpr.sh\"",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Chave ausente, errada, revogada ou expirada (invalid_api_key)."
+            }
           },
           "402": {
+            "description": "Sem créditos (insufficient_credits).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Sem créditos (insufficient_credits)."
+            }
           },
           "403": {
+            "description": "A chave não tem o escopo recognitions:write (insufficient_scope).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "A chave não tem o escopo da rota (insufficient_scope)."
+            }
           },
           "413": {
+            "description": "Mais de 10 MB ou 8000 px (image_too_large).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Mais de 10 MB ou 8000 px (image_too_large)."
+            }
           },
           "429": {
-            "description": "Acima do limite por minuto; respeite Retry-After (rate_limited)."
+            "description": "Acima do limite por minuto; espere os segundos de Retry-After. Vale também antes de a chave ser conferida.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos até a próxima tentativa.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           },
           "503": {
+            "description": "Leitura indisponível no momento; nada foi cobrado (engine_unavailable).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
               }
-            },
-            "description": "Leitura indisponível no momento; nada foi cobrado (engine_unavailable)."
+            }
           }
         },
         "security": [
@@ -1083,30 +2179,55 @@
             "apiKey": []
           }
         ],
-        "summary": "Ler as placas de uma foto",
-        "tags": [
-          "Leitura por foto"
-        ],
         "x-arandu-route-name": "api.recognize"
       }
     }
   },
-  "servers": [
-    {
-      "description": "Produção.",
-      "url": "https://alpr.sh"
-    }
-  ],
   "webhooks": {
     "alert.triggered": {
       "post": {
-        "description": "Enviado por POST ao endereço cadastrado no painel. Cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (sha256= e o HMAC-SHA256 hexadecimal de \"{timestamp}.{delivery-id}.{corpo}\" com o segredo whsec_ do endereço). Responda 2xx; 408, 425, 429 e 5xx são repetidos em 5 s, 30 s, 2 min e 10 min.",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Uma regra de alerta disparou.",
+        "description": "Evento \"Alerta disparado\", assinado pelo webhook que o cadastra em `/painel/webhooks`.\n\nEnviado por POST ao endereço do webhook, com Content-Type: application/json e User-Agent: alpr.sh-webhooks/1.0.\n\n**Assinatura.** Os cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (o prefixo X-Alprsh é o padrão do serviço). A assinatura é `sha256=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{delivery-id}.{corpo}`, com o corpo exatamente como chegou, e como chave o segredo do webhook inteiro (`whsec_…`, prefixo incluído), que o painel mostra. Compare em tempo constante e recuse um timestamp com mais de 5 minutos de diferença do seu relógio.\n\n**Entrega.** X-Alprsh-Delivery-Id é o mesmo em toda nova tentativa: guarde-o para não processar a mesma entrega duas vezes. Responda 2xx. Em erro de rede, tempo esgotado (15 s), 408, 425, 429 ou 5xx o Alpr.sh tenta de novo, em até 5 tentativas no total, esperando 5 s, 30 s, 2 min e 10 min entre elas e respeitando Retry-After; qualquer outro 4xx encerra a entrega sem nova tentativa. Redirecionamentos (até 5) são seguidos; endereços internos ou privados são recusados. Os cabeçalhos extras que o webhook cadastrou vão junto.",
         "operationId": "webhooks:alert.triggered",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Delivery-Id",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "sha256= e o HMAC-SHA256 em hexadecimal de {timestamp}.{delivery-id}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256=[0-9a-f]{64}$"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AlertTriggered"
+                "$ref": "#/components/schemas/WebhookAlertTriggered"
               }
             }
           },
@@ -1115,23 +2236,379 @@
         "responses": {
           "2XX": {
             "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
+          }
+        }
+      }
+    },
+    "legacy.recognition.created": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Uma placa foi lida por uma câmera, no formato da plataforma anterior.",
+        "description": "Só para um webhook importado da plataforma anterior, que segue recebendo este formato até ser trocado no painel. Uma entrega por leitura de câmera; uma foto enviada pela API não gera esta entrega.\n\n**Assinatura.** X-Signature-256 é o HMAC-SHA256 do corpo, em hexadecimal e sem prefixo, com o segredo do webhook como chave; não há timestamp. X-Alpr-Event-Id é o id da leitura, para a idempotência. Content-Type: application/json e User-Agent: alpr.sh-webhooks/1.0.\n\n**Entrega.** Responda 2xx. 429 e 5xx são repetidos; qualquer outro 4xx encerra a entrega.",
+        "operationId": "webhooks:legacy.recognition.created",
+        "parameters": [
+          {
+            "name": "X-Signature-256",
+            "in": "header",
+            "description": "O HMAC-SHA256 do corpo, em hexadecimal.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          {
+            "name": "X-Alpr-Event-Id",
+            "in": "header",
+            "description": "O id da leitura.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookLegacyRecognition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
           }
         },
-        "summary": "Uma regra de alerta disparou.",
+        "deprecated": true
+      }
+    },
+    "partner.camera.created": {
+      "post": {
         "tags": [
-          "webhooks"
-        ]
+          "Webhooks de parceiro"
+        ],
+        "summary": "A pessoa cadastrou uma câmera (parceiro nativo).",
+        "description": "Enviado por POST ao deliver_url do parceiro (docs/partners/widget.md), com `Authorization: Bearer \u003ctoken da pessoa no parceiro\u003e`, Content-Type: application/json e User-Agent: alpr.sh-partners/1.0.\n\n**Assinatura.** X-Alprsh-Event (o evento), X-Alprsh-Delivery (o id da entrega, igual em toda nova tentativa), X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature, que é `v1=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{corpo}`, com o segredo de assinatura que o Alpr.sh devolveu no cadastro do parceiro. Compare em tempo constante, recuse um timestamp com mais de 5 minutos de diferença, confira que o token pertence à pessoa de external_user_id e use X-Alprsh-Delivery para a idempotência. Um evento desconhecido deve ser respondido com 2xx e ignorado.\n\n**Entrega.** 2xx: entregue. 401: o Alpr.sh renova o token da pessoa uma vez e reenvia; se continuar 401, a conexão passa a aguardar nova autorização. 429, 5xx ou sem resposta: nova tentativa mais tarde, em intervalos crescentes; uma leitura com mais de 15 minutos é abandonada e um aviso de câmera tem até 12 tentativas. Outro 4xx: registrado e não reenviado.",
+        "operationId": "webhooks:partner.camera.created",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Event",
+            "in": "header",
+            "description": "O evento: recognition.created, camera.created, camera.updated ou camera.deleted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Delivery",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "v1= e o HMAC-SHA256 em hexadecimal de {timestamp}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^v1=[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerDeliveryCamera"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
+          }
+        }
+      }
+    },
+    "partner.camera.deleted": {
+      "post": {
+        "tags": [
+          "Webhooks de parceiro"
+        ],
+        "summary": "A câmera foi apagada (parceiro nativo).",
+        "description": "Enviado por POST ao deliver_url do parceiro (docs/partners/widget.md), com `Authorization: Bearer \u003ctoken da pessoa no parceiro\u003e`, Content-Type: application/json e User-Agent: alpr.sh-partners/1.0.\n\n**Assinatura.** X-Alprsh-Event (o evento), X-Alprsh-Delivery (o id da entrega, igual em toda nova tentativa), X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature, que é `v1=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{corpo}`, com o segredo de assinatura que o Alpr.sh devolveu no cadastro do parceiro. Compare em tempo constante, recuse um timestamp com mais de 5 minutos de diferença, confira que o token pertence à pessoa de external_user_id e use X-Alprsh-Delivery para a idempotência. Um evento desconhecido deve ser respondido com 2xx e ignorado.\n\n**Entrega.** 2xx: entregue. 401: o Alpr.sh renova o token da pessoa uma vez e reenvia; se continuar 401, a conexão passa a aguardar nova autorização. 429, 5xx ou sem resposta: nova tentativa mais tarde, em intervalos crescentes; uma leitura com mais de 15 minutos é abandonada e um aviso de câmera tem até 12 tentativas. Outro 4xx: registrado e não reenviado.",
+        "operationId": "webhooks:partner.camera.deleted",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Event",
+            "in": "header",
+            "description": "O evento: recognition.created, camera.created, camera.updated ou camera.deleted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Delivery",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "v1= e o HMAC-SHA256 em hexadecimal de {timestamp}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^v1=[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerDeliveryCamera"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
+          }
+        }
+      }
+    },
+    "partner.camera.updated": {
+      "post": {
+        "tags": [
+          "Webhooks de parceiro"
+        ],
+        "summary": "A câmera mudou de nome, ou foi ligada ou desligada (parceiro nativo).",
+        "description": "Enviado por POST ao deliver_url do parceiro (docs/partners/widget.md), com `Authorization: Bearer \u003ctoken da pessoa no parceiro\u003e`, Content-Type: application/json e User-Agent: alpr.sh-partners/1.0.\n\n**Assinatura.** X-Alprsh-Event (o evento), X-Alprsh-Delivery (o id da entrega, igual em toda nova tentativa), X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature, que é `v1=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{corpo}`, com o segredo de assinatura que o Alpr.sh devolveu no cadastro do parceiro. Compare em tempo constante, recuse um timestamp com mais de 5 minutos de diferença, confira que o token pertence à pessoa de external_user_id e use X-Alprsh-Delivery para a idempotência. Um evento desconhecido deve ser respondido com 2xx e ignorado.\n\n**Entrega.** 2xx: entregue. 401: o Alpr.sh renova o token da pessoa uma vez e reenvia; se continuar 401, a conexão passa a aguardar nova autorização. 429, 5xx ou sem resposta: nova tentativa mais tarde, em intervalos crescentes; uma leitura com mais de 15 minutos é abandonada e um aviso de câmera tem até 12 tentativas. Outro 4xx: registrado e não reenviado.",
+        "operationId": "webhooks:partner.camera.updated",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Event",
+            "in": "header",
+            "description": "O evento: recognition.created, camera.created, camera.updated ou camera.deleted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Delivery",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "v1= e o HMAC-SHA256 em hexadecimal de {timestamp}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^v1=[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerDeliveryCamera"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
+          }
+        }
+      }
+    },
+    "partner.recognition.created": {
+      "post": {
+        "tags": [
+          "Webhooks de parceiro"
+        ],
+        "summary": "Uma câmera da pessoa leu uma placa.",
+        "description": "Enviado por POST ao deliver_url do parceiro (docs/partners/widget.md), com `Authorization: Bearer \u003ctoken da pessoa no parceiro\u003e`, Content-Type: application/json e User-Agent: alpr.sh-partners/1.0.\n\n**Assinatura.** X-Alprsh-Event (o evento), X-Alprsh-Delivery (o id da entrega, igual em toda nova tentativa), X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature, que é `v1=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{corpo}`, com o segredo de assinatura que o Alpr.sh devolveu no cadastro do parceiro. Compare em tempo constante, recuse um timestamp com mais de 5 minutos de diferença, confira que o token pertence à pessoa de external_user_id e use X-Alprsh-Delivery para a idempotência. Um evento desconhecido deve ser respondido com 2xx e ignorado.\n\n**Entrega.** 2xx: entregue. 401: o Alpr.sh renova o token da pessoa uma vez e reenvia; se continuar 401, a conexão passa a aguardar nova autorização. 429, 5xx ou sem resposta: nova tentativa mais tarde, em intervalos crescentes; uma leitura com mais de 15 minutos é abandonada e um aviso de câmera tem até 12 tentativas. Outro 4xx: registrado e não reenviado.",
+        "operationId": "webhooks:partner.recognition.created",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Event",
+            "in": "header",
+            "description": "O evento: recognition.created, camera.created, camera.updated ou camera.deleted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Delivery",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "v1= e o HMAC-SHA256 em hexadecimal de {timestamp}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^v1=[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerDeliveryRecognition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "2XX": {
+            "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
+          }
+        }
       }
     },
     "recognition.created": {
       "post": {
-        "description": "Enviado por POST ao endereço cadastrado no painel. Cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (sha256= e o HMAC-SHA256 hexadecimal de \"{timestamp}.{delivery-id}.{corpo}\" com o segredo whsec_ do endereço). Responda 2xx; 408, 425, 429 e 5xx são repetidos em 5 s, 30 s, 2 min e 10 min.",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Uma placa foi lida, por uma câmera ou por foto.",
+        "description": "Evento \"Nova leitura de placa\", assinado pelo webhook que o cadastra em `/painel/webhooks`.\n\nEnviado por POST ao endereço do webhook, com Content-Type: application/json e User-Agent: alpr.sh-webhooks/1.0.\n\n**Assinatura.** Os cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (o prefixo X-Alprsh é o padrão do serviço). A assinatura é `sha256=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{delivery-id}.{corpo}`, com o corpo exatamente como chegou, e como chave o segredo do webhook inteiro (`whsec_…`, prefixo incluído), que o painel mostra. Compare em tempo constante e recuse um timestamp com mais de 5 minutos de diferença do seu relógio.\n\n**Entrega.** X-Alprsh-Delivery-Id é o mesmo em toda nova tentativa: guarde-o para não processar a mesma entrega duas vezes. Responda 2xx. Em erro de rede, tempo esgotado (15 s), 408, 425, 429 ou 5xx o Alpr.sh tenta de novo, em até 5 tentativas no total, esperando 5 s, 30 s, 2 min e 10 min entre elas e respeitando Retry-After; qualquer outro 4xx encerra a entrega sem nova tentativa. Redirecionamentos (até 5) são seguidos; endereços internos ou privados são recusados. Os cabeçalhos extras que o webhook cadastrou vão junto.",
         "operationId": "webhooks:recognition.created",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Delivery-Id",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "sha256= e o HMAC-SHA256 em hexadecimal de {timestamp}.{delivery-id}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256=[0-9a-f]{64}$"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RecognitionCreated"
+                "$ref": "#/components/schemas/WebhookRecognitionCreated"
               }
             }
           },
@@ -1140,18 +2617,52 @@
         "responses": {
           "2XX": {
             "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
           }
-        },
-        "summary": "Uma câmera ou a API leu uma placa.",
-        "tags": [
-          "webhooks"
-        ]
+        }
       }
     },
     "webhook.test": {
       "post": {
-        "description": "Enviado por POST ao endereço cadastrado no painel. Cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (sha256= e o HMAC-SHA256 hexadecimal de \"{timestamp}.{delivery-id}.{corpo}\" com o segredo whsec_ do endereço). Responda 2xx; 408, 425, 429 e 5xx são repetidos em 5 s, 30 s, 2 min e 10 min.",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "O teste do painel.",
+        "description": "Enviado a um só webhook quando alguém usa o botão de teste, qualquer que seja a lista de eventos que ele assina; não se assina.\n\nEnviado por POST ao endereço do webhook, com Content-Type: application/json e User-Agent: alpr.sh-webhooks/1.0.\n\n**Assinatura.** Os cabeçalhos X-Alprsh-Delivery-Id, X-Alprsh-Timestamp (segundos Unix) e X-Alprsh-Signature (o prefixo X-Alprsh é o padrão do serviço). A assinatura é `sha256=` seguido do HMAC-SHA256, em hexadecimal, de `{timestamp}.{delivery-id}.{corpo}`, com o corpo exatamente como chegou, e como chave o segredo do webhook inteiro (`whsec_…`, prefixo incluído), que o painel mostra. Compare em tempo constante e recuse um timestamp com mais de 5 minutos de diferença do seu relógio.\n\n**Entrega.** X-Alprsh-Delivery-Id é o mesmo em toda nova tentativa: guarde-o para não processar a mesma entrega duas vezes. Responda 2xx. Em erro de rede, tempo esgotado (15 s), 408, 425, 429 ou 5xx o Alpr.sh tenta de novo, em até 5 tentativas no total, esperando 5 s, 30 s, 2 min e 10 min entre elas e respeitando Retry-After; qualquer outro 4xx encerra a entrega sem nova tentativa. Redirecionamentos (até 5) são seguidos; endereços internos ou privados são recusados. Os cabeçalhos extras que o webhook cadastrou vão junto.",
         "operationId": "webhooks:webhook.test",
+        "parameters": [
+          {
+            "name": "X-Alprsh-Delivery-Id",
+            "in": "header",
+            "description": "Id desta entrega, igual em toda nova tentativa.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Alprsh-Timestamp",
+            "in": "header",
+            "description": "Segundos Unix em que a entrega foi assinada.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "X-Alprsh-Signature",
+            "in": "header",
+            "description": "sha256= e o HMAC-SHA256 em hexadecimal de {timestamp}.{delivery-id}.{corpo}.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^sha256=[0-9a-f]{64}$"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1165,13 +2676,1554 @@
         "responses": {
           "2XX": {
             "description": "Recebido."
+          },
+          "default": {
+            "description": "Qualquer outra resposta: 408, 425, 429 e 5xx são repetidos; os demais 4xx encerram a entrega."
           }
-        },
-        "summary": "Entrega de teste, enviada pelo botão Testar do painel.",
-        "tags": [
-          "webhooks"
-        ]
+        }
       }
     }
-  }
+  },
+  "components": {
+    "schemas": {
+      "Camera": {
+        "type": "object",
+        "required": [
+          "createdAt",
+          "enabled",
+          "id",
+          "location",
+          "name",
+          "protocol",
+          "readingArea"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string",
+            "description": "O endereço da câmera como texto; vazio se não foi informado."
+          },
+          "name": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "rtsp",
+              "rtmp",
+              "hls",
+              "http",
+              "hikconnect",
+              "hikcloud",
+              "rtmppush"
+            ],
+            "description": "Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha."
+          },
+          "readingArea": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadingArea"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nulo quando a câmera lê a imagem inteira."
+          }
+        }
+      },
+      "CameraList": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Camera"
+            }
+          }
+        }
+      },
+      "DetectedPlate": {
+        "type": "object",
+        "required": [
+          "conf",
+          "coordinateBottom",
+          "coordinateLeft",
+          "coordinateRight",
+          "coordinateTop",
+          "createdAt",
+          "plateType",
+          "time"
+        ],
+        "properties": {
+          "conf": {
+            "type": "number",
+            "description": "Confiança do detector, de 0 a 100, com uma casa."
+          },
+          "coordinateBottom": {
+            "type": "integer"
+          },
+          "coordinateLeft": {
+            "type": "integer"
+          },
+          "coordinateRight": {
+            "type": "integer"
+          },
+          "coordinateTop": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plateType": {
+            "type": "string",
+            "enum": [
+              "car"
+            ]
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DetectionImageLink": {
+        "type": "object",
+        "required": [
+          "detectionId",
+          "expiresIn",
+          "imageUrl"
+        ],
+        "properties": {
+          "detectionId": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "Segundos de validade do link (300)."
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio."
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Código estável do erro, em inglês; é o que o código deve testar."
+          },
+          "message": {
+            "type": "string",
+            "description": "Explicação em texto, para o log; pode mudar de redação."
+          }
+        }
+      },
+      "LoginLink": {
+        "type": "object",
+        "required": [
+          "expires_at",
+          "url"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "integer",
+            "description": "Segundos Unix em que o link vence (60 segundos depois de emitido)."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Abre uma vez, no navegador da pessoa; não guarde, não registre em log."
+          }
+        }
+      },
+      "LoginLinkRequest": {
+        "type": "object",
+        "required": [
+          "external_user_id",
+          "return_to"
+        ],
+        "properties": {
+          "external_user_id": {
+            "type": "string",
+            "maxLength": 191,
+            "description": "O sub da pessoa no userinfo do parceiro."
+          },
+          "return_to": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^/painel(/cameras(/nova|/hik-connect|/[A-Za-z0-9_-]{1,64}(/pagar)?)?)?$",
+            "description": "A página do painel onde a pessoa cai: /painel, /painel/cameras, /painel/cameras/nova, /painel/cameras/hik-connect, /painel/cameras/{id} ou /painel/cameras/{id}/pagar. Sem consulta, sem fragmento e sem outro host."
+          }
+        }
+      },
+      "PartnerAlert": {
+        "type": "object",
+        "required": [
+          "camera_id",
+          "captured_at",
+          "confidence",
+          "id",
+          "plate",
+          "recognition_id",
+          "rule_id"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string"
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "De 0 a 1."
+          },
+          "id": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "recognition_id": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          }
+        }
+      },
+      "PartnerAlertList": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerAlert"
+            },
+            "description": "Os 50 alertas disparados mais recentes."
+          }
+        }
+      },
+      "PartnerCamera": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "id",
+          "name",
+          "status"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "disabled (desligada), waiting (esperando o motor) ou o estado que o motor informa (running, failed, …); numa câmera Hik-Connect, running ou offline."
+          }
+        }
+      },
+      "PartnerCameraActivity": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "id",
+          "last_read_at",
+          "name",
+          "online",
+          "reads_month",
+          "reads_today",
+          "status",
+          "term"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_read_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "A leitura mais recente (UTC); nulo se nunca leu."
+          },
+          "name": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Verdadeiro só quando a câmera está ligada e lendo."
+          },
+          "reads_month": {
+            "type": "integer",
+            "description": "Leituras desde o dia 1º, no fuso America/Sao_Paulo."
+          },
+          "reads_today": {
+            "type": "integer",
+            "description": "Leituras desde a meia-noite, no fuso America/Sao_Paulo."
+          },
+          "status": {
+            "type": "string",
+            "description": "disabled, waiting, expired (só no monitor: termo vencido), offline, ou o estado do motor (running, failed, …)."
+          },
+          "term": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartnerCameraTerm"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "O termo de cobrança da câmera; nulo numa câmera que nunca teve um."
+          }
+        }
+      },
+      "PartnerCameraActivityList": {
+        "type": "object",
+        "required": [
+          "data",
+          "engine",
+          "has_more"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerCameraActivity"
+            },
+            "description": "Por nome, no máximo 200 câmeras."
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "description": "unavailable: o servidor de leitura não respondeu, e online vem falso nas câmeras que ele roda; trate como desconhecido, não como offline."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Verdadeiro se pode haver mais câmeras que as 200 listadas; não apague do seu lado uma câmera que não veio."
+          }
+        }
+      },
+      "PartnerCameraList": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerCamera"
+            }
+          }
+        }
+      },
+      "PartnerCameraRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Senha da câmera; fica cifrada e nunca volta em resposta."
+          },
+          "url": {
+            "type": "string",
+            "description": "Endereço do stream (rtsp://, rtmp://, http(s):// ou HLS) de um host que o Alpr.sh alcance; endereço interno é recusado."
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 120
+          }
+        }
+      },
+      "PartnerCameraTerm": {
+        "type": "object",
+        "required": [
+          "ends_at",
+          "pending",
+          "renewable"
+        ],
+        "properties": {
+          "ends_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Até quando está pago; nulo se ainda não começou."
+          },
+          "pending": {
+            "type": "boolean",
+            "description": "Verdadeiro se o termo não está em vigor (aguarda pagamento ou venceu)."
+          },
+          "renewable": {
+            "type": "boolean",
+            "description": "Verdadeiro dentro da janela de renovação."
+          }
+        }
+      },
+      "PartnerConnection": {
+        "type": "object",
+        "required": [
+          "account",
+          "delivery",
+          "partner",
+          "permissions"
+        ],
+        "properties": {
+          "account": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "O nome da pessoa no parceiro, ou o do parceiro."
+              }
+            }
+          },
+          "delivery": {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "description": "Como foi a última entrega de leitura ao parceiro.",
+            "properties": {
+              "error": {
+                "type": "string",
+                "description": "Só quando status é failed."
+              },
+              "last_delivered_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "status": {
+                "type": "string",
+                "description": "ok, skipped (o parceiro disse que a leitura não interessa), failed, ou vazio se nunca houve entrega."
+              }
+            }
+          },
+          "partner": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerPermission"
+            },
+            "description": "O que esta conexão pode fazer."
+          }
+        }
+      },
+      "PartnerDeliveryCamera": {
+        "type": "object",
+        "required": [
+          "camera",
+          "event",
+          "external_user_id"
+        ],
+        "properties": {
+          "camera": {
+            "type": "object",
+            "required": [
+              "enabled",
+              "id",
+              "name"
+            ],
+            "description": "A câmera como está na hora do envio (camera.deleted: como estava ao ser apagada). Nunca traz endereço, usuário, senha nem URL do stream.",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "camera.created",
+              "camera.updated",
+              "camera.deleted"
+            ]
+          },
+          "external_user_id": {
+            "type": "string",
+            "description": "O sub da pessoa no parceiro."
+          }
+        }
+      },
+      "PartnerDeliveryRecognition": {
+        "type": "object",
+        "required": [
+          "box",
+          "camera",
+          "captured_at",
+          "char_confidences",
+          "confidence",
+          "detector_score",
+          "event",
+          "external_user_id",
+          "id",
+          "image",
+          "plate"
+        ],
+        "properties": {
+          "box": {
+            "type": "object",
+            "required": [
+              "height",
+              "width",
+              "x",
+              "y"
+            ],
+            "description": "A placa, em pixels do quadro.",
+            "properties": {
+              "height": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              }
+            }
+          },
+          "box_normalized": {
+            "type": "object",
+            "required": [
+              "xmax",
+              "xmin",
+              "ymax",
+              "ymin"
+            ],
+            "description": "A placa, em frações de 0 a 1 do quadro. Só para um parceiro nativo, e só quando a leitura tem o quadro inteiro e a caixa.",
+            "properties": {
+              "xmax": {
+                "type": "number"
+              },
+              "xmin": {
+                "type": "number"
+              },
+              "ymax": {
+                "type": "number"
+              },
+              "ymin": {
+                "type": "number"
+              }
+            }
+          },
+          "camera": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "Vazio se a câmera já não existe."
+              }
+            }
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC."
+          },
+          "char_confidences": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Confiança de cada caractere, de 0 a 1."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "De 0 a 1."
+          },
+          "detector_score": {
+            "type": "number"
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "recognition.created"
+            ]
+          },
+          "external_user_id": {
+            "type": "string",
+            "description": "O sub da pessoa no parceiro."
+          },
+          "frame_aspect": {
+            "type": "number",
+            "description": "Largura sobre altura do quadro; acompanha box_normalized."
+          },
+          "id": {
+            "type": "string",
+            "description": "O id da leitura no Alpr.sh."
+          },
+          "image": {
+            "type": "object",
+            "required": [
+              "content_type"
+            ],
+            "description": "Um parceiro nativo recebe url (o quadro, ou o recorte se só ele existe) e nenhuma imagem no corpo; uma aplicação de cliente recebe crop e full em base64.",
+            "properties": {
+              "content_type": {
+                "type": "string"
+              },
+              "crop": {
+                "type": "string",
+                "description": "JPEG do recorte da placa em base64; sempre que houver recorte."
+              },
+              "full": {
+                "type": "string",
+                "description": "JPEG do quadro inteiro em base64; só quando a câmera envia a foto inteira."
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Endereço assinado da foto, que fica no Alpr.sh pelo prazo de retenção das leituras (60 dias por padrão); depois responde 404."
+              }
+            }
+          },
+          "plate": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string",
+            "description": "Presente só quando o motor informou a região."
+          },
+          "region_confidence": {
+            "type": "number"
+          }
+        }
+      },
+      "PartnerForbiddenError": {
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "insufficient_permission",
+              "origin_not_allowed"
+            ],
+            "description": "insufficient_permission: a conexão não recebeu a permissão; origin_not_allowed: a origem do navegador não está cadastrada para este parceiro."
+          },
+          "message": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "description": "A permissão que falta; só em insufficient_permission."
+          }
+        }
+      },
+      "PartnerPermission": {
+        "type": "string",
+        "enum": [
+          "cameras:read",
+          "cameras:write",
+          "recognitions:read",
+          "recognitions:deliver",
+          "alerts:read",
+          "watchlist:read"
+        ],
+        "description": "As permissões que uma conexão recebe; os nomes nunca mudam, só ganham novos."
+      },
+      "PartnerRecognition": {
+        "type": "object",
+        "required": [
+          "camera_id",
+          "camera_name",
+          "captured_at",
+          "confidence",
+          "has_crop",
+          "id",
+          "plate"
+        ],
+        "properties": {
+          "camera_id": {
+            "type": "string"
+          },
+          "camera_name": {
+            "type": "string",
+            "description": "Vazio se a conexão não tem cameras:read."
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "De 0 a 1 (na API de chave, conf vai de 0 a 100)."
+          },
+          "has_crop": {
+            "type": "boolean",
+            "description": "Verdadeiro se há recorte da placa para GET …/image?kind=crop."
+          },
+          "id": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          }
+        }
+      },
+      "PartnerRecognitionList": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerRecognition"
+            },
+            "description": "As 20 leituras de câmera mais recentes; não há paginação."
+          }
+        }
+      },
+      "PartnerSession": {
+        "type": "object",
+        "required": [
+          "expires_at",
+          "token"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "integer",
+            "description": "Segundos Unix em que o token vence (15 minutos depois de emitido)."
+          },
+          "token": {
+            "type": "string",
+            "description": "Token curto do widget (aws1…). É uma credencial: não registre em log."
+          }
+        }
+      },
+      "PartnerWatchlistEntry": {
+        "type": "object",
+        "required": [
+          "created_at",
+          "hits",
+          "id",
+          "notes",
+          "plate",
+          "status"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC."
+          },
+          "hits": {
+            "type": "integer",
+            "description": "Quantas vezes uma câmera do espaço leu a placa."
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Ausente se a placa nunca foi vista."
+          },
+          "notes": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "aberta",
+              "localizada",
+              "fechada"
+            ],
+            "description": "aberta: procurada; localizada: uma câmera já a leu; fechada: caso encerrado."
+          }
+        }
+      },
+      "PartnerWatchlistPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerWatchlistEntry"
+            },
+            "description": "Da placa cadastrada há menos tempo para a mais antiga."
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "page",
+              "per_page",
+              "total"
+            ],
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "per_page": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer",
+                "description": "Quantas placas há na lista, não só na página."
+              }
+            }
+          }
+        }
+      },
+      "PhotoDetection": {
+        "type": "object",
+        "required": [
+          "imageHeight",
+          "imageWidth",
+          "plates",
+          "processingTimeMs"
+        ],
+        "properties": {
+          "imageHeight": {
+            "type": "integer"
+          },
+          "imageWidth": {
+            "type": "integer"
+          },
+          "plates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetectedPlate"
+            },
+            "description": "Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, []."
+          },
+          "processingTimeMs": {
+            "type": "integer"
+          }
+        }
+      },
+      "PhotoForm": {
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "description": "A foto, JPEG ou PNG."
+          },
+          "image_mode": {
+            "type": "string",
+            "enum": [
+              "NONE"
+            ],
+            "description": "Só NONE é aceito."
+          },
+          "lpr_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Piso de confiança do detector de placas."
+          },
+          "min_ocr_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Piso de confiança da leitura dos caracteres."
+          }
+        }
+      },
+      "PhotoRecognition": {
+        "type": "object",
+        "required": [
+          "creditsRemaining",
+          "imageHeight",
+          "imageWidth",
+          "plates",
+          "processingTimeMs"
+        ],
+        "properties": {
+          "creditsRemaining": {
+            "type": "integer",
+            "description": "Créditos que sobraram depois desta leitura."
+          },
+          "imageHeight": {
+            "type": "integer"
+          },
+          "imageWidth": {
+            "type": "integer"
+          },
+          "plates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecognizedPlate"
+            },
+            "description": "Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, []."
+          },
+          "processingTimeMs": {
+            "type": "integer"
+          }
+        }
+      },
+      "PhotoRequest": {
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "A foto em base64, com ou sem o prefixo data:image/...;base64,."
+          },
+          "image_mode": {
+            "type": "string",
+            "enum": [
+              "NONE"
+            ],
+            "description": "Só NONE (a resposta não leva imagem) é aceito; qualquer outro valor é recusado com unsupported_image_mode. O nome imageMode também é lido."
+          },
+          "lpr_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Piso de confiança do detector de placas."
+          },
+          "min_ocr_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Piso de confiança da leitura dos caracteres."
+          }
+        }
+      },
+      "PlateImageForm": {
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "description": "A imagem da placa já recortada, JPEG ou PNG."
+          }
+        }
+      },
+      "PlateImageRequest": {
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "A imagem da placa já recortada, em base64, com ou sem o prefixo data:image/...;base64,."
+          }
+        }
+      },
+      "PlateReading": {
+        "type": "object",
+        "required": [
+          "confidence",
+          "creditsRemaining",
+          "detectionId",
+          "latencyMs",
+          "plate"
+        ],
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "description": "Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100)."
+          },
+          "creditsRemaining": {
+            "type": "integer",
+            "description": "Créditos que sobraram depois desta leitura."
+          },
+          "detectionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Hoje sempre nulo: a leitura de uma placa recortada não é guardada."
+          },
+          "latencyMs": {
+            "type": "integer"
+          },
+          "plate": {
+            "type": "string",
+            "description": "O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro."
+          }
+        }
+      },
+      "RateLimitError": {
+        "type": "object",
+        "required": [
+          "error",
+          "message",
+          "retry_after"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "rate_limited"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retry_after": {
+            "type": "string",
+            "description": "Segundos até a próxima tentativa, como texto; é o valor do cabeçalho Retry-After."
+          }
+        }
+      },
+      "ReadingArea": {
+        "type": "object",
+        "required": [
+          "box",
+          "points"
+        ],
+        "properties": {
+          "box": {
+            "type": "object",
+            "required": [
+              "height",
+              "width",
+              "x",
+              "y"
+            ],
+            "description": "A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.",
+            "properties": {
+              "height": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          },
+          "points": {
+            "type": "array",
+            "description": "Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas.",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      },
+      "Recognition": {
+        "type": "object",
+        "required": [
+          "cameraId",
+          "capturedAt",
+          "conf",
+          "id",
+          "plate",
+          "source"
+        ],
+        "properties": {
+          "cameraId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nulo numa leitura feita pela API por foto."
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Com o deslocamento do fuso do Alpr.sh."
+          },
+          "conf": {
+            "type": "number",
+            "description": "De 0 a 100, com uma casa."
+          },
+          "id": {
+            "type": "string"
+          },
+          "plate": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "camera",
+              "api"
+            ],
+            "description": "camera: lida por uma câmera; api: enviada por foto."
+          }
+        }
+      },
+      "RecognitionPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "next"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recognition"
+            },
+            "description": "Até 50 leituras, das mais novas para as mais antigas."
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Passe em before para a página seguinte; nulo na última página."
+          }
+        }
+      },
+      "RecognizedPlate": {
+        "type": "object",
+        "required": [
+          "charConfs",
+          "conf",
+          "coordinateBottom",
+          "coordinateLeft",
+          "coordinateRight",
+          "coordinateTop",
+          "createdAt",
+          "plate",
+          "plateType",
+          "time"
+        ],
+        "properties": {
+          "charConfs": {
+            "type": "string",
+            "description": "Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula (\"0.99;0.98\")."
+          },
+          "conf": {
+            "type": "number",
+            "description": "Confiança da placa, de 0 a 100, com uma casa."
+          },
+          "coordinateBottom": {
+            "type": "integer",
+            "description": "Pixels da foto enviada."
+          },
+          "coordinateLeft": {
+            "type": "integer"
+          },
+          "coordinateRight": {
+            "type": "integer"
+          },
+          "coordinateTop": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Igual a time."
+          },
+          "plate": {
+            "type": "string",
+            "description": "Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul)."
+          },
+          "plateType": {
+            "type": "string",
+            "enum": [
+              "car"
+            ],
+            "description": "Sempre car; a API não informa país nem formato."
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Instante da leitura, com o deslocamento do fuso do Alpr.sh."
+          }
+        }
+      },
+      "SubscriptionRequiredError": {
+        "type": "object",
+        "required": [
+          "error",
+          "message",
+          "renew_url"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "subscription_required"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "renew_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Página onde a pessoa renova a assinatura."
+          }
+        }
+      },
+      "WebhookAlertTriggered": {
+        "type": "object",
+        "required": [
+          "event",
+          "id",
+          "tenant_id",
+          "rule_id",
+          "rule_name",
+          "recognition_id",
+          "plate",
+          "confidence",
+          "captured_at"
+        ],
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "alert.triggered"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "O id do disparo."
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "recognition_id": {
+            "type": "string",
+            "description": "A leitura que disparou o alerta."
+          },
+          "plate": {
+            "type": "string"
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Ausente se a leitura não veio de uma câmera."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "De 0 a 1."
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "skip": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:\u003cid\u003e, partner:\u003cid\u003e). Presente só quando algum foi excluído; é informação, não há o que fazer com ela."
+          }
+        }
+      },
+      "WebhookLegacyRecognition": {
+        "type": "object",
+        "required": [
+          "data",
+          "event"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "cameraId",
+              "createdAt",
+              "eventId",
+              "imageHeight",
+              "imageWidth",
+              "plates",
+              "processingTimeMs"
+            ],
+            "properties": {
+              "cameraId": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "eventId": {
+                "type": "string",
+                "description": "O id da leitura; é também o cabeçalho X-Alpr-Event-Id."
+              },
+              "imageBase64": {
+                "type": "string",
+                "description": "JPEG em base64, sem prefixo: o quadro inteiro se o webhook pede FULL, senão o recorte da placa; ausente com NONE ou sem imagem guardada."
+              },
+              "imageHeight": {
+                "type": "integer",
+                "description": "Zero se só o recorte foi guardado."
+              },
+              "imageWidth": {
+                "type": "integer",
+                "description": "Zero se só o recorte foi guardado."
+              },
+              "plates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RecognizedPlate"
+                },
+                "minItems": 1,
+                "maxItems": 1,
+                "description": "Uma placa por entrega. conf vem sem arredondar."
+              },
+              "processingTimeMs": {
+                "type": "integer"
+              }
+            }
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "recognition.created"
+            ]
+          }
+        }
+      },
+      "WebhookRecognitionCreated": {
+        "type": "object",
+        "required": [
+          "event",
+          "id",
+          "tenant_id",
+          "source",
+          "plate",
+          "confidence",
+          "captured_at"
+        ],
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "recognition.created"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image."
+          },
+          "tenant_id": {
+            "type": "string",
+            "description": "O espaço de trabalho dono da leitura."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "camera",
+              "api"
+            ],
+            "description": "camera: lida por uma câmera; api: enviada por foto."
+          },
+          "camera_id": {
+            "type": "string",
+            "description": "Ausente numa leitura enviada por foto."
+          },
+          "plate": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "De 0 a 1 (na API de chave, conf vai de 0 a 100)."
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC, com fração de segundo."
+          }
+        }
+      },
+      "WebhookTest": {
+        "type": "object",
+        "required": [
+          "event",
+          "id",
+          "tenant_id",
+          "sent_at"
+        ],
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "webhook.test"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WidgetSessionRequest": {
+        "type": "object",
+        "required": [
+          "external_user_id"
+        ],
+        "properties": {
+          "external_user_id": {
+            "type": "string",
+            "maxLength": 191,
+            "description": "O sub da pessoa no userinfo do parceiro; vem da sessão do parceiro, nunca do navegador."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "description": "Chave de API do Alpr.sh (alpr_live_…), criada no painel em Chaves de API. Age só no espaço onde foi criada e só com os escopos marcados nela; o segredo aparece uma única vez.",
+        "scheme": "bearer",
+        "bearerFormat": "alpr_live_…"
+      },
+      "partnerClient": {
+        "type": "http",
+        "description": "O client OAuth do parceiro nativo (client_id e client_secret), cada parte codificada como application/x-www-form-urlencoded (RFC 6749, 2.3.1). Só o servidor do parceiro chama; só um parceiro nativo ativo.",
+        "scheme": "basic"
+      },
+      "widgetToken": {
+        "type": "http",
+        "description": "Token curto do widget (aws1…), de 15 minutos: o parceiro o pede em POST /api/partner/v1/widget-sessions ou o widget o renova em POST /api/partner/v1/session. Vale para a pessoa e o espaço da conexão, e só para as permissões que ela recebeu. O navegador do parceiro o envia de uma origem cadastrada (CORS).",
+        "scheme": "bearer",
+        "bearerFormat": "aws1.…"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Leitura por foto",
+      "description": "Envie uma imagem e receba as placas no formato público."
+    },
+    {
+      "name": "Leituras",
+      "description": "As leituras das câmeras e da API por foto."
+    },
+    {
+      "name": "Câmeras",
+      "description": "As câmeras do espaço, sem credenciais."
+    },
+    {
+      "name": "Parceiro: servidor",
+      "description": "O servidor de um parceiro nativo, autenticado como client OAuth (HTTP Basic): a sessão do widget, as câmeras de uma pessoa e o link de entrada no painel."
+    },
+    {
+      "name": "Parceiro: widget",
+      "description": "O widget e a página do parceiro, com o token curto da conexão e só com as permissões que ela recebeu."
+    },
+    {
+      "name": "Webhooks",
+      "description": "Os eventos que o Alpr.sh envia ao endereço de um webhook do cliente, assinados com o segredo dele."
+    },
+    {
+      "name": "Webhooks de parceiro",
+      "description": "As leituras e os avisos de câmera que o Alpr.sh entrega ao deliver_url de um parceiro."
+    }
+  ]
 }

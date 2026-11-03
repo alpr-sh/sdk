@@ -8,48 +8,19 @@ from typing import Any, Literal, NotRequired, Self, TypedDict
 
 
 @dataclass(frozen=True)
-class AlertTriggered:
-    """Carga de alert.triggered: a regra que disparou e a leitura que a disparou."""
-
-    camera_id: str | None
-    captured_at: str
-    confidence: float
-    event: Literal["alert.triggered"]
-    id: str
-    plate: str
-    recognition_id: str
-    rule_id: str
-    rule_name: str
-    tenant_id: str
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
-        return cls(
-            camera_id=data.get("camera_id"),
-            captured_at=data["captured_at"],
-            confidence=float(data["confidence"]),
-            event=data["event"],
-            id=data["id"],
-            plate=data["plate"],
-            recognition_id=data["recognition_id"],
-            rule_id=data["rule_id"],
-            rule_name=data["rule_name"],
-            tenant_id=data["tenant_id"],
-        )
-
-
-@dataclass(frozen=True)
 class Camera:
-    """Uma câmera do espaço, sem endereço nem credenciais."""
+    """Camera is a resource of Alpr.sh's API."""
 
     created_at: str
     enabled: bool
     id: str
     location: str
+    """O endereço da câmera como texto; vazio se não foi informado."""
     name: str
-    protocol: str
+    protocol: Literal["rtsp", "rtmp", "hls", "http", "hikconnect", "hikcloud", "rtmppush"]
+    """Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha."""
     reading_area: ReadingArea | None
+    """Nulo quando a câmera lê a imagem inteira."""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
@@ -66,36 +37,17 @@ class Camera:
 
 
 @dataclass(frozen=True)
-class DetectResult:
-    """Onde estão as placas de uma foto."""
-
-    image_height: int
-    image_width: int
-    plates: list[DetectedPlate]
-    processing_time_ms: int
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
-        return cls(
-            image_height=data["imageHeight"],
-            image_width=data["imageWidth"],
-            plates=[DetectedPlate.from_dict(item0) for item0 in data["plates"]],
-            processing_time_ms=data["processingTimeMs"],
-        )
-
-
-@dataclass(frozen=True)
 class DetectedPlate:
-    """Uma placa localizada na foto, sem o texto."""
+    """DetectedPlate is a resource of Alpr.sh's API."""
 
     conf: float
+    """Confiança do detector, de 0 a 100, com uma casa."""
     coordinate_bottom: int
     coordinate_left: int
     coordinate_right: int
     coordinate_top: int
     created_at: str
-    plate_type: str
+    plate_type: Literal["car"]
     time: str
 
     @classmethod
@@ -114,13 +66,14 @@ class DetectedPlate:
 
 
 @dataclass(frozen=True)
-class DetectionImage:
-    """O link temporário da imagem de uma leitura."""
+class DetectionImageLink:
+    """DetectionImageLink is a resource of Alpr.sh's API."""
 
     detection_id: str
     expires_in: int
-    """Segundos de validade do link."""
+    """Segundos de validade do link (300)."""
     image_url: str
+    """Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio."""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
@@ -133,124 +86,36 @@ class DetectionImage:
 
 
 @dataclass(frozen=True)
-class OcrResult:
-    """A placa lida de uma imagem já recortada."""
+class PhotoDetection:
+    """PhotoDetection is a resource of Alpr.sh's API."""
 
-    confidence: float
-    credits_remaining: int
-    detection_id: str | None
-    latency_ms: int
-    plate: str
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
-        return cls(
-            confidence=float(data["confidence"]),
-            credits_remaining=data["creditsRemaining"],
-            detection_id=data.get("detectionId"),
-            latency_ms=data["latencyMs"],
-            plate=data["plate"],
-        )
-
-
-@dataclass(frozen=True)
-class ReadingArea:
-    """A área de leitura da câmera: placas fora do polígono são ignoradas."""
-
-    box: ReadingBox | None
-    points: list[list[float]] | None
+    image_height: int
+    image_width: int
+    plates: list[DetectedPlate]
+    """Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, []."""
+    processing_time_ms: int
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
         return cls(
-            box=None if data.get("box") is None else ReadingBox.from_dict(data["box"]),
-            points=None if data.get("points") is None else [[float(item1) for item1 in item0] for item0 in data["points"]],
+            image_height=data["imageHeight"],
+            image_width=data["imageWidth"],
+            plates=[DetectedPlate.from_dict(item0) for item0 in data["plates"]],
+            processing_time_ms=data["processingTimeMs"],
         )
 
 
 @dataclass(frozen=True)
-class ReadingBox:
-    """A caixa envolvente da área de leitura, em frações da imagem."""
-
-    height: float | None
-    width: float | None
-    x: float | None
-    y: float | None
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
-        return cls(
-            height=None if data.get("height") is None else float(data["height"]),
-            width=None if data.get("width") is None else float(data["width"]),
-            x=None if data.get("x") is None else float(data["x"]),
-            y=None if data.get("y") is None else float(data["y"]),
-        )
-
-
-@dataclass(frozen=True)
-class Recognition:
-    """Uma leitura de placa, de uma câmera ou da API por foto."""
-
-    camera_id: str | None
-    captured_at: str
-    conf: float
-    """Confiança da leitura, de 0 a 100."""
-    id: str
-    plate: str
-    source: Literal["camera", "api"]
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
-        return cls(
-            camera_id=data.get("cameraId"),
-            captured_at=data["capturedAt"],
-            conf=float(data["conf"]),
-            id=data["id"],
-            plate=data["plate"],
-            source=data["source"],
-        )
-
-
-@dataclass(frozen=True)
-class RecognitionCreated:
-    """Carga de recognition.created: os fatos no instante da leitura."""
-
-    camera_id: str | None
-    captured_at: str
-    confidence: float
-    event: Literal["recognition.created"]
-    id: str
-    plate: str
-    source: Literal["camera", "api"]
-    tenant_id: str
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
-        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
-        return cls(
-            camera_id=data.get("camera_id"),
-            captured_at=data["captured_at"],
-            confidence=float(data["confidence"]),
-            event=data["event"],
-            id=data["id"],
-            plate=data["plate"],
-            source=data["source"],
-            tenant_id=data["tenant_id"],
-        )
-
-
-@dataclass(frozen=True)
-class RecognizeResult:
-    """O resultado da leitura de uma foto. Sem placa, plates é []."""
+class PhotoRecognition:
+    """PhotoRecognition is a resource of Alpr.sh's API."""
 
     credits_remaining: int
+    """Créditos que sobraram depois desta leitura."""
     image_height: int
     image_width: int
     plates: list[RecognizedPlate]
+    """Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, []."""
     processing_time_ms: int
 
     @classmethod
@@ -266,21 +131,118 @@ class RecognizeResult:
 
 
 @dataclass(frozen=True)
+class PlateReading:
+    """PlateReading is a resource of Alpr.sh's API."""
+
+    confidence: float
+    """Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100)."""
+    credits_remaining: int
+    """Créditos que sobraram depois desta leitura."""
+    detection_id: str | None
+    """Hoje sempre nulo: a leitura de uma placa recortada não é guardada."""
+    latency_ms: int
+    plate: str
+    """O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro."""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
+        return cls(
+            confidence=float(data["confidence"]),
+            credits_remaining=data["creditsRemaining"],
+            detection_id=data.get("detectionId"),
+            latency_ms=data["latencyMs"],
+            plate=data["plate"],
+        )
+
+
+@dataclass(frozen=True)
+class ReadingArea:
+    """ReadingArea is a resource of Alpr.sh's API."""
+
+    box: ReadingAreaBox
+    """A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê."""
+    points: list[list[float]]
+    """Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas."""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
+        return cls(
+            box=ReadingAreaBox.from_dict(data["box"]),
+            points=[[float(item1) for item1 in item0] for item0 in data["points"]],
+        )
+
+
+@dataclass(frozen=True)
+class ReadingAreaBox:
+    """A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê."""
+
+    height: float
+    width: float
+    x: float
+    y: float
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
+        return cls(
+            height=float(data["height"]),
+            width=float(data["width"]),
+            x=float(data["x"]),
+            y=float(data["y"]),
+        )
+
+
+@dataclass(frozen=True)
+class Recognition:
+    """Recognition is a resource of Alpr.sh's API."""
+
+    camera_id: str | None
+    """Nulo numa leitura feita pela API por foto."""
+    captured_at: str
+    """Com o deslocamento do fuso do Alpr.sh."""
+    conf: float
+    """De 0 a 100, com uma casa."""
+    id: str
+    plate: str
+    source: Literal["camera", "api"]
+    """camera: lida por uma câmera; api: enviada por foto."""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
+        return cls(
+            camera_id=data.get("cameraId"),
+            captured_at=data["capturedAt"],
+            conf=float(data["conf"]),
+            id=data["id"],
+            plate=data["plate"],
+            source=data["source"],
+        )
+
+
+@dataclass(frozen=True)
 class RecognizedPlate:
-    """Uma placa lida na foto, com a caixa em pixels."""
+    """RecognizedPlate is a resource of Alpr.sh's API."""
 
     char_confs: str
-    """Confiança de 0 a 1 de cada caractere, separadas por vírgula."""
+    """Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula (\"0.99;0.98\")."""
     conf: float
-    """Confiança da leitura, de 0 a 100."""
+    """Confiança da placa, de 0 a 100, com uma casa."""
     coordinate_bottom: int
+    """Pixels da foto enviada."""
     coordinate_left: int
     coordinate_right: int
     coordinate_top: int
     created_at: str
+    """Igual a time."""
     plate: str
-    plate_type: str
+    """Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul)."""
+    plate_type: Literal["car"]
+    """Sempre car; a API não informa país nem formato."""
     time: str
+    """Instante da leitura, com o deslocamento do fuso do Alpr.sh."""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
@@ -300,8 +262,81 @@ class RecognizedPlate:
 
 
 @dataclass(frozen=True)
+class WebhookAlertTriggered:
+    """WebhookAlertTriggered is a resource of Alpr.sh's API."""
+
+    camera_id: str | None
+    """Ausente se a leitura não veio de uma câmera."""
+    captured_at: str
+    confidence: float
+    """De 0 a 1."""
+    event: Literal["alert.triggered"]
+    id: str
+    """O id do disparo."""
+    plate: str
+    recognition_id: str
+    """A leitura que disparou o alerta."""
+    rule_id: str
+    rule_name: str
+    skip: list[str] | None
+    """Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:<id>, partner:<id>). Presente só quando algum foi excluído; é informação, não há o que fazer com ela."""
+    tenant_id: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
+        return cls(
+            camera_id=data.get("camera_id"),
+            captured_at=data["captured_at"],
+            confidence=float(data["confidence"]),
+            event=data["event"],
+            id=data["id"],
+            plate=data["plate"],
+            recognition_id=data["recognition_id"],
+            rule_id=data["rule_id"],
+            rule_name=data["rule_name"],
+            skip=data.get("skip"),
+            tenant_id=data["tenant_id"],
+        )
+
+
+@dataclass(frozen=True)
+class WebhookRecognitionCreated:
+    """WebhookRecognitionCreated is a resource of Alpr.sh's API."""
+
+    camera_id: str | None
+    """Ausente numa leitura enviada por foto."""
+    captured_at: str
+    """UTC, com fração de segundo."""
+    confidence: float
+    """De 0 a 1 (na API de chave, conf vai de 0 a 100)."""
+    event: Literal["recognition.created"]
+    id: str
+    """O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image."""
+    plate: str
+    source: Literal["camera", "api"]
+    """camera: lida por uma câmera; api: enviada por foto."""
+    tenant_id: str
+    """O espaço de trabalho dono da leitura."""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Reads the object the API answered; the JSON names are the API's, the attributes snake_case."""
+        return cls(
+            camera_id=data.get("camera_id"),
+            captured_at=data["captured_at"],
+            confidence=float(data["confidence"]),
+            event=data["event"],
+            id=data["id"],
+            plate=data["plate"],
+            source=data["source"],
+            tenant_id=data["tenant_id"],
+        )
+
+
+@dataclass(frozen=True)
 class WebhookTest:
-    """Carga de webhook.test, enviada pelo botão Testar do painel."""
+    """WebhookTest is a resource of Alpr.sh's API."""
 
     event: Literal["webhook.test"]
     id: str
@@ -323,27 +358,31 @@ class PhotosDetectParams(TypedDict):
     """The body of photos:detect."""
 
     image: bytes
-    """A foto, JPEG ou PNG, até 10 MB e 8000 px."""
+    """A foto, JPEG ou PNG."""
+    image_mode: NotRequired[Literal["NONE"]]
+    """Só NONE é aceito."""
     lpr_confidence: NotRequired[float]
-    """Piso do detector, de 0 a 1."""
+    """Piso de confiança do detector de placas."""
     min_ocr_confidence: NotRequired[float]
-    """Piso da leitura, de 0 a 1."""
+    """Piso de confiança da leitura dos caracteres."""
 
 
 class PhotosOCRParams(TypedDict):
     """The body of photos:ocr."""
 
     image: bytes
-    """A foto, JPEG ou PNG, até 10 MB e 8000 px."""
+    """A imagem da placa já recortada, JPEG ou PNG."""
 
 
 class PhotosRecognizeParams(TypedDict):
     """The body of photos:recognize."""
 
     image: bytes
-    """A foto, JPEG ou PNG, até 10 MB e 8000 px."""
+    """A foto, JPEG ou PNG."""
+    image_mode: NotRequired[Literal["NONE"]]
+    """Só NONE é aceito."""
     lpr_confidence: NotRequired[float]
-    """Piso do detector, de 0 a 1."""
+    """Piso de confiança do detector de placas."""
     min_ocr_confidence: NotRequired[float]
-    """Piso da leitura, de 0 a 1."""
+    """Piso de confiança da leitura dos caracteres."""
 

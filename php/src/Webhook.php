@@ -96,7 +96,7 @@ final class Webhook
         return match (true) {
             in_array($event, AlertTriggeredWebhookEvent::EVENTS, true) => AlertTriggeredWebhookEvent::fromArray($data),
             in_array($event, RecognitionCreatedWebhookEvent::EVENTS, true) => RecognitionCreatedWebhookEvent::fromArray($data),
-            in_array($event, WebhookTestWebhookEvent::EVENTS, true) => WebhookTestWebhookEvent::fromArray($data),
+            in_array($event, TestWebhookEvent::EVENTS, true) => TestWebhookEvent::fromArray($data),
             default => new UnknownWebhookEvent($event, is_string($data['id'] ?? null) ? $data['id'] : '', $data, $body),
         };
     }

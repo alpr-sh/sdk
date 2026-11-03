@@ -31,7 +31,7 @@ sealed class WebhookEvent {
 
 /// The payload of the events
 /// `alert.triggered`,
-/// all with the fields of a [AlertTriggered].
+/// all with the fields of a [WebhookAlertTriggered].
 final class AlertTriggeredWebhookEvent extends WebhookEvent {
   const AlertTriggeredWebhookEvent({
     this.cameraId,
@@ -43,6 +43,7 @@ final class AlertTriggeredWebhookEvent extends WebhookEvent {
     required this.recognitionId,
     required this.ruleId,
     required this.ruleName,
+    this.skip,
     required this.tenantId,
   });
 
@@ -58,6 +59,7 @@ final class AlertTriggeredWebhookEvent extends WebhookEvent {
       recognitionId: json['recognition_id'] as String,
       ruleId: json['rule_id'] as String,
       ruleName: json['rule_name'] as String,
+      skip: readOptional(json['skip'], (value) => readList(value, readString)),
       tenantId: json['tenant_id'] as String,
     );
   }
@@ -67,33 +69,42 @@ final class AlertTriggeredWebhookEvent extends WebhookEvent {
     'alert.triggered',
   };
 
+  /// Ausente se a leitura não veio de uma câmera.
   final String? cameraId;
 
   final String capturedAt;
 
+  /// De 0 a 1.
   final double confidence;
 
   /// One of `alert.triggered`.
   @override
   final String event;
 
+  /// O id do disparo.
   @override
   final String id;
 
   final String plate;
 
+  /// A leitura que disparou o alerta.
   final String recognitionId;
 
   final String ruleId;
 
   final String ruleName;
 
+  /// Os destinos que as listas de permitidos e de bloqueados excluíram deste
+  /// disparo (internal, channel:&lt;id&gt;, partner:&lt;id&gt;). Presente só
+  /// quando algum foi excluído; é informação, não há o que fazer com ela.
+  final List<String>? skip;
+
   final String tenantId;
 }
 
 /// The payload of the events
 /// `recognition.created`,
-/// all with the fields of a [RecognitionCreated].
+/// all with the fields of a [WebhookRecognitionCreated].
 final class RecognitionCreatedWebhookEvent extends WebhookEvent {
   const RecognitionCreatedWebhookEvent({
     this.cameraId,
@@ -125,32 +136,40 @@ final class RecognitionCreatedWebhookEvent extends WebhookEvent {
     'recognition.created',
   };
 
+  /// Ausente numa leitura enviada por foto.
   final String? cameraId;
 
+  /// UTC, com fração de segundo.
   final String capturedAt;
 
+  /// De 0 a 1 (na API de chave, conf vai de 0 a 100).
   final double confidence;
 
   /// One of `recognition.created`.
   @override
   final String event;
 
+  /// O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET
+  /// /api/v1/detections/{id}/image.
   @override
   final String id;
 
   final String plate;
 
+  /// camera: lida por uma câmera; api: enviada por foto.
+  ///
   /// One of `camera`, `api`.
   final String source;
 
+  /// O espaço de trabalho dono da leitura.
   final String tenantId;
 }
 
 /// The payload of the events
 /// `webhook.test`,
 /// all with the fields of a [WebhookTest].
-final class WebhookTestWebhookEvent extends WebhookEvent {
-  const WebhookTestWebhookEvent({
+final class TestWebhookEvent extends WebhookEvent {
+  const TestWebhookEvent({
     required this.event,
     required this.id,
     required this.sentAt,
@@ -158,8 +177,8 @@ final class WebhookTestWebhookEvent extends WebhookEvent {
   });
 
   /// The payload of a body already known to be one of these events.
-  factory WebhookTestWebhookEvent.fromJson(Map<String, Object?> json) {
-    return WebhookTestWebhookEvent(
+  factory TestWebhookEvent.fromJson(Map<String, Object?> json) {
+    return TestWebhookEvent(
       event: json['event'] as String,
       id: json['id'] as String,
       sentAt: json['sent_at'] as String,
@@ -337,7 +356,7 @@ WebhookEvent parseWebhookEvent(List<int> raw) {
       case 'recognition.created':
         return RecognitionCreatedWebhookEvent.fromJson(json);
       case 'webhook.test':
-        return WebhookTestWebhookEvent.fromJson(json);
+        return TestWebhookEvent.fromJson(json);
     }
   } on TypeError {
     throw FormatException('alpr: the webhook body is not a $event event');

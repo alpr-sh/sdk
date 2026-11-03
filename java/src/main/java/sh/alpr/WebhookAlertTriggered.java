@@ -5,8 +5,8 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Carga de alert.triggered: a regra que disparou e a leitura que a disparou. */
-public final class AlertTriggered {
+/** WebhookAlertTriggered is a resource of Alpr.sh's API. */
+public final class WebhookAlertTriggered {
     /** A value of {@link #getEvent()}. */
     public static final String EVENT_ALERT_TRIGGERED = "alert.triggered";
 
@@ -19,9 +19,10 @@ public final class AlertTriggered {
     private final String recognitionId;
     private final String ruleId;
     private final String ruleName;
+    private final List<String> skip;
     private final String tenantId;
 
-    AlertTriggered(String cameraId, String capturedAt, double confidence, String event, String id, String plate, String recognitionId, String ruleId, String ruleName, String tenantId) {
+    WebhookAlertTriggered(String cameraId, String capturedAt, double confidence, String event, String id, String plate, String recognitionId, String ruleId, String ruleName, List<String> skip, String tenantId) {
         this.cameraId = cameraId;
         this.capturedAt = capturedAt;
         this.confidence = confidence;
@@ -31,11 +32,12 @@ public final class AlertTriggered {
         this.recognitionId = recognitionId;
         this.ruleId = ruleId;
         this.ruleName = ruleName;
+        this.skip = skip;
         this.tenantId = tenantId;
     }
 
-    static AlertTriggered fromJson(Map<String, Object> data) {
-        return new AlertTriggered(
+    static WebhookAlertTriggered fromJson(Map<String, Object> data) {
+        return new WebhookAlertTriggered(
                 Json.optional(data, "camera_id", Json::asString),
                 Json.required(data, "captured_at", Json::asString),
                 Json.required(data, "confidence", Json::asDouble),
@@ -45,10 +47,11 @@ public final class AlertTriggered {
                 Json.required(data, "recognition_id", Json::asString),
                 Json.required(data, "rule_id", Json::asString),
                 Json.required(data, "rule_name", Json::asString),
+                Json.optional(data, "skip", Json.list(Json::asString)),
                 Json.required(data, "tenant_id", Json::asString));
     }
 
-    /** @return the API's {@code camera_id} (null when the API sends none) */
+    /** @return Ausente se a leitura não veio de uma câmera. (null when the API sends none) */
     public String getCameraId() {
         return cameraId;
     }
@@ -58,7 +61,7 @@ public final class AlertTriggered {
         return capturedAt;
     }
 
-    /** @return the API's {@code confidence} */
+    /** @return De 0 a 1. */
     public double getConfidence() {
         return confidence;
     }
@@ -68,7 +71,7 @@ public final class AlertTriggered {
         return event;
     }
 
-    /** @return the API's {@code id} */
+    /** @return O id do disparo. */
     public String getId() {
         return id;
     }
@@ -78,7 +81,7 @@ public final class AlertTriggered {
         return plate;
     }
 
-    /** @return the API's {@code recognition_id} */
+    /** @return A leitura que disparou o alerta. */
     public String getRecognitionId() {
         return recognitionId;
     }
@@ -93,6 +96,11 @@ public final class AlertTriggered {
         return ruleName;
     }
 
+    /** @return Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:&lt;id&gt;, partner:&lt;id&gt;). Presente só quando algum foi excluído; é informação, não há o que fazer com ela. (null when the API sends none) */
+    public List<String> getSkip() {
+        return skip;
+    }
+
     /** @return the API's {@code tenant_id} */
     public String getTenantId() {
         return tenantId;
@@ -100,6 +108,6 @@ public final class AlertTriggered {
 
     @Override
     public String toString() {
-        return "AlertTriggered{" + "cameraId=" + cameraId + ", capturedAt=" + capturedAt + ", confidence=" + confidence + ", event=" + event + ", id=" + id + ", plate=" + plate + ", recognitionId=" + recognitionId + ", ruleId=" + ruleId + ", ruleName=" + ruleName + ", tenantId=" + tenantId + "}";
+        return "WebhookAlertTriggered{" + "cameraId=" + cameraId + ", capturedAt=" + capturedAt + ", confidence=" + confidence + ", event=" + event + ", id=" + id + ", plate=" + plate + ", recognitionId=" + recognitionId + ", ruleId=" + ruleId + ", ruleName=" + ruleName + ", skip=" + skip + ", tenantId=" + tenantId + "}";
     }
 }

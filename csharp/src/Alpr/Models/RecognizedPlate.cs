@@ -6,18 +6,21 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Uma placa lida na foto, com a caixa em pixels.</summary>
+/// <summary>RecognizedPlate is a resource of Alpr.sh's API.</summary>
 public sealed record RecognizedPlate
 {
-    /// <summary>Confiança de 0 a 1 de cada caractere, separadas por vírgula.</summary>
+    /// <summary>A value of <see cref="PlateType"/>.</summary>
+    public const string PlateTypeCar = "car";
+
+    /// <summary>Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula ("0.99;0.98").</summary>
     [JsonPropertyName("charConfs")]
     public required string CharConfs { get; init; }
 
-    /// <summary>Confiança da leitura, de 0 a 100.</summary>
+    /// <summary>Confiança da placa, de 0 a 100, com uma casa.</summary>
     [JsonPropertyName("conf")]
     public required double Conf { get; init; }
 
-    /// <summary>The API's <c>coordinateBottom</c>.</summary>
+    /// <summary>Pixels da foto enviada.</summary>
     [JsonPropertyName("coordinateBottom")]
     public required long CoordinateBottom { get; init; }
 
@@ -33,19 +36,19 @@ public sealed record RecognizedPlate
     [JsonPropertyName("coordinateTop")]
     public required long CoordinateTop { get; init; }
 
-    /// <summary>The API's <c>createdAt</c>.</summary>
+    /// <summary>Igual a time.</summary>
     [JsonPropertyName("createdAt")]
     public required string CreatedAt { get; init; }
 
-    /// <summary>The API's <c>plate</c>.</summary>
+    /// <summary>Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul).</summary>
     [JsonPropertyName("plate")]
     public required string Plate { get; init; }
 
-    /// <summary>The API's <c>plateType</c>.</summary>
+    /// <summary>Sempre car; a API não informa país nem formato.</summary>
     [JsonPropertyName("plateType")]
     public required string PlateType { get; init; }
 
-    /// <summary>The API's <c>time</c>.</summary>
+    /// <summary>Instante da leitura, com o deslocamento do fuso do Alpr.sh.</summary>
     [JsonPropertyName("time")]
     public required string Time { get; init; }
 }

@@ -5,74 +5,7 @@ import 'dart:typed_data';
 import 'json.dart';
 import 'upload.dart';
 
-/// Carga de alert.triggered: a regra que disparou e a leitura que a disparou.
-final class AlertTriggered {
-  const AlertTriggered({
-    this.cameraId,
-    required this.capturedAt,
-    required this.confidence,
-    required this.event,
-    required this.id,
-    required this.plate,
-    required this.recognitionId,
-    required this.ruleId,
-    required this.ruleName,
-    required this.tenantId,
-  });
-
-  /// The AlertTriggered the API's JSON describes.
-  factory AlertTriggered.fromJson(Map<String, Object?> json) {
-    return AlertTriggered(
-      cameraId: json['camera_id'] as String?,
-      capturedAt: json['captured_at'] as String,
-      confidence: readDouble(json['confidence']),
-      event: json['event'] as String,
-      id: json['id'] as String,
-      plate: json['plate'] as String,
-      recognitionId: json['recognition_id'] as String,
-      ruleId: json['rule_id'] as String,
-      ruleName: json['rule_name'] as String,
-      tenantId: json['tenant_id'] as String,
-    );
-  }
-
-  final String? cameraId;
-
-  final String capturedAt;
-
-  final double confidence;
-
-  /// One of `alert.triggered`.
-  final String event;
-
-  final String id;
-
-  final String plate;
-
-  final String recognitionId;
-
-  final String ruleId;
-
-  final String ruleName;
-
-  final String tenantId;
-
-  /// The JSON the API answers.
-  Map<String, Object?> toJson() => {
-    'camera_id': ?cameraId,
-    'captured_at': capturedAt,
-    'confidence': confidence,
-    'event': event,
-    'id': id,
-    'plate': plate,
-    'recognition_id': recognitionId,
-    'rule_id': ruleId,
-    'rule_name': ruleName,
-    'tenant_id': tenantId,
-  };
-}
-
-/// Uma câmera do espaço, sem endereço nem credenciais.
+/// Camera is a resource of Alpr.sh's API.
 final class Camera {
   const Camera({
     required this.createdAt,
@@ -106,12 +39,18 @@ final class Camera {
 
   final String id;
 
+  /// O endereço da câmera como texto; vazio se não foi informado.
   final String location;
 
   final String name;
 
+  /// Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
+  ///
+  /// One of `rtsp`, `rtmp`, `hls`, `http`, `hikconnect`, `hikcloud`,
+  /// `rtmppush`.
   final String protocol;
 
+  /// Nulo quando a câmera lê a imagem inteira.
   final ReadingArea? readingArea;
 
   /// The JSON the API answers.
@@ -126,46 +65,7 @@ final class Camera {
   };
 }
 
-/// Onde estão as placas de uma foto.
-final class DetectResult {
-  const DetectResult({
-    required this.imageHeight,
-    required this.imageWidth,
-    required this.plates,
-    required this.processingTimeMs,
-  });
-
-  /// The DetectResult the API's JSON describes.
-  factory DetectResult.fromJson(Map<String, Object?> json) {
-    return DetectResult(
-      imageHeight: json['imageHeight'] as int,
-      imageWidth: json['imageWidth'] as int,
-      plates: readList(
-        json['plates'],
-        (value) => DetectedPlate.fromJson(readObject(value)),
-      ),
-      processingTimeMs: json['processingTimeMs'] as int,
-    );
-  }
-
-  final int imageHeight;
-
-  final int imageWidth;
-
-  final List<DetectedPlate> plates;
-
-  final int processingTimeMs;
-
-  /// The JSON the API answers.
-  Map<String, Object?> toJson() => {
-    'imageHeight': imageHeight,
-    'imageWidth': imageWidth,
-    'plates': plates.map((item) => item.toJson()).toList(),
-    'processingTimeMs': processingTimeMs,
-  };
-}
-
-/// Uma placa localizada na foto, sem o texto.
+/// DetectedPlate is a resource of Alpr.sh's API.
 final class DetectedPlate {
   const DetectedPlate({
     required this.conf,
@@ -192,6 +92,7 @@ final class DetectedPlate {
     );
   }
 
+  /// Confiança do detector, de 0 a 100, com uma casa.
   final double conf;
 
   final int coordinateBottom;
@@ -204,6 +105,7 @@ final class DetectedPlate {
 
   final String createdAt;
 
+  /// One of `car`.
   final String plateType;
 
   final String time;
@@ -221,17 +123,17 @@ final class DetectedPlate {
   };
 }
 
-/// O link temporário da imagem de uma leitura.
-final class DetectionImage {
-  const DetectionImage({
+/// DetectionImageLink is a resource of Alpr.sh's API.
+final class DetectionImageLink {
+  const DetectionImageLink({
     required this.detectionId,
     required this.expiresIn,
     required this.imageUrl,
   });
 
-  /// The DetectionImage the API's JSON describes.
-  factory DetectionImage.fromJson(Map<String, Object?> json) {
-    return DetectionImage(
+  /// The DetectionImageLink the API's JSON describes.
+  factory DetectionImageLink.fromJson(Map<String, Object?> json) {
+    return DetectionImageLink(
       detectionId: json['detectionId'] as String,
       expiresIn: json['expiresIn'] as int,
       imageUrl: json['imageUrl'] as String,
@@ -240,9 +142,11 @@ final class DetectionImage {
 
   final String detectionId;
 
-  /// Segundos de validade do link.
+  /// Segundos de validade do link (300).
   final int expiresIn;
 
+  /// Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado;
+  /// abra-o como veio.
   final String imageUrl;
 
   /// The JSON the API answers.
@@ -253,44 +157,90 @@ final class DetectionImage {
   };
 }
 
-/// A placa lida de uma imagem já recortada.
-final class OcrResult {
-  const OcrResult({
-    required this.confidence,
-    required this.creditsRemaining,
-    this.detectionId,
-    required this.latencyMs,
-    required this.plate,
+/// PhotoDetection is a resource of Alpr.sh's API.
+final class PhotoDetection {
+  const PhotoDetection({
+    required this.imageHeight,
+    required this.imageWidth,
+    required this.plates,
+    required this.processingTimeMs,
   });
 
-  /// The OcrResult the API's JSON describes.
-  factory OcrResult.fromJson(Map<String, Object?> json) {
-    return OcrResult(
-      confidence: readDouble(json['confidence']),
-      creditsRemaining: json['creditsRemaining'] as int,
-      detectionId: json['detectionId'] as String?,
-      latencyMs: json['latencyMs'] as int,
-      plate: json['plate'] as String,
+  /// The PhotoDetection the API's JSON describes.
+  factory PhotoDetection.fromJson(Map<String, Object?> json) {
+    return PhotoDetection(
+      imageHeight: json['imageHeight'] as int,
+      imageWidth: json['imageWidth'] as int,
+      plates: readList(
+        json['plates'],
+        (value) => DetectedPlate.fromJson(readObject(value)),
+      ),
+      processingTimeMs: json['processingTimeMs'] as int,
     );
   }
 
-  final double confidence;
+  final int imageHeight;
 
-  final int creditsRemaining;
+  final int imageWidth;
 
-  final String? detectionId;
+  /// Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro.
+  /// Sem placa, [].
+  final List<DetectedPlate> plates;
 
-  final int latencyMs;
-
-  final String plate;
+  final int processingTimeMs;
 
   /// The JSON the API answers.
   Map<String, Object?> toJson() => {
-    'confidence': confidence,
+    'imageHeight': imageHeight,
+    'imageWidth': imageWidth,
+    'plates': plates.map((item) => item.toJson()).toList(),
+    'processingTimeMs': processingTimeMs,
+  };
+}
+
+/// PhotoRecognition is a resource of Alpr.sh's API.
+final class PhotoRecognition {
+  const PhotoRecognition({
+    required this.creditsRemaining,
+    required this.imageHeight,
+    required this.imageWidth,
+    required this.plates,
+    required this.processingTimeMs,
+  });
+
+  /// The PhotoRecognition the API's JSON describes.
+  factory PhotoRecognition.fromJson(Map<String, Object?> json) {
+    return PhotoRecognition(
+      creditsRemaining: json['creditsRemaining'] as int,
+      imageHeight: json['imageHeight'] as int,
+      imageWidth: json['imageWidth'] as int,
+      plates: readList(
+        json['plates'],
+        (value) => RecognizedPlate.fromJson(readObject(value)),
+      ),
+      processingTimeMs: json['processingTimeMs'] as int,
+    );
+  }
+
+  /// Créditos que sobraram depois desta leitura.
+  final int creditsRemaining;
+
+  final int imageHeight;
+
+  final int imageWidth;
+
+  /// Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, [].
+  final List<RecognizedPlate> plates;
+
+  final int processingTimeMs;
+
+  /// The JSON the API answers.
+  Map<String, Object?> toJson() => {
     'creditsRemaining': creditsRemaining,
-    'detectionId': detectionId,
-    'latencyMs': latencyMs,
-    'plate': plate,
+    'imageHeight': imageHeight,
+    'imageWidth': imageWidth,
+    'plates': plates.map((item) => item.toJson()).toList(),
+    'processingTimeMs': processingTimeMs,
   };
 }
 
@@ -298,17 +248,23 @@ final class OcrResult {
 final class PhotosDetectParams {
   const PhotosDetectParams({
     required this.image,
+    this.imageMode,
     this.lprConfidence,
     this.minOcrConfidence,
   });
 
-  /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+  /// A foto, JPEG ou PNG.
   final Uint8List image;
 
-  /// Piso do detector, de 0 a 1.
+  /// Só NONE é aceito.
+  ///
+  /// One of `NONE`.
+  final String? imageMode;
+
+  /// Piso de confiança do detector de placas.
   final double? lprConfidence;
 
-  /// Piso da leitura, de 0 a 1.
+  /// Piso de confiança da leitura dos caracteres.
   final double? minOcrConfidence;
 
   /// The multipart/form-data body the API takes; a field left null is left
@@ -316,6 +272,9 @@ final class PhotosDetectParams {
   MultipartForm toForm() {
     final form = MultipartForm();
     form.file('image', image);
+    if (imageMode case final value?) {
+      form.text('image_mode', value);
+    }
     if (lprConfidence case final value?) {
       form.text('lpr_confidence', formatNumber(value));
     }
@@ -332,7 +291,7 @@ final class PhotosOCRParams {
     required this.image,
   });
 
-  /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+  /// A imagem da placa já recortada, JPEG ou PNG.
   final Uint8List image;
 
   /// The multipart/form-data body the API takes; a field left null is left
@@ -348,17 +307,23 @@ final class PhotosOCRParams {
 final class PhotosRecognizeParams {
   const PhotosRecognizeParams({
     required this.image,
+    this.imageMode,
     this.lprConfidence,
     this.minOcrConfidence,
   });
 
-  /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+  /// A foto, JPEG ou PNG.
   final Uint8List image;
 
-  /// Piso do detector, de 0 a 1.
+  /// Só NONE é aceito.
+  ///
+  /// One of `NONE`.
+  final String? imageMode;
+
+  /// Piso de confiança do detector de placas.
   final double? lprConfidence;
 
-  /// Piso da leitura, de 0 a 1.
+  /// Piso de confiança da leitura dos caracteres.
   final double? minOcrConfidence;
 
   /// The multipart/form-data body the API takes; a field left null is left
@@ -366,6 +331,9 @@ final class PhotosRecognizeParams {
   MultipartForm toForm() {
     final form = MultipartForm();
     form.file('image', image);
+    if (imageMode case final value?) {
+      form.text('image_mode', value);
+    }
     if (lprConfidence case final value?) {
       form.text('lpr_confidence', formatNumber(value));
     }
@@ -376,75 +344,119 @@ final class PhotosRecognizeParams {
   }
 }
 
-/// A área de leitura da câmera: placas fora do polígono são ignoradas.
+/// PlateReading is a resource of Alpr.sh's API.
+final class PlateReading {
+  const PlateReading({
+    required this.confidence,
+    required this.creditsRemaining,
+    this.detectionId,
+    required this.latencyMs,
+    required this.plate,
+  });
+
+  /// The PlateReading the API's JSON describes.
+  factory PlateReading.fromJson(Map<String, Object?> json) {
+    return PlateReading(
+      confidence: readDouble(json['confidence']),
+      creditsRemaining: json['creditsRemaining'] as int,
+      detectionId: json['detectionId'] as String?,
+      latencyMs: json['latencyMs'] as int,
+      plate: json['plate'] as String,
+    );
+  }
+
+  /// Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai
+  /// de 0 a 100).
+  final double confidence;
+
+  /// Créditos que sobraram depois desta leitura.
+  final int creditsRemaining;
+
+  /// Hoje sempre nulo: a leitura de uma placa recortada não é guardada.
+  final String? detectionId;
+
+  final int latencyMs;
+
+  /// O texto lido, sem hífen, maiúsculo; não é validado pelo formato
+  /// brasileiro.
+  final String plate;
+
+  /// The JSON the API answers.
+  Map<String, Object?> toJson() => {
+    'confidence': confidence,
+    'creditsRemaining': creditsRemaining,
+    'detectionId': detectionId,
+    'latencyMs': latencyMs,
+    'plate': plate,
+  };
+}
+
+/// ReadingArea is a resource of Alpr.sh's API.
 final class ReadingArea {
   const ReadingArea({
-    this.box,
-    this.points,
+    required this.box,
+    required this.points,
   });
 
   /// The ReadingArea the API's JSON describes.
   factory ReadingArea.fromJson(Map<String, Object?> json) {
     return ReadingArea(
-      box: readOptional(
-        json['box'],
-        (value) => ReadingBox.fromJson(readObject(value)),
-      ),
-      points: readOptional(
-        json['points'],
-        (value) => readList(value, (value) => readList(value, readDouble)),
-      ),
+      box: ReadingAreaBox.fromJson(readObject(json['box'])),
+      points: readList(json['points'], (value) => readList(value, readDouble)),
     );
   }
 
-  final ReadingBox? box;
+  /// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+  final ReadingAreaBox box;
 
-  final List<List<double>>? points;
+  /// Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um
+  /// retângulo traz os quatro cantos. Placas fora dele são ignoradas.
+  final List<List<double>> points;
 
   /// The JSON the API answers.
   Map<String, Object?> toJson() => {
-    'box': ?box?.toJson(),
-    'points': ?points,
+    'box': box.toJson(),
+    'points': points,
   };
 }
 
-/// A caixa envolvente da área de leitura, em frações da imagem.
-final class ReadingBox {
-  const ReadingBox({
-    this.height,
-    this.width,
-    this.x,
-    this.y,
+/// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+final class ReadingAreaBox {
+  const ReadingAreaBox({
+    required this.height,
+    required this.width,
+    required this.x,
+    required this.y,
   });
 
-  /// The ReadingBox the API's JSON describes.
-  factory ReadingBox.fromJson(Map<String, Object?> json) {
-    return ReadingBox(
-      height: readOptional(json['height'], readDouble),
-      width: readOptional(json['width'], readDouble),
-      x: readOptional(json['x'], readDouble),
-      y: readOptional(json['y'], readDouble),
+  /// The ReadingAreaBox the API's JSON describes.
+  factory ReadingAreaBox.fromJson(Map<String, Object?> json) {
+    return ReadingAreaBox(
+      height: readDouble(json['height']),
+      width: readDouble(json['width']),
+      x: readDouble(json['x']),
+      y: readDouble(json['y']),
     );
   }
 
-  final double? height;
+  final double height;
 
-  final double? width;
+  final double width;
 
-  final double? x;
+  final double x;
 
-  final double? y;
+  final double y;
 
   /// The JSON the API answers.
   Map<String, Object?> toJson() => {
-    'height': ?height,
-    'width': ?width,
-    'x': ?x,
-    'y': ?y,
+    'height': height,
+    'width': width,
+    'x': x,
+    'y': y,
   };
 }
 
-/// Uma leitura de placa, de uma câmera ou da API por foto.
+/// Recognition is a resource of Alpr.sh's API.
 final class Recognition {
   const Recognition({
     this.cameraId,
@@ -467,17 +479,21 @@ final class Recognition {
     );
   }
 
+  /// Nulo numa leitura feita pela API por foto.
   final String? cameraId;
 
+  /// Com o deslocamento do fuso do Alpr.sh.
   final String capturedAt;
 
-  /// Confiança da leitura, de 0 a 100.
+  /// De 0 a 100, com uma casa.
   final double conf;
 
   final String id;
 
   final String plate;
 
+  /// camera: lida por uma câmera; api: enviada por foto.
+  ///
   /// One of `camera`, `api`.
   final String source;
 
@@ -492,109 +508,7 @@ final class Recognition {
   };
 }
 
-/// Carga de recognition.created: os fatos no instante da leitura.
-final class RecognitionCreated {
-  const RecognitionCreated({
-    this.cameraId,
-    required this.capturedAt,
-    required this.confidence,
-    required this.event,
-    required this.id,
-    required this.plate,
-    required this.source,
-    required this.tenantId,
-  });
-
-  /// The RecognitionCreated the API's JSON describes.
-  factory RecognitionCreated.fromJson(Map<String, Object?> json) {
-    return RecognitionCreated(
-      cameraId: json['camera_id'] as String?,
-      capturedAt: json['captured_at'] as String,
-      confidence: readDouble(json['confidence']),
-      event: json['event'] as String,
-      id: json['id'] as String,
-      plate: json['plate'] as String,
-      source: json['source'] as String,
-      tenantId: json['tenant_id'] as String,
-    );
-  }
-
-  final String? cameraId;
-
-  final String capturedAt;
-
-  final double confidence;
-
-  /// One of `recognition.created`.
-  final String event;
-
-  final String id;
-
-  final String plate;
-
-  /// One of `camera`, `api`.
-  final String source;
-
-  final String tenantId;
-
-  /// The JSON the API answers.
-  Map<String, Object?> toJson() => {
-    'camera_id': ?cameraId,
-    'captured_at': capturedAt,
-    'confidence': confidence,
-    'event': event,
-    'id': id,
-    'plate': plate,
-    'source': source,
-    'tenant_id': tenantId,
-  };
-}
-
-/// O resultado da leitura de uma foto. Sem placa, plates é [].
-final class RecognizeResult {
-  const RecognizeResult({
-    required this.creditsRemaining,
-    required this.imageHeight,
-    required this.imageWidth,
-    required this.plates,
-    required this.processingTimeMs,
-  });
-
-  /// The RecognizeResult the API's JSON describes.
-  factory RecognizeResult.fromJson(Map<String, Object?> json) {
-    return RecognizeResult(
-      creditsRemaining: json['creditsRemaining'] as int,
-      imageHeight: json['imageHeight'] as int,
-      imageWidth: json['imageWidth'] as int,
-      plates: readList(
-        json['plates'],
-        (value) => RecognizedPlate.fromJson(readObject(value)),
-      ),
-      processingTimeMs: json['processingTimeMs'] as int,
-    );
-  }
-
-  final int creditsRemaining;
-
-  final int imageHeight;
-
-  final int imageWidth;
-
-  final List<RecognizedPlate> plates;
-
-  final int processingTimeMs;
-
-  /// The JSON the API answers.
-  Map<String, Object?> toJson() => {
-    'creditsRemaining': creditsRemaining,
-    'imageHeight': imageHeight,
-    'imageWidth': imageWidth,
-    'plates': plates.map((item) => item.toJson()).toList(),
-    'processingTimeMs': processingTimeMs,
-  };
-}
-
-/// Uma placa lida na foto, com a caixa em pixels.
+/// RecognizedPlate is a resource of Alpr.sh's API.
 final class RecognizedPlate {
   const RecognizedPlate({
     required this.charConfs,
@@ -625,12 +539,14 @@ final class RecognizedPlate {
     );
   }
 
-  /// Confiança de 0 a 1 de cada caractere, separadas por vírgula.
+  /// Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto
+  /// e vírgula ("0.99;0.98").
   final String charConfs;
 
-  /// Confiança da leitura, de 0 a 100.
+  /// Confiança da placa, de 0 a 100, com uma casa.
   final double conf;
 
+  /// Pixels da foto enviada.
   final int coordinateBottom;
 
   final int coordinateLeft;
@@ -639,12 +555,18 @@ final class RecognizedPlate {
 
   final int coordinateTop;
 
+  /// Igual a time.
   final String createdAt;
 
+  /// Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul).
   final String plate;
 
+  /// Sempre car; a API não informa país nem formato.
+  ///
+  /// One of `car`.
   final String plateType;
 
+  /// Instante da leitura, com o deslocamento do fuso do Alpr.sh.
   final String time;
 
   /// The JSON the API answers.
@@ -662,7 +584,152 @@ final class RecognizedPlate {
   };
 }
 
-/// Carga de webhook.test, enviada pelo botão Testar do painel.
+/// WebhookAlertTriggered is a resource of Alpr.sh's API.
+final class WebhookAlertTriggered {
+  const WebhookAlertTriggered({
+    this.cameraId,
+    required this.capturedAt,
+    required this.confidence,
+    required this.event,
+    required this.id,
+    required this.plate,
+    required this.recognitionId,
+    required this.ruleId,
+    required this.ruleName,
+    this.skip,
+    required this.tenantId,
+  });
+
+  /// The WebhookAlertTriggered the API's JSON describes.
+  factory WebhookAlertTriggered.fromJson(Map<String, Object?> json) {
+    return WebhookAlertTriggered(
+      cameraId: json['camera_id'] as String?,
+      capturedAt: json['captured_at'] as String,
+      confidence: readDouble(json['confidence']),
+      event: json['event'] as String,
+      id: json['id'] as String,
+      plate: json['plate'] as String,
+      recognitionId: json['recognition_id'] as String,
+      ruleId: json['rule_id'] as String,
+      ruleName: json['rule_name'] as String,
+      skip: readOptional(json['skip'], (value) => readList(value, readString)),
+      tenantId: json['tenant_id'] as String,
+    );
+  }
+
+  /// Ausente se a leitura não veio de uma câmera.
+  final String? cameraId;
+
+  final String capturedAt;
+
+  /// De 0 a 1.
+  final double confidence;
+
+  /// One of `alert.triggered`.
+  final String event;
+
+  /// O id do disparo.
+  final String id;
+
+  final String plate;
+
+  /// A leitura que disparou o alerta.
+  final String recognitionId;
+
+  final String ruleId;
+
+  final String ruleName;
+
+  /// Os destinos que as listas de permitidos e de bloqueados excluíram deste
+  /// disparo (internal, channel:&lt;id&gt;, partner:&lt;id&gt;). Presente só
+  /// quando algum foi excluído; é informação, não há o que fazer com ela.
+  final List<String>? skip;
+
+  final String tenantId;
+
+  /// The JSON the API answers.
+  Map<String, Object?> toJson() => {
+    'camera_id': ?cameraId,
+    'captured_at': capturedAt,
+    'confidence': confidence,
+    'event': event,
+    'id': id,
+    'plate': plate,
+    'recognition_id': recognitionId,
+    'rule_id': ruleId,
+    'rule_name': ruleName,
+    'skip': ?skip,
+    'tenant_id': tenantId,
+  };
+}
+
+/// WebhookRecognitionCreated is a resource of Alpr.sh's API.
+final class WebhookRecognitionCreated {
+  const WebhookRecognitionCreated({
+    this.cameraId,
+    required this.capturedAt,
+    required this.confidence,
+    required this.event,
+    required this.id,
+    required this.plate,
+    required this.source,
+    required this.tenantId,
+  });
+
+  /// The WebhookRecognitionCreated the API's JSON describes.
+  factory WebhookRecognitionCreated.fromJson(Map<String, Object?> json) {
+    return WebhookRecognitionCreated(
+      cameraId: json['camera_id'] as String?,
+      capturedAt: json['captured_at'] as String,
+      confidence: readDouble(json['confidence']),
+      event: json['event'] as String,
+      id: json['id'] as String,
+      plate: json['plate'] as String,
+      source: json['source'] as String,
+      tenantId: json['tenant_id'] as String,
+    );
+  }
+
+  /// Ausente numa leitura enviada por foto.
+  final String? cameraId;
+
+  /// UTC, com fração de segundo.
+  final String capturedAt;
+
+  /// De 0 a 1 (na API de chave, conf vai de 0 a 100).
+  final double confidence;
+
+  /// One of `recognition.created`.
+  final String event;
+
+  /// O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET
+  /// /api/v1/detections/{id}/image.
+  final String id;
+
+  final String plate;
+
+  /// camera: lida por uma câmera; api: enviada por foto.
+  ///
+  /// One of `camera`, `api`.
+  final String source;
+
+  /// O espaço de trabalho dono da leitura.
+  final String tenantId;
+
+  /// The JSON the API answers.
+  Map<String, Object?> toJson() => {
+    'camera_id': ?cameraId,
+    'captured_at': capturedAt,
+    'confidence': confidence,
+    'event': event,
+    'id': id,
+    'plate': plate,
+    'source': source,
+    'tenant_id': tenantId,
+  };
+}
+
+/// WebhookTest is a resource of Alpr.sh's API.
 final class WebhookTest {
   const WebhookTest({
     required this.event,

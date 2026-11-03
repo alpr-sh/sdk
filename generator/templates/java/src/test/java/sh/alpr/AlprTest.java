@@ -143,7 +143,7 @@ class AlprTest {
     @Test
     void aPhotoGoesAsMultipart() {
         Recorder recorder = new Recorder(request -> ok(RECOGNIZED));
-        RecognizeResult result = client(recorder).photos().recognize(
+        PhotoRecognition result = client(recorder).photos().recognize(
                 PhotosService.RecognizeParams.builder().image(JPEG).lprConfidence(0.5).build());
         Transport.Request seen = recorder.seen.get(0);
         assertEquals("POST", seen.getMethod());
@@ -172,7 +172,7 @@ class AlprTest {
         };
         for (Object[] each : cases) {
             Recorder recorder = new Recorder(request -> ok("{\"imageHeight\":10,\"imageWidth\":20,\"plates\":[],\"processingTimeMs\":3}"));
-            DetectResult result = client(recorder).photos().detect(PhotosService.DetectParams.builder().image((byte[]) each[0]).build());
+            PhotoDetection result = client(recorder).photos().detect(PhotosService.DetectParams.builder().image((byte[]) each[0]).build());
             Transport.Request seen = recorder.seen.get(0);
             Part image = part(parts(seen.getHeaders().get("Content-Type"), seen.getBody()), "image");
             assertEquals(each[1], image.filename);
@@ -197,7 +197,7 @@ class AlprTest {
     @Test
     void aPlateImageIsReadByOcr() {
         Recorder recorder = new Recorder(request -> ok("{\"confidence\":0.91,\"creditsRemaining\":40,\"detectionId\":null,\"latencyMs\":12,\"plate\":\"ABC1234\"}"));
-        OcrResult result = client(recorder).photos().ocr(PhotosService.OcrParams.builder().image(PNG).build());
+        PlateReading result = client(recorder).photos().ocr(PhotosService.OcrParams.builder().image(PNG).build());
         assertEquals("/api/v1/ocr", URI.create(recorder.seen.get(0).getUrl()).getPath());
         assertEquals("ABC1234", result.getPlate());
         assertNull(result.getDetectionId());
@@ -207,7 +207,7 @@ class AlprTest {
     @Test
     void aDetectionImageIsALink() {
         Recorder recorder = new Recorder(request -> ok("{\"detectionId\":\"a/b\",\"expiresIn\":300,\"imageUrl\":\"https://alpr.sh/api/v1/detections/a/image/file?s=x\"}"));
-        DetectionImage image = client(recorder).detections().image("a/b");
+        DetectionImageLink image = client(recorder).recognitions().image("a/b");
         assertEquals("https://alpr.test/api/v1/detections/a%2Fb/image", recorder.seen.get(0).getUrl());
         assertEquals(300L, image.getExpiresIn());
         assertEquals("a/b", image.getDetectionId());
@@ -362,7 +362,7 @@ class AlprTest {
         server.start();
         try {
             Alpr alpr = Alpr.builder(KEY).baseUrl("http://127.0.0.1:" + server.getAddress().getPort()).build();
-            RecognizeResult result = alpr.photos().recognize(PhotosService.RecognizeParams.builder().image(PNG).build());
+            PhotoRecognition result = alpr.photos().recognize(PhotosService.RecognizeParams.builder().image(PNG).build());
             assertEquals("BRA2E19", result.getPlates().get(0).getPlate());
             AlprException redirected = assertThrows(AlprException.class, () -> alpr.cameras().list());
             assertEquals(302, redirected.getStatus());
@@ -478,7 +478,7 @@ class AlprTest {
         assertEquals("rec_1", alert.getRecognitionId());
         assertEquals("rule_1", alert.getRuleId());
 
-        WebhookTestWebhookEvent test = assertInstanceOf(WebhookTestWebhookEvent.class,
+        TestWebhookEvent test = assertInstanceOf(TestWebhookEvent.class,
                 Webhook.verify(NEW_SECRET, webhookHeaders("del_0003", SIGNED, TEST_NEW), bytes(TEST_BODY), NOW));
         assertEquals("webhook.test", test.getEvent());
         assertEquals("2026-10-22T12:00:00Z", test.getSentAt());

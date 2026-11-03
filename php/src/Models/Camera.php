@@ -6,16 +6,22 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Uma câmera do espaço, sem endereço nem credenciais. */
+/** Camera is a resource of Alpr.sh's API. */
 final class Camera
 {
     public function __construct(
         public readonly string $createdAt,
         public readonly bool $enabled,
         public readonly string $id,
+        /** O endereço da câmera como texto; vazio se não foi informado. */
         public readonly string $location,
         public readonly string $name,
+        /**
+         * Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
+         * @var 'rtsp'|'rtmp'|'hls'|'http'|'hikconnect'|'hikcloud'|'rtmppush'
+         */
         public readonly string $protocol,
+        /** Nulo quando a câmera lê a imagem inteira. */
         public readonly ?ReadingArea $readingArea,
     ) {
     }

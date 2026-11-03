@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import urlencode, urlsplit
 
 from ._errors import AlprError
-from ._services import CamerasService, DetectionsService, PhotosService, RecognitionsService
+from ._services import CamerasService, PhotosService, RecognitionsService
 from ._upload import Form
 from ._version import DEFAULT_BASE_URL, VERSION
 
@@ -74,7 +74,6 @@ class Alpr:
         self._timeout = timeout
         self._transport = transport or urllib_transport
         self.cameras = CamerasService(self)
-        self.detections = DetectionsService(self)
         self.photos = PhotosService(self)
         self.recognitions = RecognitionsService(self)
 

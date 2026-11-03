@@ -5,22 +5,27 @@
 module Alpr
   # The body of photos:detect.
   class PhotosDetectParams < Params
-    MEMBERS = %i[image lpr_confidence min_ocr_confidence].freeze
+    MEMBERS = %i[image image_mode lpr_confidence min_ocr_confidence].freeze
 
-    # A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    # A foto, JPEG ou PNG.
     # @return [String (the bytes)]
     attr_reader :image
 
-    # Piso do detector, de 0 a 1.
+    # Só NONE é aceito.
+    # @return [String ("NONE"), nil]
+    attr_reader :image_mode
+
+    # Piso de confiança do detector de placas.
     # @return [Float, nil]
     attr_reader :lpr_confidence
 
-    # Piso da leitura, de 0 a 1.
+    # Piso de confiança da leitura dos caracteres.
     # @return [Float, nil]
     attr_reader :min_ocr_confidence
 
-    def initialize(image:, lpr_confidence: nil, min_ocr_confidence: nil)
+    def initialize(image:, image_mode: nil, lpr_confidence: nil, min_ocr_confidence: nil)
       @image = image
+      @image_mode = image_mode
       @lpr_confidence = lpr_confidence
       @min_ocr_confidence = min_ocr_confidence
       freeze
@@ -31,6 +36,7 @@ module Alpr
     def to_form
       form = Form.new
       form.file("image", @image)
+      form.text("image_mode", @image_mode) unless @image_mode.nil?
       form.text("lpr_confidence", @lpr_confidence) unless @lpr_confidence.nil?
       form.text("min_ocr_confidence", @min_ocr_confidence) unless @min_ocr_confidence.nil?
       form
@@ -41,7 +47,7 @@ module Alpr
   class PhotosOCRParams < Params
     MEMBERS = %i[image].freeze
 
-    # A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    # A imagem da placa já recortada, JPEG ou PNG.
     # @return [String (the bytes)]
     attr_reader :image
 
@@ -61,22 +67,27 @@ module Alpr
 
   # The body of photos:recognize.
   class PhotosRecognizeParams < Params
-    MEMBERS = %i[image lpr_confidence min_ocr_confidence].freeze
+    MEMBERS = %i[image image_mode lpr_confidence min_ocr_confidence].freeze
 
-    # A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    # A foto, JPEG ou PNG.
     # @return [String (the bytes)]
     attr_reader :image
 
-    # Piso do detector, de 0 a 1.
+    # Só NONE é aceito.
+    # @return [String ("NONE"), nil]
+    attr_reader :image_mode
+
+    # Piso de confiança do detector de placas.
     # @return [Float, nil]
     attr_reader :lpr_confidence
 
-    # Piso da leitura, de 0 a 1.
+    # Piso de confiança da leitura dos caracteres.
     # @return [Float, nil]
     attr_reader :min_ocr_confidence
 
-    def initialize(image:, lpr_confidence: nil, min_ocr_confidence: nil)
+    def initialize(image:, image_mode: nil, lpr_confidence: nil, min_ocr_confidence: nil)
       @image = image
+      @image_mode = image_mode
       @lpr_confidence = lpr_confidence
       @min_ocr_confidence = min_ocr_confidence
       freeze
@@ -87,6 +98,7 @@ module Alpr
     def to_form
       form = Form.new
       form.file("image", @image)
+      form.text("image_mode", @image_mode) unless @image_mode.nil?
       form.text("lpr_confidence", @lpr_confidence) unless @lpr_confidence.nil?
       form.text("min_ocr_confidence", @min_ocr_confidence) unless @min_ocr_confidence.nil?
       form

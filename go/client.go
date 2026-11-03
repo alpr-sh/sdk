@@ -35,7 +35,6 @@ type Client struct {
 	// baseURLErr is why the base URL is refused, answered by every call.
 	baseURLErr   error
 	Cameras      *CamerasService
-	Detections   *DetectionsService
 	Photos       *PhotosService
 	Recognitions *RecognitionsService
 }

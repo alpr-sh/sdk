@@ -23,52 +23,44 @@ class CamerasService:
         return [models.Camera.from_dict(item) for item in data.get("data") or []]
 
 
-class DetectionsService:
-    """The API's detections."""
-
-    def __init__(self, client: Requester) -> None:
-        self._client = client
-
-    def image(self, id: str, *, api_key: str | None = None) -> models.DetectionImage:
-        """Imagem de uma leitura."""
-        data = self._client.request("GET", "/api/v1/detections/" + segment(id) + "/image", api_key=api_key)
-        return models.DetectionImage.from_dict(data)
-
-
 class PhotosService:
     """The API's photos."""
 
     def __init__(self, client: Requester) -> None:
         self._client = client
 
-    def detect(self, params: models.PhotosDetectParams, *, api_key: str | None = None) -> models.DetectResult:
+    def detect(self, params: models.PhotosDetectParams, *, api_key: str | None = None) -> models.PhotoDetection:
         """Localizar as placas de uma foto."""
         form = Form()
         form.file("image", params["image"])
+        if params.get("image_mode") is not None:
+            form.text("image_mode", params["image_mode"])
         if params.get("lpr_confidence") is not None:
             form.text("lpr_confidence", params["lpr_confidence"])
         if params.get("min_ocr_confidence") is not None:
             form.text("min_ocr_confidence", params["min_ocr_confidence"])
         data = self._client.request("POST", "/api/v1/detect", form=form, api_key=api_key)
-        return models.DetectResult.from_dict(data)
+        return models.PhotoDetection.from_dict(data)
 
-    def ocr(self, params: models.PhotosOCRParams, *, api_key: str | None = None) -> models.OcrResult:
+    def ocr(self, params: models.PhotosOCRParams, *, api_key: str | None = None) -> models.PlateReading:
         """Ler uma placa já recortada."""
         form = Form()
         form.file("image", params["image"])
         data = self._client.request("POST", "/api/v1/ocr", form=form, api_key=api_key)
-        return models.OcrResult.from_dict(data)
+        return models.PlateReading.from_dict(data)
 
-    def recognize(self, params: models.PhotosRecognizeParams, *, api_key: str | None = None) -> models.RecognizeResult:
+    def recognize(self, params: models.PhotosRecognizeParams, *, api_key: str | None = None) -> models.PhotoRecognition:
         """Ler as placas de uma foto."""
         form = Form()
         form.file("image", params["image"])
+        if params.get("image_mode") is not None:
+            form.text("image_mode", params["image_mode"])
         if params.get("lpr_confidence") is not None:
             form.text("lpr_confidence", params["lpr_confidence"])
         if params.get("min_ocr_confidence") is not None:
             form.text("min_ocr_confidence", params["min_ocr_confidence"])
         data = self._client.request("POST", "/api/v1/recognize", form=form, api_key=api_key)
-        return models.RecognizeResult.from_dict(data)
+        return models.PhotoRecognition.from_dict(data)
 
 
 class RecognitionsService:
@@ -76,6 +68,11 @@ class RecognitionsService:
 
     def __init__(self, client: Requester) -> None:
         self._client = client
+
+    def image(self, id: str, *, api_key: str | None = None) -> models.DetectionImageLink:
+        """Imagem de uma leitura."""
+        data = self._client.request("GET", "/api/v1/detections/" + segment(id) + "/image", api_key=api_key)
+        return models.DetectionImageLink.from_dict(data)
 
     def list(self, *, before: str | None = None, plate: str | None = None, camera: str | None = None, source: str | None = None, api_key: str | None = None) -> Page[models.Recognition]:
         """Listar as leituras. One page; ``list_iter`` walks every page.

@@ -21,12 +21,15 @@ final class PhotosService
     /**
      * Localizar as placas de uma foto.
      *
-     * @param array{image: string, lpr_confidence?: float, min_ocr_confidence?: float} $params image is the photo's bytes (JPEG or PNG), as file_get_contents reads them
+     * @param array{image: string, image_mode?: 'NONE', lpr_confidence?: float, min_ocr_confidence?: float} $params image is the photo's bytes (JPEG or PNG), as file_get_contents reads them
      */
-    public function detect(array $params, ?string $apiKey = null): Models\DetectResult
+    public function detect(array $params, ?string $apiKey = null): Models\PhotoDetection
     {
         $form = new Form();
         $form->file('image', $params['image']);
+        if (isset($params['image_mode'])) {
+            $form->text('image_mode', $params['image_mode']);
+        }
         if (isset($params['lpr_confidence'])) {
             $form->text('lpr_confidence', $params['lpr_confidence']);
         }
@@ -34,7 +37,7 @@ final class PhotosService
             $form->text('min_ocr_confidence', $params['min_ocr_confidence']);
         }
         $data = $this->client->request('POST', '/api/v1/detect', form: $form, apiKey: $apiKey);
-        return Models\DetectResult::fromArray($data);
+        return Models\PhotoDetection::fromArray($data);
     }
 
     /**
@@ -42,23 +45,26 @@ final class PhotosService
      *
      * @param array{image: string} $params image is the photo's bytes (JPEG or PNG), as file_get_contents reads them
      */
-    public function ocr(array $params, ?string $apiKey = null): Models\OcrResult
+    public function ocr(array $params, ?string $apiKey = null): Models\PlateReading
     {
         $form = new Form();
         $form->file('image', $params['image']);
         $data = $this->client->request('POST', '/api/v1/ocr', form: $form, apiKey: $apiKey);
-        return Models\OcrResult::fromArray($data);
+        return Models\PlateReading::fromArray($data);
     }
 
     /**
      * Ler as placas de uma foto.
      *
-     * @param array{image: string, lpr_confidence?: float, min_ocr_confidence?: float} $params image is the photo's bytes (JPEG or PNG), as file_get_contents reads them
+     * @param array{image: string, image_mode?: 'NONE', lpr_confidence?: float, min_ocr_confidence?: float} $params image is the photo's bytes (JPEG or PNG), as file_get_contents reads them
      */
-    public function recognize(array $params, ?string $apiKey = null): Models\RecognizeResult
+    public function recognize(array $params, ?string $apiKey = null): Models\PhotoRecognition
     {
         $form = new Form();
         $form->file('image', $params['image']);
+        if (isset($params['image_mode'])) {
+            $form->text('image_mode', $params['image_mode']);
+        }
         if (isset($params['lpr_confidence'])) {
             $form->text('lpr_confidence', $params['lpr_confidence']);
         }
@@ -66,7 +72,7 @@ final class PhotosService
             $form->text('min_ocr_confidence', $params['min_ocr_confidence']);
         }
         $data = $this->client->request('POST', '/api/v1/recognize', form: $form, apiKey: $apiKey);
-        return Models\RecognizeResult::fromArray($data);
+        return Models\PhotoRecognition::fromArray($data);
     }
 }
 

@@ -22,7 +22,7 @@ import java.util.Objects;
  *
  * <pre>{@code
  * Alpr alpr = new Alpr(System.getenv("ALPR_API_KEY"));
- * RecognizeResult result = alpr.photos().recognize(
+ * PhotoRecognition result = alpr.photos().recognize(
  *         PhotosService.RecognizeParams.builder().image(photo).build());
  * for (Recognition each : alpr.recognitions().listIter()) { … }
  * }</pre>
@@ -46,7 +46,6 @@ public final class Alpr {
     private final Duration timeout;
     private final Transport transport;
     private final CamerasService cameras;
-    private final DetectionsService detections;
     private final PhotosService photos;
     private final RecognitionsService recognitions;
 
@@ -66,7 +65,6 @@ public final class Alpr {
         this.timeout = builder.timeout;
         this.transport = builder.transport == null ? new HttpTransport() : builder.transport;
         this.cameras = new CamerasService(this);
-        this.detections = new DetectionsService(this);
         this.photos = new PhotosService(this);
         this.recognitions = new RecognitionsService(this);
     }
@@ -84,11 +82,6 @@ public final class Alpr {
     /** @return the API's cameras */
     public CamerasService cameras() {
         return cameras;
-    }
-
-    /** @return the API's detections */
-    public DetectionsService detections() {
-        return detections;
     }
 
     /** @return the API's photos */

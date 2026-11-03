@@ -141,7 +141,7 @@ defmodule AlprTest do
     assert %Alpr.Camera{
              id: "cam_2",
              reading_area: %Alpr.ReadingArea{
-               box: %Alpr.ReadingBox{x: 0.1, y: 0.2, width: 0.5, height: 0.5},
+               box: %Alpr.ReadingAreaBox{x: 0.1, y: 0.2, width: 0.5, height: 0.5},
                points: [[0.1, 0.2], [0.6, 0.2], [0.6, 0.7]]
              }
            } = second
@@ -196,7 +196,7 @@ defmodule AlprTest do
           {@png, "photo.png", "image/png"},
           {"not an image", "photo", "application/octet-stream"}
         ] do
-      assert {:ok, %Alpr.DetectResult{image_width: 20, plates: []}} =
+      assert {:ok, %Alpr.PhotoDetection{image_width: 20, plates: []}} =
                Alpr.Photos.detect(alpr, image: data)
 
       assert [seen] = requests()
@@ -231,7 +231,7 @@ defmodule AlprTest do
          []}
       end)
 
-    assert {:ok, %Alpr.OcrResult{plate: "ABC1234", detection_id: nil, confidence: 0.91}} =
+    assert {:ok, %Alpr.PlateReading{plate: "ABC1234", detection_id: nil, confidence: 0.91}} =
              Alpr.Photos.ocr(alpr, %Alpr.PhotosOCRParams{image: @png})
 
     assert [%{uri: %URI{path: "/api/v1/ocr"}}] = requests()
@@ -245,7 +245,7 @@ defmodule AlprTest do
          []}
       end)
 
-    assert {:ok, image} = Alpr.Detections.image(alpr, "a/b")
+    assert {:ok, image} = Alpr.Recognitions.image(alpr, "a/b")
     assert image.expires_in == 300
     assert image.detection_id == "a/b"
     assert String.starts_with?(image.image_url, "https://alpr.sh/")
@@ -618,7 +618,7 @@ defmodule AlprTest do
            } = alert
 
     assert {:ok,
-            %Alpr.WebhookTestWebhookEvent{event: "webhook.test", sent_at: "2026-10-22T12:00:00Z"}} =
+            %Alpr.TestWebhookEvent{event: "webhook.test", sent_at: "2026-10-22T12:00:00Z"}} =
              verify.("del_0003", @test_new, @test_body)
 
     assert {:ok, %Alpr.UnknownWebhookEvent{} = unknown} =

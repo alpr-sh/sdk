@@ -7,7 +7,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::de::Error as _;
 use sha2::Sha256;
 
-use crate::models::{AlertTriggered, RecognitionCreated, WebhookTest};
+use crate::models::{WebhookAlertTriggered, WebhookRecognitionCreated, WebhookTest};
 
 /// How far from now a webhook's timestamp may be.
 pub const WEBHOOK_TOLERANCE: Duration = Duration::from_secs(300);
@@ -18,15 +18,15 @@ const MAX_WEBHOOK_SIGNATURES: usize = 6;
 
 /// The payload of `alert.triggered`. The
 /// fields are the body's own, flat: there is no wrapper around them.
-pub type AlertTriggeredWebhookEvent = AlertTriggered;
+pub type AlertTriggeredWebhookEvent = WebhookAlertTriggered;
 
 /// The payload of `recognition.created`. The
 /// fields are the body's own, flat: there is no wrapper around them.
-pub type RecognitionCreatedWebhookEvent = RecognitionCreated;
+pub type RecognitionCreatedWebhookEvent = WebhookRecognitionCreated;
 
 /// The payload of `webhook.test`. The
 /// fields are the body's own, flat: there is no wrapper around them.
-pub type WebhookTestWebhookEvent = WebhookTest;
+pub type TestWebhookEvent = WebhookTest;
 
 /// An event of a name this SDK does not know yet, kept as it was sent.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,7 +55,7 @@ pub enum WebhookEvent {
     /// `recognition.created`.
     RecognitionCreated(RecognitionCreatedWebhookEvent),
     /// `webhook.test`.
-    WebhookTest(WebhookTestWebhookEvent),
+    Test(TestWebhookEvent),
     /// An event this SDK does not know yet.
     Unknown(UnknownWebhookEvent),
 }
@@ -66,7 +66,7 @@ impl WebhookEvent {
         match self {
             WebhookEvent::AlertTriggered(event) => event.event.as_str(),
             WebhookEvent::RecognitionCreated(event) => event.event.as_str(),
-            WebhookEvent::WebhookTest(event) => event.event.as_str(),
+            WebhookEvent::Test(event) => event.event.as_str(),
             WebhookEvent::Unknown(event) => &event.event,
         }
     }
@@ -77,7 +77,7 @@ impl WebhookEvent {
         match self {
             WebhookEvent::AlertTriggered(event) => &event.id,
             WebhookEvent::RecognitionCreated(event) => &event.id,
-            WebhookEvent::WebhookTest(event) => &event.id,
+            WebhookEvent::Test(event) => &event.id,
             WebhookEvent::Unknown(event) => &event.id,
         }
     }
@@ -103,7 +103,7 @@ impl WebhookEvent {
                 serde_json::from_value(value).map(WebhookEvent::RecognitionCreated)
             }
             "webhook.test" => {
-                serde_json::from_value(value).map(WebhookEvent::WebhookTest)
+                serde_json::from_value(value).map(WebhookEvent::Test)
             }
             _ => {
                 let id = value

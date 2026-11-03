@@ -27,9 +27,8 @@ Um POST sem chave de idempotência é enviado com uma `Idempotency-Key` própria
 | Serviço | Métodos |
 |---|---|
 | `client.Cameras` | `List` |
-| `client.Detections` | `Image` |
 | `client.Photos` | `Detect`, `OCR`, `Recognize` |
-| `client.Recognitions` | `List`, `ListIter` |
+| `client.Recognitions` | `Image`, `List`, `ListIter` |
 
 ## Erros
 

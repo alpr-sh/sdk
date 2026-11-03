@@ -6,13 +6,9 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>O resultado da leitura de uma foto. Sem placa, plates é [].</summary>
-public sealed record RecognizeResult
+/// <summary>PhotoDetection is a resource of Alpr.sh's API.</summary>
+public sealed record PhotoDetection
 {
-    /// <summary>The API's <c>creditsRemaining</c>.</summary>
-    [JsonPropertyName("creditsRemaining")]
-    public required long CreditsRemaining { get; init; }
-
     /// <summary>The API's <c>imageHeight</c>.</summary>
     [JsonPropertyName("imageHeight")]
     public required long ImageHeight { get; init; }
@@ -21,9 +17,9 @@ public sealed record RecognizeResult
     [JsonPropertyName("imageWidth")]
     public required long ImageWidth { get; init; }
 
-    /// <summary>The API's <c>plates</c>.</summary>
+    /// <summary>Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, [].</summary>
     [JsonPropertyName("plates")]
-    public required IReadOnlyList<RecognizedPlate> Plates { get; init; }
+    public required IReadOnlyList<DetectedPlate> Plates { get; init; }
 
     /// <summary>The API's <c>processingTimeMs</c>.</summary>
     [JsonPropertyName("processingTimeMs")]

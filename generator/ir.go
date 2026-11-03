@@ -286,20 +286,6 @@ func build(doc *spec, version string) (*IR, error) {
 		}
 	}
 	l := newLoader(doc)
-	names := make([]string, 0, len(doc.Components.Schemas))
-	for name, s := range doc.Components.Schemas {
-		if !wrapper(name, s) && l.aliases[name] == nil {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		model, err := l.modelOf(name, doc.Components.Schemas[name], false)
-		if err != nil {
-			return nil, err
-		}
-		ir.Models = append(ir.Models, model)
-	}
 	services := map[string]*Service{}
 	paths := make([]string, 0, len(doc.Paths))
 	for path := range doc.Paths {
@@ -363,9 +349,88 @@ func build(doc *spec, version string) (*IR, error) {
 		return nil, err
 	}
 	ir.Webhooks = webhooks
-	for _, model := range l.synthesized {
-		ir.Models = append(ir.Models, model)
+	// The models are the ones the services and the webhooks reach, named
+	// components and inline objects alike: the rest of the contract (the
+	// partner API's, the previous platform's) is not the SDK's.
+	var roots []string
+	for _, service := range ir.Services {
+		for _, method := range service.Methods {
+			if method.Response != "" {
+				roots = append(roots, method.Response)
+			}
+		}
 	}
+	for _, group := range ir.Webhooks {
+		roots = append(roots, group.Model)
+	}
+	reached := map[string]*Model{}
+	for _, model := range ir.Models {
+		reached[model.Name] = model
+	}
+	for _, model := range l.synthesized {
+		reached[model.Name] = model
+	}
+	var models []*Model
+	seen := map[string]bool{}
+	var visit func(name string) error
+	visit = func(name string) error {
+		if seen[name] {
+			return nil
+		}
+		seen[name] = true
+		model := reached[name]
+		if model == nil {
+			schema := doc.Components.Schemas[name]
+			if schema == nil {
+				return fmt.Errorf("generator: model %s is not in the contract", name)
+			}
+			var err error
+			if model, err = l.modelOf(name, schema, false); err != nil {
+				return err
+			}
+			// Inline objects found while reading it are reached too.
+			for _, synthesized := range l.synthesized {
+				reached[synthesized.Name] = synthesized
+			}
+		}
+		models = append(models, model)
+		for _, field := range model.Fields {
+			for t := field.Type; t != nil; t = t.Items {
+				if t.Kind == "model" {
+					if err := visit(t.Model); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	}
+	for _, name := range roots {
+		if err := visit(name); err != nil {
+			return nil, err
+		}
+	}
+	for _, model := range ir.Models {
+		if model.Input {
+			models = append(models, model)
+		}
+	}
+	// Inline models found after their parent was visited.
+	for name := range l.synthesized {
+		if !seen[name] {
+			for _, model := range models {
+				if model.Name == name {
+					seen[name] = true
+				}
+			}
+			if !seen[name] {
+				if err := visit(name); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	ir.Models = models
 	sort.Slice(ir.Models, func(i, j int) bool { return ir.Models[i].Name < ir.Models[j].Name })
 	return ir, nil
 }
@@ -440,6 +505,11 @@ func (l *loader) webhooks(doc *spec) ([]*WebhookGroup, error) {
 		if op == nil || op.RequestBody == nil {
 			return nil, fmt.Errorf("generator: webhook %s is not a POST with a body", name)
 		}
+		if !signedLikeTheSDK(op) {
+			// Another delivery with its own headers and signature (the
+			// previous platform's, a partner's): not what VerifyWebhook reads.
+			continue
+		}
 		body := op.RequestBody.Content["application/json"].Schema
 		if body == nil || body.Ref == "" {
 			return nil, fmt.Errorf("generator: webhook %s has no payload model", name)
@@ -454,18 +524,36 @@ func (l *loader) webhooks(doc *spec) ([]*WebhookGroup, error) {
 		if err := checkIdentifier("webhook payload of "+name, model); err != nil {
 			return nil, err
 		}
+		group := strings.TrimPrefix(model, "Webhook")
+		if group == "" {
+			group = model
+		}
 		if groups[model] == nil {
-			groups[model] = &WebhookGroup{Name: model, Model: model}
+			groups[model] = &WebhookGroup{Name: group, Model: model}
 		}
 		groups[model].Types = append(groups[model].Types, name)
 	}
 	out := make([]*WebhookGroup, 0, len(groups))
 	for _, group := range groups {
+		if err := checkIdentifier("webhook group", group.Name); err != nil {
+			return nil, err
+		}
 		sort.Strings(group.Types)
 		out = append(out, group)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// signedLikeTheSDK says a webhook carries the headers the SDK verifies: the
+// delivery id, the timestamp and the signature under the X-Alprsh prefix.
+func signedLikeTheSDK(op *operation) bool {
+	for _, param := range op.Parameters {
+		if param.In == "header" && strings.EqualFold(param.Name, "X-Alprsh-Delivery-Id") {
+			return true
+		}
+	}
+	return false
 }
 
 // apiKeyOperation says the operation is the SDK's: authenticated by the
@@ -532,11 +620,10 @@ func (l *loader) methodOf(op *operation, httpMethod, path, serviceName, methodNa
 		return nil, fmt.Errorf("generator: %s has query parameters, which the SDKs carry only on a page", method.OperationID)
 	}
 	if op.RequestBody != nil {
-		content, kind := op.RequestBody.Content["application/json"], ""
-		if content.Schema != nil {
-			kind = "application/json"
-		} else if content = op.RequestBody.Content["multipart/form-data"]; content.Schema != nil {
-			kind = "multipart/form-data"
+		// A photo can be sent several ways; the SDKs send it as multipart.
+		content, kind := op.RequestBody.Content["multipart/form-data"], "multipart/form-data"
+		if content.Schema == nil {
+			content, kind = op.RequestBody.Content["application/json"], "application/json"
 		}
 		body, _ := l.resolve(content.Schema)
 		if body != nil && len(body.Properties) > 0 && kind != "multipart/form-data" {
@@ -549,7 +636,7 @@ func (l *loader) methodOf(op *operation, httpMethod, path, serviceName, methodNa
 			}
 			model.Description = "The body of " + method.OperationID + "."
 			method.Body = model
-			method.Multipart = kind == "multipart/form-data"
+			method.Multipart = true
 		}
 	}
 	return method, nil

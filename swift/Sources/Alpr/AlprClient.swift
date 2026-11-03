@@ -15,8 +15,6 @@ import Foundation
 public final class AlprClient: Sendable {
     /// The API's cameras.
     public let cameras: CamerasService
-    /// The API's detections.
-    public let detections: DetectionsService
     /// The API's photos.
     public let photos: PhotosService
     /// The API's recognitions.
@@ -43,7 +41,6 @@ public final class AlprClient: Sendable {
         var requester = Requester(apiKey: apiKey, baseURL: base, timeout: timeout, transport: transport ?? Requester.urlSession)
         requester.baseURLError = AlprError.insecureBaseURL(baseURL)
         cameras = CamerasService(requester: requester)
-        detections = DetectionsService(requester: requester)
         photos = PhotosService(requester: requester)
         recognitions = RecognitionsService(requester: requester)
     }

@@ -5,21 +5,21 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** O link temporário da imagem de uma leitura. */
-public final class DetectionImage {
+/** DetectionImageLink is a resource of Alpr.sh's API. */
+public final class DetectionImageLink {
 
     private final String detectionId;
     private final long expiresIn;
     private final String imageUrl;
 
-    DetectionImage(String detectionId, long expiresIn, String imageUrl) {
+    DetectionImageLink(String detectionId, long expiresIn, String imageUrl) {
         this.detectionId = detectionId;
         this.expiresIn = expiresIn;
         this.imageUrl = imageUrl;
     }
 
-    static DetectionImage fromJson(Map<String, Object> data) {
-        return new DetectionImage(
+    static DetectionImageLink fromJson(Map<String, Object> data) {
+        return new DetectionImageLink(
                 Json.required(data, "detectionId", Json::asString),
                 Json.required(data, "expiresIn", Json::asLong),
                 Json.required(data, "imageUrl", Json::asString));
@@ -30,18 +30,18 @@ public final class DetectionImage {
         return detectionId;
     }
 
-    /** @return Segundos de validade do link. */
+    /** @return Segundos de validade do link (300). */
     public long getExpiresIn() {
         return expiresIn;
     }
 
-    /** @return the API's {@code imageUrl} */
+    /** @return Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio. */
     public String getImageUrl() {
         return imageUrl;
     }
 
     @Override
     public String toString() {
-        return "DetectionImage{" + "detectionId=" + detectionId + ", expiresIn=" + expiresIn + ", imageUrl=" + imageUrl + "}";
+        return "DetectionImageLink{" + "detectionId=" + detectionId + ", expiresIn=" + expiresIn + ", imageUrl=" + imageUrl + "}";
     }
 }

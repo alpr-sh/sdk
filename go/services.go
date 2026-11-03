@@ -18,7 +18,6 @@ var (
 
 func (c *Client) initServices() {
 	c.Cameras = &CamerasService{client: c}
-	c.Detections = &DetectionsService{client: c}
 	c.Photos = &PhotosService{client: c}
 	c.Recognitions = &RecognitionsService{client: c}
 }
@@ -38,25 +37,15 @@ func (s *CamerasService) List(ctx context.Context, opts ...RequestOption) ([]Cam
 	return out.Data, nil
 }
 
-// DetectionsService is the API's detections.
-type DetectionsService struct{ client *Client }
-
-// Image: Imagem de uma leitura.
-func (s *DetectionsService) Image(ctx context.Context, id string, opts ...RequestOption) (*DetectionImage, error) {
-	var out DetectionImage
-	err := s.client.do(ctx, request{method: http.MethodGet, path: "/api/v1/detections/" + url.PathEscape(id) + "/image"}, &out, opts)
-	if err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 // PhotosService is the API's photos.
 type PhotosService struct{ client *Client }
 
 func (p PhotosDetectParams) form() *form {
 	f := &form{}
 	f.file("image", p.Image)
+	if p.ImageMode != nil {
+		f.text("image_mode", *p.ImageMode)
+	}
 	if p.LPRConfidence != nil {
 		f.text("lpr_confidence", strconv.FormatFloat(*p.LPRConfidence, 'g', -1, 64))
 	}
@@ -67,8 +56,8 @@ func (p PhotosDetectParams) form() *form {
 }
 
 // Detect: Localizar as placas de uma foto.
-func (s *PhotosService) Detect(ctx context.Context, params PhotosDetectParams, opts ...RequestOption) (*DetectResult, error) {
-	var out DetectResult
+func (s *PhotosService) Detect(ctx context.Context, params PhotosDetectParams, opts ...RequestOption) (*PhotoDetection, error) {
+	var out PhotoDetection
 	err := s.client.do(ctx, request{method: http.MethodPost, path: "/api/v1/detect", form: params.form()}, &out, opts)
 	if err != nil {
 		return nil, err
@@ -83,8 +72,8 @@ func (p PhotosOCRParams) form() *form {
 }
 
 // OCR: Ler uma placa já recortada.
-func (s *PhotosService) OCR(ctx context.Context, params PhotosOCRParams, opts ...RequestOption) (*OcrResult, error) {
-	var out OcrResult
+func (s *PhotosService) OCR(ctx context.Context, params PhotosOCRParams, opts ...RequestOption) (*PlateReading, error) {
+	var out PlateReading
 	err := s.client.do(ctx, request{method: http.MethodPost, path: "/api/v1/ocr", form: params.form()}, &out, opts)
 	if err != nil {
 		return nil, err
@@ -95,6 +84,9 @@ func (s *PhotosService) OCR(ctx context.Context, params PhotosOCRParams, opts ..
 func (p PhotosRecognizeParams) form() *form {
 	f := &form{}
 	f.file("image", p.Image)
+	if p.ImageMode != nil {
+		f.text("image_mode", *p.ImageMode)
+	}
 	if p.LPRConfidence != nil {
 		f.text("lpr_confidence", strconv.FormatFloat(*p.LPRConfidence, 'g', -1, 64))
 	}
@@ -105,8 +97,8 @@ func (p PhotosRecognizeParams) form() *form {
 }
 
 // Recognize: Ler as placas de uma foto.
-func (s *PhotosService) Recognize(ctx context.Context, params PhotosRecognizeParams, opts ...RequestOption) (*RecognizeResult, error) {
-	var out RecognizeResult
+func (s *PhotosService) Recognize(ctx context.Context, params PhotosRecognizeParams, opts ...RequestOption) (*PhotoRecognition, error) {
+	var out PhotoRecognition
 	err := s.client.do(ctx, request{method: http.MethodPost, path: "/api/v1/recognize", form: params.form()}, &out, opts)
 	if err != nil {
 		return nil, err
@@ -117,15 +109,25 @@ func (s *PhotosService) Recognize(ctx context.Context, params PhotosRecognizePar
 // RecognitionsService is the API's recognitions.
 type RecognitionsService struct{ client *Client }
 
+// Image: Imagem de uma leitura.
+func (s *RecognitionsService) Image(ctx context.Context, id string, opts ...RequestOption) (*DetectionImageLink, error) {
+	var out DetectionImageLink
+	err := s.client.do(ctx, request{method: http.MethodGet, path: "/api/v1/detections/" + url.PathEscape(id) + "/image"}, &out, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // RecognitionsListParams are the filters of recognitions:list, and the cursor to start from.
 type RecognitionsListParams struct {
 	// Before is the cursor the previous page answered as Next; empty asks for the newest page.
 	Before string
-	// Prefixo da placa; traço e caixa não importam.
+	// Prefixo da placa; traço, espaço e caixa não importam.
 	Plate string
 	// ID da câmera.
 	Camera string
-	// Origem da leitura: camera ou api.
+	// Origem da leitura; outro valor é ignorado.
 	Source string
 }
 

@@ -158,7 +158,7 @@ public static class Webhook
                     return root.Deserialize(AlprJson.Default.RecognitionCreatedWebhookEvent)
                         ?? throw new JsonException("alpr: the webhook body is not a " + name + " event");
                 case "webhook.test":
-                    return root.Deserialize(AlprJson.Default.WebhookTestWebhookEvent)
+                    return root.Deserialize(AlprJson.Default.TestWebhookEvent)
                         ?? throw new JsonException("alpr: the webhook body is not a " + name + " event");
             }
         }

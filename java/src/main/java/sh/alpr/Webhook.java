@@ -151,8 +151,8 @@ public final class Webhook {
             if (RecognitionCreatedWebhookEvent.EVENTS.contains(name)) {
                 return RecognitionCreatedWebhookEvent.fromJson(data);
             }
-            if (WebhookTestWebhookEvent.EVENTS.contains(name)) {
-                return WebhookTestWebhookEvent.fromJson(data);
+            if (TestWebhookEvent.EVENTS.contains(name)) {
+                return TestWebhookEvent.fromJson(data);
             }
         } catch (IllegalStateException e) {
             throw new IllegalArgumentException("alpr: the webhook body is not a " + name + " event: " + e.getMessage(), e);

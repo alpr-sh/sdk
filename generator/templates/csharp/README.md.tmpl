@@ -37,7 +37,7 @@ foreach (var camera in await alpr.Cameras.ListAsync())
 }
 
 // O link temporário da imagem de uma leitura.
-var image = await alpr.Detections.ImageAsync("det_123");
+var image = await alpr.Recognitions.ImageAsync("det_123");
 Console.WriteLine($"{image.ImageUrl} (vale {image.ExpiresIn} s)");
 ```
 

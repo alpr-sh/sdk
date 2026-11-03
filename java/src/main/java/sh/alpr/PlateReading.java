@@ -5,8 +5,8 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** A placa lida de uma imagem já recortada. */
-public final class OcrResult {
+/** PlateReading is a resource of Alpr.sh's API. */
+public final class PlateReading {
 
     private final double confidence;
     private final long creditsRemaining;
@@ -14,7 +14,7 @@ public final class OcrResult {
     private final long latencyMs;
     private final String plate;
 
-    OcrResult(double confidence, long creditsRemaining, String detectionId, long latencyMs, String plate) {
+    PlateReading(double confidence, long creditsRemaining, String detectionId, long latencyMs, String plate) {
         this.confidence = confidence;
         this.creditsRemaining = creditsRemaining;
         this.detectionId = detectionId;
@@ -22,8 +22,8 @@ public final class OcrResult {
         this.plate = plate;
     }
 
-    static OcrResult fromJson(Map<String, Object> data) {
-        return new OcrResult(
+    static PlateReading fromJson(Map<String, Object> data) {
+        return new PlateReading(
                 Json.required(data, "confidence", Json::asDouble),
                 Json.required(data, "creditsRemaining", Json::asLong),
                 Json.optional(data, "detectionId", Json::asString),
@@ -31,17 +31,17 @@ public final class OcrResult {
                 Json.required(data, "plate", Json::asString));
     }
 
-    /** @return the API's {@code confidence} */
+    /** @return Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100). */
     public double getConfidence() {
         return confidence;
     }
 
-    /** @return the API's {@code creditsRemaining} */
+    /** @return Créditos que sobraram depois desta leitura. */
     public long getCreditsRemaining() {
         return creditsRemaining;
     }
 
-    /** @return the API's {@code detectionId} (null when the API sends none) */
+    /** @return Hoje sempre nulo: a leitura de uma placa recortada não é guardada. (null when the API sends none) */
     public String getDetectionId() {
         return detectionId;
     }
@@ -51,13 +51,13 @@ public final class OcrResult {
         return latencyMs;
     }
 
-    /** @return the API's {@code plate} */
+    /** @return O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro. */
     public String getPlate() {
         return plate;
     }
 
     @Override
     public String toString() {
-        return "OcrResult{" + "confidence=" + confidence + ", creditsRemaining=" + creditsRemaining + ", detectionId=" + detectionId + ", latencyMs=" + latencyMs + ", plate=" + plate + "}";
+        return "PlateReading{" + "confidence=" + confidence + ", creditsRemaining=" + creditsRemaining + ", detectionId=" + detectionId + ", latencyMs=" + latencyMs + ", plate=" + plate + "}";
     }
 }

@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
-from .models import AlertTriggered, RecognitionCreated, WebhookTest
+from .models import WebhookAlertTriggered, WebhookRecognitionCreated, WebhookTest
 
 WEBHOOK_TOLERANCE_SECONDS = 300
 """How far from now a webhook's timestamp may be."""
@@ -34,7 +34,7 @@ class WebhookVerificationError(Exception):
 
 
 @dataclass(frozen=True)
-class AlertTriggeredWebhookEvent(AlertTriggered):
+class AlertTriggeredWebhookEvent(WebhookAlertTriggered):
     """The payload of
     - ``alert.triggered``
 
@@ -43,7 +43,7 @@ class AlertTriggeredWebhookEvent(AlertTriggered):
 
 
 @dataclass(frozen=True)
-class RecognitionCreatedWebhookEvent(RecognitionCreated):
+class RecognitionCreatedWebhookEvent(WebhookRecognitionCreated):
     """The payload of
     - ``recognition.created``
 
@@ -52,7 +52,7 @@ class RecognitionCreatedWebhookEvent(RecognitionCreated):
 
 
 @dataclass(frozen=True)
-class WebhookTestWebhookEvent(WebhookTest):
+class TestWebhookEvent(WebhookTest):
     """The payload of
     - ``webhook.test``
 
@@ -75,7 +75,7 @@ class UnknownWebhookEvent:
 WebhookEvent: TypeAlias = (
     AlertTriggeredWebhookEvent
     | RecognitionCreatedWebhookEvent
-    | WebhookTestWebhookEvent
+    | TestWebhookEvent
     | UnknownWebhookEvent
 )
 """A webhook Alpr.sh sent, verified: one class a payload, told apart with ``match``
@@ -96,7 +96,7 @@ def _event(raw: bytes) -> WebhookEvent:
         if name in ("recognition.created",):
             return RecognitionCreatedWebhookEvent.from_dict(body)
         if name in ("webhook.test",):
-            return WebhookTestWebhookEvent.from_dict(body)
+            return TestWebhookEvent.from_dict(body)
     except (KeyError, TypeError, ValueError, AttributeError) as error:
         raise ValueError(f"alpr: the webhook body is not a {name} event: {error!r}") from None
     sent = body.get("id")

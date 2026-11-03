@@ -9,15 +9,17 @@ defmodule Alpr.PhotosDetectParams do
   """
 
   @enforce_keys [:image]
-  defstruct [:image, :lpr_confidence, :min_ocr_confidence]
+  defstruct [:image, :image_mode, :lpr_confidence, :min_ocr_confidence]
 
   @typedoc """
-  * `image`: A foto, JPEG ou PNG, até 10 MB e 8000 px.
-  * `lpr_confidence` (optional): Piso do detector, de 0 a 1.
-  * `min_ocr_confidence` (optional): Piso da leitura, de 0 a 1.
+  * `image`: A foto, JPEG ou PNG.
+  * `image_mode` (optional; one of `"NONE"`): Só NONE é aceito.
+  * `lpr_confidence` (optional): Piso de confiança do detector de placas.
+  * `min_ocr_confidence` (optional): Piso de confiança da leitura dos caracteres.
   """
   @type t :: %__MODULE__{
           image: binary(),
+          image_mode: String.t() | nil,
           lpr_confidence: number() | nil,
           min_ocr_confidence: number() | nil
         }
@@ -34,6 +36,7 @@ defmodule Alpr.PhotosDetectParams do
 
     Alpr.Multipart.compact([
       {:file, "image", params.image},
+      {:text, "image_mode", params.image_mode},
       {:text, "lpr_confidence", params.lpr_confidence},
       {:text, "min_ocr_confidence", params.min_ocr_confidence}
     ])
@@ -52,7 +55,7 @@ defmodule Alpr.PhotosOCRParams do
   defstruct [:image]
 
   @typedoc """
-  * `image`: A foto, JPEG ou PNG, até 10 MB e 8000 px.
+  * `image`: A imagem da placa já recortada, JPEG ou PNG.
   """
   @type t :: %__MODULE__{
           image: binary()
@@ -83,15 +86,17 @@ defmodule Alpr.PhotosRecognizeParams do
   """
 
   @enforce_keys [:image]
-  defstruct [:image, :lpr_confidence, :min_ocr_confidence]
+  defstruct [:image, :image_mode, :lpr_confidence, :min_ocr_confidence]
 
   @typedoc """
-  * `image`: A foto, JPEG ou PNG, até 10 MB e 8000 px.
-  * `lpr_confidence` (optional): Piso do detector, de 0 a 1.
-  * `min_ocr_confidence` (optional): Piso da leitura, de 0 a 1.
+  * `image`: A foto, JPEG ou PNG.
+  * `image_mode` (optional; one of `"NONE"`): Só NONE é aceito.
+  * `lpr_confidence` (optional): Piso de confiança do detector de placas.
+  * `min_ocr_confidence` (optional): Piso de confiança da leitura dos caracteres.
   """
   @type t :: %__MODULE__{
           image: binary(),
+          image_mode: String.t() | nil,
           lpr_confidence: number() | nil,
           min_ocr_confidence: number() | nil
         }
@@ -108,6 +113,7 @@ defmodule Alpr.PhotosRecognizeParams do
 
     Alpr.Multipart.compact([
       {:file, "image", params.image},
+      {:text, "image_mode", params.image_mode},
       {:text, "lpr_confidence", params.lpr_confidence},
       {:text, "min_ocr_confidence", params.min_ocr_confidence}
     ])

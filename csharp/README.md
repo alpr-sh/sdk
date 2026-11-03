@@ -37,7 +37,7 @@ foreach (var camera in await alpr.Cameras.ListAsync())
 }
 
 // O link temporário da imagem de uma leitura.
-var image = await alpr.Detections.ImageAsync("det_123");
+var image = await alpr.Recognitions.ImageAsync("det_123");
 Console.WriteLine($"{image.ImageUrl} (vale {image.ExpiresIn} s)");
 ```
 
@@ -54,9 +54,8 @@ A foto é um `byte[]` com o arquivo inteiro (`Image`). O SDK envia `multipart/fo
 | Serviço | Métodos |
 |---|---|
 | `alpr.Cameras` | `ListAsync` |
-| `alpr.Detections` | `ImageAsync` |
 | `alpr.Photos` | `DetectAsync`, `OCRAsync`, `RecognizeAsync` |
-| `alpr.Recognitions` | `ListAsync`, `ListIterAsync` |
+| `alpr.Recognitions` | `ImageAsync`, `ListAsync`, `ListIterAsync` |
 
 Os modelos são `record`s imutáveis em PascalCase (`reading.CapturedAt`), com os valores enumerados como constantes (`Recognition.SourceCamera`). Um campo opcional ou nulo é `null`. `ListAsync` de leituras devolve uma `Page<Recognition>` (`Items` e `Next`, o cursor da página seguinte, vazio na última); `ListIterAsync` devolve um `IAsyncEnumerable` que começa no cursor dado (`Before`; nenhum, a página mais nova), entrega cada item, segue `Next` até acabar, para quando o cursor não anda e termina no primeiro erro. `Cameras.ListAsync` devolve a lista de câmeras já sem o envelope `data`.
 
@@ -114,11 +113,11 @@ A assinatura é o HMAC-SHA256 de `timestamp + "." + deliveryId + "." + corpo`, c
 
 Uma assinatura inválida, um cabeçalho ausente ou um timestamp fora da janela lançam `WebhookVerificationException`; um segredo vazio lança `ArgumentException` (erro de configuração), e um corpo verificado que não é um evento (não é um objeto JSON com `event` em texto) lança `JsonException`. `Webhook.VerifySignature` só confere a assinatura.
 
-O evento é tipado e plano, sem `data` nem `type`: `AlertTriggeredWebhookEvent`, `RecognitionCreatedWebhookEvent`, `WebhookTestWebhookEvent` trazem os campos do modelo de mesmo nome, e `EventName` diz o evento:
+O evento é tipado e plano, sem `data` nem `type`: `AlertTriggeredWebhookEvent`, `RecognitionCreatedWebhookEvent`, `TestWebhookEvent` trazem os campos do modelo de mesmo nome, e `EventName` diz o evento:
 
 - `AlertTriggeredWebhookEvent`: `alert.triggered`
 - `RecognitionCreatedWebhookEvent`: `recognition.created`
-- `WebhookTestWebhookEvent`: `webhook.test`
+- `TestWebhookEvent`: `webhook.test`
 
 Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent` com `Event`, `Id` (vazio se o corpo não tiver um `id` em texto) e o corpo inteiro em `Body`. Desduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`: o `id` do corpo é o da leitura ou do alerta, não o da entrega.
 

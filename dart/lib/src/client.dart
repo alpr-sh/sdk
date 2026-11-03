@@ -55,9 +55,6 @@ class Alpr implements Requester {
   /// The API's cameras.
   late final cameras = CamerasService(this);
 
-  /// The API's detections.
-  late final detections = DetectionsService(this);
-
   /// The API's photos.
   late final photos = PhotosService(this);
 

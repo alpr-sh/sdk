@@ -22,7 +22,7 @@ import java.util.Objects;
  *
  * <pre>{@code
  * Alpr alpr = new Alpr(System.getenv("ALPR_API_KEY"));
- * RecognizeResult result = alpr.photos().recognize(
+ * PhotoRecognition result = alpr.photos().recognize(
  *         PhotosService.RecognizeParams.builder().image(photo).build());
  * for (Recognition each : alpr.recognitions().listIter()) { … }
  * }</pre>

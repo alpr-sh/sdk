@@ -5,8 +5,10 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Uma placa lida na foto, com a caixa em pixels. */
+/** RecognizedPlate is a resource of Alpr.sh's API. */
 public final class RecognizedPlate {
+    /** A value of {@link #getPlateType()}. */
+    public static final String PLATETYPE_CAR = "car";
 
     private final String charConfs;
     private final double conf;
@@ -46,17 +48,17 @@ public final class RecognizedPlate {
                 Json.required(data, "time", Json::asString));
     }
 
-    /** @return Confiança de 0 a 1 de cada caractere, separadas por vírgula. */
+    /** @return Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula ("0.99;0.98"). */
     public String getCharConfs() {
         return charConfs;
     }
 
-    /** @return Confiança da leitura, de 0 a 100. */
+    /** @return Confiança da placa, de 0 a 100, com uma casa. */
     public double getConf() {
         return conf;
     }
 
-    /** @return the API's {@code coordinateBottom} */
+    /** @return Pixels da foto enviada. */
     public long getCoordinateBottom() {
         return coordinateBottom;
     }
@@ -76,22 +78,22 @@ public final class RecognizedPlate {
         return coordinateTop;
     }
 
-    /** @return the API's {@code createdAt} */
+    /** @return Igual a time. */
     public String getCreatedAt() {
         return createdAt;
     }
 
-    /** @return the API's {@code plate} */
+    /** @return Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul). */
     public String getPlate() {
         return plate;
     }
 
-    /** @return the API's {@code plateType} */
+    /** @return Sempre car; a API não informa país nem formato. */
     public String getPlateType() {
         return plateType;
     }
 
-    /** @return the API's {@code time} */
+    /** @return Instante da leitura, com o deslocamento do fuso do Alpr.sh. */
     public String getTime() {
         return time;
     }

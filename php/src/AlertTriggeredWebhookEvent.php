@@ -21,16 +21,25 @@ final class AlertTriggeredWebhookEvent extends WebhookEvent
     private const REQUIRED = ['captured_at', 'confidence', 'event', 'id', 'plate', 'recognition_id', 'rule_id', 'rule_name', 'tenant_id'];
 
     public function __construct(
+        /** Ausente se a leitura não veio de uma câmera. */
         public readonly ?string $cameraId,
         public readonly string $capturedAt,
+        /** De 0 a 1. */
         public readonly float $confidence,
         /** @var 'alert.triggered' */
         public readonly string $event,
+        /** O id do disparo. */
         public readonly string $id,
         public readonly string $plate,
+        /** A leitura que disparou o alerta. */
         public readonly string $recognitionId,
         public readonly string $ruleId,
         public readonly string $ruleName,
+        /**
+         * Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:<id>, partner:<id>). Presente só quando algum foi excluído; é informação, não há o que fazer com ela.
+         * @var list<string>|null
+         */
+        public readonly ?array $skip,
         public readonly string $tenantId,
     ) {
     }
@@ -57,6 +66,7 @@ final class AlertTriggeredWebhookEvent extends WebhookEvent
                 recognitionId: $data['recognition_id'],
                 ruleId: $data['rule_id'],
                 ruleName: $data['rule_name'],
+                skip: $data['skip'] ?? null,
                 tenantId: $data['tenant_id'],
             );
         } catch (\TypeError $error) {

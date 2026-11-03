@@ -7,9 +7,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use alpr::{
     verify_webhook_at, verify_webhook_signature_at, BoxError, Client, Error, HttpRequest,
-    HttpResponse, PhotosDetectParams, PhotosOCRParams, PhotosRecognizeParams,
-    RecognitionCreatedSource, RecognitionSource, RecognitionsListParams, WebhookError,
-    WebhookEvent,
+    HttpResponse, PhotosDetectParams, PhotosOCRParams, PhotosRecognizeParams, RecognitionSource,
+    RecognitionsListParams, WebhookError, WebhookEvent, WebhookRecognitionCreatedSource,
 };
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
@@ -146,8 +145,8 @@ fn a_call_carries_the_key_and_no_idempotency_key() {
     assert!(cameras[0].enabled);
     assert_eq!(cameras[0].reading_area, None);
     let area = cameras[1].reading_area.as_ref().unwrap();
-    assert_eq!(area.box_.as_ref().unwrap().x, Some(0.1));
-    let points = area.points.as_ref().unwrap();
+    assert_eq!(area.box_.x, 0.1);
+    let points = &area.points;
     assert_eq!(points.len(), 3);
     assert_eq!(points[1][0], 0.6);
 
@@ -279,7 +278,7 @@ fn a_detection_image_is_a_link() {
             r#"{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}"#,
         )
     });
-    let image = client.detections().image("a/b").unwrap();
+    let image = client.recognitions().image("a/b").unwrap();
     assert_eq!(image.expires_in, 300);
     assert_eq!(image.detection_id, "a/b");
     assert!(image.image_url.starts_with("https://alpr.sh/"));
@@ -823,7 +822,7 @@ fn a_webhook_answers_its_typed_event() {
     assert_eq!(read.plate, "BRA2E19");
     assert_eq!(read.confidence, 0.97);
     assert_eq!(read.camera_id.as_deref(), Some("cam_1"));
-    assert_eq!(read.source, RecognitionCreatedSource::Camera);
+    assert_eq!(read.source, WebhookRecognitionCreatedSource::Camera);
     assert_eq!(read.tenant_id, "ws_1");
     assert_eq!(read.captured_at, "2026-10-22T11:59:58Z");
 
@@ -849,7 +848,7 @@ fn a_webhook_answers_its_typed_event() {
     )
     .unwrap();
     assert_eq!(event.event_name(), "webhook.test");
-    let WebhookEvent::WebhookTest(test) = event else {
+    let WebhookEvent::Test(test) = event else {
         panic!("{event:?}");
     };
     assert_eq!(test.sent_at, "2026-10-22T12:00:00Z");

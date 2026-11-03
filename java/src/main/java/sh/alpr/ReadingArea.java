@@ -5,29 +5,29 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** A área de leitura da câmera: placas fora do polígono são ignoradas. */
+/** ReadingArea is a resource of Alpr.sh's API. */
 public final class ReadingArea {
 
-    private final ReadingBox box;
+    private final ReadingAreaBox box;
     private final List<List<Double>> points;
 
-    ReadingArea(ReadingBox box, List<List<Double>> points) {
+    ReadingArea(ReadingAreaBox box, List<List<Double>> points) {
         this.box = box;
         this.points = points;
     }
 
     static ReadingArea fromJson(Map<String, Object> data) {
         return new ReadingArea(
-                Json.optional(data, "box", Json.model(ReadingBox::fromJson)),
-                Json.optional(data, "points", Json.list(Json.list(Json::asDouble))));
+                Json.required(data, "box", Json.model(ReadingAreaBox::fromJson)),
+                Json.required(data, "points", Json.list(Json.list(Json::asDouble))));
     }
 
-    /** @return the API's {@code box} (null when the API sends none) */
-    public ReadingBox getBox() {
+    /** @return A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê. */
+    public ReadingAreaBox getBox() {
         return box;
     }
 
-    /** @return the API's {@code points} (null when the API sends none) */
+    /** @return Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas. */
     public List<List<Double>> getPoints() {
         return points;
     }

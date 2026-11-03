@@ -12,14 +12,14 @@ public let webhookTolerance: TimeInterval = 300
 // Deduplicate deliveries by the `X-Alprsh-Delivery-Id` header: the body's `id`
 // is the id of the reading or the alert, not of the delivery.
 
-/// The payload of `alert.triggered`: the fields of `AlertTriggered`, flat.
-public typealias AlertTriggeredWebhookEvent = AlertTriggered
+/// The payload of `alert.triggered`: the fields of `WebhookAlertTriggered`, flat.
+public typealias AlertTriggeredWebhookEvent = WebhookAlertTriggered
 
-/// The payload of `recognition.created`: the fields of `RecognitionCreated`, flat.
-public typealias RecognitionCreatedWebhookEvent = RecognitionCreated
+/// The payload of `recognition.created`: the fields of `WebhookRecognitionCreated`, flat.
+public typealias RecognitionCreatedWebhookEvent = WebhookRecognitionCreated
 
 /// The payload of `webhook.test`: the fields of `WebhookTest`, flat.
-public typealias WebhookTestWebhookEvent = WebhookTest
+public typealias TestWebhookEvent = WebhookTest
 
 /// An event of a name this SDK does not know yet: its name, the id the body
 /// carries (empty when it has none) and the body as it was sent.
@@ -45,7 +45,7 @@ public enum WebhookEvent: Sendable, Hashable {
     /// `recognition.created`.
     case recognitionCreated(RecognitionCreatedWebhookEvent)
     /// `webhook.test`.
-    case webhookTest(WebhookTestWebhookEvent)
+    case test(TestWebhookEvent)
     /// A name this SDK does not know yet.
     case unknown(UnknownWebhookEvent)
 
@@ -54,7 +54,7 @@ public enum WebhookEvent: Sendable, Hashable {
         switch self {
         case let .alertTriggered(payload): payload.event.rawValue
         case let .recognitionCreated(payload): payload.event.rawValue
-        case let .webhookTest(payload): payload.event.rawValue
+        case let .test(payload): payload.event.rawValue
         case let .unknown(payload): payload.event
         }
     }
@@ -74,7 +74,7 @@ public enum WebhookEvent: Sendable, Hashable {
             case "recognition.created":
                 return try .recognitionCreated(decoder.decode(RecognitionCreatedWebhookEvent.self, from: body))
             case "webhook.test":
-                return try .webhookTest(decoder.decode(WebhookTestWebhookEvent.self, from: body))
+                return try .test(decoder.decode(TestWebhookEvent.self, from: body))
             default:
                 return .unknown(UnknownWebhookEvent(event: name, id: object["id"] as? String ?? "", body: body))
             }

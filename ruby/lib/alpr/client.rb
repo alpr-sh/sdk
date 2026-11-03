@@ -33,8 +33,6 @@ module Alpr
   class Client
     # @return [CamerasService]
     attr_reader :cameras
-    # @return [DetectionsService]
-    attr_reader :detections
     # @return [PhotosService]
     attr_reader :photos
     # @return [RecognitionsService]
@@ -49,7 +47,6 @@ module Alpr
       @timeout = timeout
       @transport = transport
       @cameras = CamerasService.new(self)
-      @detections = DetectionsService.new(self)
       @photos = PhotosService.new(self)
       @recognitions = RecognitionsService.new(self)
     end

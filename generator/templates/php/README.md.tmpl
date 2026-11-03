@@ -26,7 +26,7 @@ foreach ($alpr->cameras->list() as $camera) {
 }
 
 // O link temporário da imagem de uma leitura.
-$image = $alpr->detections->image('det_123');
+$image = $alpr->recognitions->image('det_123');
 echo $image->imageUrl, ' (vale ', $image->expiresIn, ' s)', PHP_EOL;
 ```
 

@@ -161,7 +161,7 @@ class AlprTest < Minitest::Test
 
   def test_a_detection_image_is_a_link
     alpr, server = client { ok('{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}') }
-    image = alpr.detections.image("a/b")
+    image = alpr.recognitions.image("a/b")
     assert_equal "/api/v1/detections/a%2Fb/image", server.requests.first.path
     assert_equal ["a/b", 300], [image.detection_id, image.expires_in]
     assert image.image_url.start_with?("https://alpr.sh/")
@@ -354,7 +354,7 @@ class AlprTest < Minitest::Test
     assert_instance_of Alpr::AlertTriggeredWebhookEvent, event
     assert_equal ["Veículo bloqueado", "rec_1", "rule_1"], [event.rule_name, event.recognition_id, event.rule_id]
     event = Alpr.verify_webhook(NEW_SECRET, webhook_headers("del_0003", STAMP, TEST_NEW), TEST_BODY, now: NOW)
-    assert_instance_of Alpr::WebhookTestWebhookEvent, event
+    assert_instance_of Alpr::TestWebhookEvent, event
     assert_equal ["webhook.test", "2026-10-22T12:00:00Z"], [event.event_name, event.sent_at]
   end
 

@@ -19,6 +19,15 @@ final class RecognitionsService
     }
 
     /**
+     * Imagem de uma leitura.
+     */
+    public function image(string $id, ?string $apiKey = null): Models\DetectionImageLink
+    {
+        $data = $this->client->request('GET', '/api/v1/detections/' . rawurlencode($id) . '/image', apiKey: $apiKey);
+        return Models\DetectionImageLink::fromArray($data);
+    }
+
+    /**
      * Listar as leituras. One page; listIter() walks every page.
      *
      * @param array{before?: string|null, plate?: string, camera?: string, source?: string} $params before is the cursor the previous page answered as next; none asks for the newest page

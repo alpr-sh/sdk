@@ -192,7 +192,7 @@ public class AlprTests
     public async Task ADetectionImageIsALink()
     {
         var recorder = new Recorder(_ => new Answer(HttpStatusCode.OK, """{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}"""));
-        var image = await Client(recorder).Detections.ImageAsync("a/b");
+        var image = await Client(recorder).Recognitions.ImageAsync("a/b");
         Assert.Equal("/api/v1/detections/a%2Fb/image", Assert.Single(recorder.Requests).Url.AbsolutePath);
         Assert.Equal(300, image.ExpiresIn);
         Assert.Equal("a/b", image.DetectionId);
@@ -563,7 +563,7 @@ public class AlprTests
         var alert = Assert.IsType<AlertTriggeredWebhookEvent>(Webhook.VerifyAt(NewSecret, WebhookHeaders("del_0002", SignedAt, AlertNew), Encoding.UTF8.GetBytes(AlertBody), Now));
         Assert.Equal(("Veículo bloqueado", "rec_1", "rule_1"), (alert.RuleName, alert.RecognitionId, alert.RuleId));
 
-        var test = Assert.IsType<WebhookTestWebhookEvent>(Webhook.VerifyAt(NewSecret, WebhookHeaders("del_0003", SignedAt, TestNew), Encoding.UTF8.GetBytes(TestBody), Now));
+        var test = Assert.IsType<TestWebhookEvent>(Webhook.VerifyAt(NewSecret, WebhookHeaders("del_0003", SignedAt, TestNew), Encoding.UTF8.GetBytes(TestBody), Now));
         Assert.Equal(("webhook.test", "2026-10-22T12:00:00Z"), (test.EventName, test.SentAt));
 
         var unknown = Assert.IsType<UnknownWebhookEvent>(Webhook.VerifyAt(NewSecret, WebhookHeaders("del_0004", SignedAt, UnknownNew), Encoding.UTF8.GetBytes(UnknownBody), Now));
@@ -590,7 +590,7 @@ public class AlprTests
     {
         var stamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var headers = WebhookHeaders("del_0001", stamp, Sign(NewSecret, "del_0001", stamp, TestBody));
-        Assert.IsType<WebhookTestWebhookEvent>(Webhook.Verify(NewSecret, headers, TestBody));
+        Assert.IsType<TestWebhookEvent>(Webhook.Verify(NewSecret, headers, TestBody));
         Webhook.VerifySignature(NewSecret, headers, Encoding.UTF8.GetBytes(TestBody));
         Assert.Equal(300, Webhook.ToleranceSeconds);
         Assert.Equal(TimeSpan.FromMinutes(5), Webhook.Tolerance);

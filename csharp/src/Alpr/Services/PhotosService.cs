@@ -22,55 +22,62 @@ public sealed class PhotosService
     /// <param name="parameters">The request.</param>
     /// <param name="options">Another workspace's key for this call.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The DetectResult.</returns>
+    /// <returns>The PhotoDetection.</returns>
     /// <exception cref="AlprException">The API refused the call.</exception>
-    public Task<DetectResult> DetectAsync(PhotosDetectParams parameters, RequestOptions? options = null, CancellationToken cancellationToken = default)
+    public Task<PhotoDetection> DetectAsync(PhotosDetectParams parameters, RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(parameters);
-        return client.RequestAsync(HttpMethod.Post, "/api/v1/detect", null, parameters.ToForm().Content, AlprJson.Default.DetectResult, options, cancellationToken);
+        return client.RequestAsync(HttpMethod.Post, "/api/v1/detect", null, parameters.ToForm().Content, AlprJson.Default.PhotoDetection, options, cancellationToken);
     }
 
     /// <summary>Ler uma placa já recortada.</summary>
     /// <param name="parameters">The request.</param>
     /// <param name="options">Another workspace's key for this call.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The OcrResult.</returns>
+    /// <returns>The PlateReading.</returns>
     /// <exception cref="AlprException">The API refused the call.</exception>
-    public Task<OcrResult> OCRAsync(PhotosOCRParams parameters, RequestOptions? options = null, CancellationToken cancellationToken = default)
+    public Task<PlateReading> OCRAsync(PhotosOCRParams parameters, RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(parameters);
-        return client.RequestAsync(HttpMethod.Post, "/api/v1/ocr", null, parameters.ToForm().Content, AlprJson.Default.OcrResult, options, cancellationToken);
+        return client.RequestAsync(HttpMethod.Post, "/api/v1/ocr", null, parameters.ToForm().Content, AlprJson.Default.PlateReading, options, cancellationToken);
     }
 
     /// <summary>Ler as placas de uma foto.</summary>
     /// <param name="parameters">The request.</param>
     /// <param name="options">Another workspace's key for this call.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The RecognizeResult.</returns>
+    /// <returns>The PhotoRecognition.</returns>
     /// <exception cref="AlprException">The API refused the call.</exception>
-    public Task<RecognizeResult> RecognizeAsync(PhotosRecognizeParams parameters, RequestOptions? options = null, CancellationToken cancellationToken = default)
+    public Task<PhotoRecognition> RecognizeAsync(PhotosRecognizeParams parameters, RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(parameters);
-        return client.RequestAsync(HttpMethod.Post, "/api/v1/recognize", null, parameters.ToForm().Content, AlprJson.Default.RecognizeResult, options, cancellationToken);
+        return client.RequestAsync(HttpMethod.Post, "/api/v1/recognize", null, parameters.ToForm().Content, AlprJson.Default.PhotoRecognition, options, cancellationToken);
     }
 }
 
 /// <summary>The body of photos:detect.</summary>
 public sealed record PhotosDetectParams
 {
-    /// <summary>A foto, JPEG ou PNG, até 10 MB e 8000 px.</summary>
+    /// <summary>A foto, JPEG ou PNG.</summary>
     public required byte[] Image { get; init; }
 
-    /// <summary>Piso do detector, de 0 a 1. Left out of the request when null.</summary>
+    /// <summary>Só NONE é aceito. Left out of the request when null.</summary>
+    public string? ImageMode { get; init; }
+
+    /// <summary>Piso de confiança do detector de placas. Left out of the request when null.</summary>
     public double? LprConfidence { get; init; }
 
-    /// <summary>Piso da leitura, de 0 a 1. Left out of the request when null.</summary>
+    /// <summary>Piso de confiança da leitura dos caracteres. Left out of the request when null.</summary>
     public double? MinOcrConfidence { get; init; }
 
     internal Form ToForm()
     {
         var form = new Alpr.Form();
         form.File("image", Image);
+        if (ImageMode is not null)
+        {
+            form.Text("image_mode", ImageMode);
+        }
         if (LprConfidence is not null)
         {
             form.Text("lpr_confidence", LprConfidence.Value.ToString(CultureInfo.InvariantCulture));
@@ -86,7 +93,7 @@ public sealed record PhotosDetectParams
 /// <summary>The body of photos:ocr.</summary>
 public sealed record PhotosOCRParams
 {
-    /// <summary>A foto, JPEG ou PNG, até 10 MB e 8000 px.</summary>
+    /// <summary>A imagem da placa já recortada, JPEG ou PNG.</summary>
     public required byte[] Image { get; init; }
 
     internal Form ToForm()
@@ -100,19 +107,26 @@ public sealed record PhotosOCRParams
 /// <summary>The body of photos:recognize.</summary>
 public sealed record PhotosRecognizeParams
 {
-    /// <summary>A foto, JPEG ou PNG, até 10 MB e 8000 px.</summary>
+    /// <summary>A foto, JPEG ou PNG.</summary>
     public required byte[] Image { get; init; }
 
-    /// <summary>Piso do detector, de 0 a 1. Left out of the request when null.</summary>
+    /// <summary>Só NONE é aceito. Left out of the request when null.</summary>
+    public string? ImageMode { get; init; }
+
+    /// <summary>Piso de confiança do detector de placas. Left out of the request when null.</summary>
     public double? LprConfidence { get; init; }
 
-    /// <summary>Piso da leitura, de 0 a 1. Left out of the request when null.</summary>
+    /// <summary>Piso de confiança da leitura dos caracteres. Left out of the request when null.</summary>
     public double? MinOcrConfidence { get; init; }
 
     internal Form ToForm()
     {
         var form = new Alpr.Form();
         form.File("image", Image);
+        if (ImageMode is not null)
+        {
+            form.Text("image_mode", ImageMode);
+        }
         if (LprConfidence is not null)
         {
             form.Text("lpr_confidence", LprConfidence.Value.ToString(CultureInfo.InvariantCulture));

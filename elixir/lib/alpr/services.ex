@@ -21,28 +21,6 @@ defmodule Alpr.Cameras do
   end
 end
 
-defmodule Alpr.Detections do
-  @moduledoc "The API's detections."
-
-  alias Alpr.Client
-
-  @doc """
-  Imagem de uma leitura.
-
-  Options: `:api_key`.
-  """
-  @spec image(Client.t(), String.t(), keyword()) ::
-          {:ok, Alpr.DetectionImage.t()} | {:error, Alpr.Error.t()}
-  def image(%Client{} = client, id, opts \\ []) do
-    path = "/api/v1/detections/#{Client.segment(id)}/image"
-    request = [api_key: opts[:api_key]]
-
-    with {:ok, data} <- Client.request(client, "GET", path, request) do
-      {:ok, Alpr.DetectionImage.from_map(data)}
-    end
-  end
-end
-
 defmodule Alpr.Photos do
   @moduledoc "The API's photos."
 
@@ -54,13 +32,13 @@ defmodule Alpr.Photos do
   Options: `:api_key`.
   """
   @spec detect(Client.t(), Alpr.PhotosDetectParams.t() | keyword() | map(), keyword()) ::
-          {:ok, Alpr.DetectResult.t()} | {:error, Alpr.Error.t()}
+          {:ok, Alpr.PhotoDetection.t()} | {:error, Alpr.Error.t()}
   def detect(%Client{} = client, params, opts \\ []) do
     path = "/api/v1/detect"
     request = [multipart: Alpr.PhotosDetectParams.to_form(params), api_key: opts[:api_key]]
 
     with {:ok, data} <- Client.request(client, "POST", path, request) do
-      {:ok, Alpr.DetectResult.from_map(data)}
+      {:ok, Alpr.PhotoDetection.from_map(data)}
     end
   end
 
@@ -70,13 +48,13 @@ defmodule Alpr.Photos do
   Options: `:api_key`.
   """
   @spec ocr(Client.t(), Alpr.PhotosOCRParams.t() | keyword() | map(), keyword()) ::
-          {:ok, Alpr.OcrResult.t()} | {:error, Alpr.Error.t()}
+          {:ok, Alpr.PlateReading.t()} | {:error, Alpr.Error.t()}
   def ocr(%Client{} = client, params, opts \\ []) do
     path = "/api/v1/ocr"
     request = [multipart: Alpr.PhotosOCRParams.to_form(params), api_key: opts[:api_key]]
 
     with {:ok, data} <- Client.request(client, "POST", path, request) do
-      {:ok, Alpr.OcrResult.from_map(data)}
+      {:ok, Alpr.PlateReading.from_map(data)}
     end
   end
 
@@ -86,13 +64,13 @@ defmodule Alpr.Photos do
   Options: `:api_key`.
   """
   @spec recognize(Client.t(), Alpr.PhotosRecognizeParams.t() | keyword() | map(), keyword()) ::
-          {:ok, Alpr.RecognizeResult.t()} | {:error, Alpr.Error.t()}
+          {:ok, Alpr.PhotoRecognition.t()} | {:error, Alpr.Error.t()}
   def recognize(%Client{} = client, params, opts \\ []) do
     path = "/api/v1/recognize"
     request = [multipart: Alpr.PhotosRecognizeParams.to_form(params), api_key: opts[:api_key]]
 
     with {:ok, data} <- Client.request(client, "POST", path, request) do
-      {:ok, Alpr.RecognizeResult.from_map(data)}
+      {:ok, Alpr.PhotoRecognition.from_map(data)}
     end
   end
 end
@@ -101,6 +79,22 @@ defmodule Alpr.Recognitions do
   @moduledoc "The API's recognitions."
 
   alias Alpr.Client
+
+  @doc """
+  Imagem de uma leitura.
+
+  Options: `:api_key`.
+  """
+  @spec image(Client.t(), String.t(), keyword()) ::
+          {:ok, Alpr.DetectionImageLink.t()} | {:error, Alpr.Error.t()}
+  def image(%Client{} = client, id, opts \\ []) do
+    path = "/api/v1/detections/#{Client.segment(id)}/image"
+    request = [api_key: opts[:api_key]]
+
+    with {:ok, data} <- Client.request(client, "GET", path, request) do
+      {:ok, Alpr.DetectionImageLink.from_map(data)}
+    end
+  end
 
   @doc """
   Listar as leituras. One page; `list_stream/2` walks every page.

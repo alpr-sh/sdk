@@ -18,6 +18,17 @@ public sealed class RecognitionsService
 
     internal RecognitionsService(AlprClient client) => this.client = client;
 
+    /// <summary>Imagem de uma leitura.</summary>
+    /// <param name="id">The id.</param>
+    /// <param name="options">Another workspace's key for this call.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The DetectionImageLink.</returns>
+    /// <exception cref="AlprException">The API refused the call.</exception>
+    public Task<DetectionImageLink> ImageAsync(string id, RequestOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        return client.RequestAsync(HttpMethod.Get, "/api/v1/detections/" + AlprClient.Segment(id) + "/image", null, null, AlprJson.Default.DetectionImageLink, options, cancellationToken);
+    }
+
     /// <summary>Listar as leituras. One page; <see cref="ListIterAsync"/> walks every page.</summary>
     /// <param name="parameters">The cursor to start from and the filters; the newest page when null.</param>
     /// <param name="options">Another workspace's key for this call.</param>
@@ -46,13 +57,13 @@ public sealed record RecognitionsListParams
     /// <summary>The cursor the previous page answered as <c>Next</c>; null or empty asks for the newest page.</summary>
     public string? Before { get; init; }
 
-    /// <summary>Prefixo da placa; traço e caixa não importam.</summary>
+    /// <summary>Prefixo da placa; traço, espaço e caixa não importam.</summary>
     public string? Plate { get; init; }
 
     /// <summary>ID da câmera.</summary>
     public string? Camera { get; init; }
 
-    /// <summary>Origem da leitura: camera ou api.</summary>
+    /// <summary>Origem da leitura; outro valor é ignorado.</summary>
     public string? Source { get; init; }
 
     internal IEnumerable<KeyValuePair<string, string?>> Query() =>

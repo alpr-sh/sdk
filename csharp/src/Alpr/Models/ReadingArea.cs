@@ -6,14 +6,14 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>A área de leitura da câmera: placas fora do polígono são ignoradas.</summary>
+/// <summary>ReadingArea is a resource of Alpr.sh's API.</summary>
 public sealed record ReadingArea
 {
-    /// <summary>The API's <c>box</c>. Null when the API sends none.</summary>
+    /// <summary>A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.</summary>
     [JsonPropertyName("box")]
-    public ReadingBox? Box { get; init; }
+    public required ReadingAreaBox Box { get; init; }
 
-    /// <summary>The API's <c>points</c>. Null when the API sends none.</summary>
+    /// <summary>Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas.</summary>
     [JsonPropertyName("points")]
-    public IReadOnlyList<IReadOnlyList<double>>? Points { get; init; }
+    public required IReadOnlyList<IReadOnlyList<double>> Points { get; init; }
 }

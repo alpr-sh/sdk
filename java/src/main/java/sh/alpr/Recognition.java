@@ -5,7 +5,7 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Uma leitura de placa, de uma câmera ou da API por foto. */
+/** Recognition is a resource of Alpr.sh's API. */
 public final class Recognition {
     /** A value of {@link #getSource()}. */
     public static final String SOURCE_CAMERA = "camera";
@@ -38,17 +38,17 @@ public final class Recognition {
                 Json.required(data, "source", Json::asString));
     }
 
-    /** @return the API's {@code cameraId} (null when the API sends none) */
+    /** @return Nulo numa leitura feita pela API por foto. (null when the API sends none) */
     public String getCameraId() {
         return cameraId;
     }
 
-    /** @return the API's {@code capturedAt} */
+    /** @return Com o deslocamento do fuso do Alpr.sh. */
     public String getCapturedAt() {
         return capturedAt;
     }
 
-    /** @return Confiança da leitura, de 0 a 100. */
+    /** @return De 0 a 100, com uma casa. */
     public double getConf() {
         return conf;
     }
@@ -63,7 +63,7 @@ public final class Recognition {
         return plate;
     }
 
-    /** @return the API's {@code source} */
+    /** @return camera: lida por uma câmera; api: enviada por foto. */
     public String getSource() {
         return source;
     }

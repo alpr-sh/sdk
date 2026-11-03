@@ -6,8 +6,8 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Carga de recognition.created: os fatos no instante da leitura.</summary>
-public record RecognitionCreated
+/// <summary>WebhookRecognitionCreated is a resource of Alpr.sh's API.</summary>
+public record WebhookRecognitionCreated
 {
     /// <summary>A value of <see cref="Event"/>.</summary>
     public const string EventRecognitionCreated = "recognition.created";
@@ -18,15 +18,15 @@ public record RecognitionCreated
     /// <summary>A value of <see cref="Source"/>.</summary>
     public const string SourceApi = "api";
 
-    /// <summary>The API's <c>camera_id</c>. Null when the API sends none.</summary>
+    /// <summary>Ausente numa leitura enviada por foto. Null when the API sends none.</summary>
     [JsonPropertyName("camera_id")]
     public string? CameraId { get; init; }
 
-    /// <summary>The API's <c>captured_at</c>.</summary>
+    /// <summary>UTC, com fração de segundo.</summary>
     [JsonPropertyName("captured_at")]
     public required string CapturedAt { get; init; }
 
-    /// <summary>The API's <c>confidence</c>.</summary>
+    /// <summary>De 0 a 1 (na API de chave, conf vai de 0 a 100).</summary>
     [JsonPropertyName("confidence")]
     public required double Confidence { get; init; }
 
@@ -34,7 +34,7 @@ public record RecognitionCreated
     [JsonPropertyName("event")]
     public required string Event { get; init; }
 
-    /// <summary>The API's <c>id</c>.</summary>
+    /// <summary>O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image.</summary>
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
@@ -42,11 +42,11 @@ public record RecognitionCreated
     [JsonPropertyName("plate")]
     public required string Plate { get; init; }
 
-    /// <summary>The API's <c>source</c>.</summary>
+    /// <summary>camera: lida por uma câmera; api: enviada por foto.</summary>
     [JsonPropertyName("source")]
     public required string Source { get; init; }
 
-    /// <summary>The API's <c>tenant_id</c>.</summary>
+    /// <summary>O espaço de trabalho dono da leitura.</summary>
     [JsonPropertyName("tenant_id")]
     public required string TenantId { get; init; }
 }

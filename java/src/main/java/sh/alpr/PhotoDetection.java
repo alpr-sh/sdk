@@ -5,23 +5,23 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Onde estão as placas de uma foto. */
-public final class DetectResult {
+/** PhotoDetection is a resource of Alpr.sh's API. */
+public final class PhotoDetection {
 
     private final long imageHeight;
     private final long imageWidth;
     private final List<DetectedPlate> plates;
     private final long processingTimeMs;
 
-    DetectResult(long imageHeight, long imageWidth, List<DetectedPlate> plates, long processingTimeMs) {
+    PhotoDetection(long imageHeight, long imageWidth, List<DetectedPlate> plates, long processingTimeMs) {
         this.imageHeight = imageHeight;
         this.imageWidth = imageWidth;
         this.plates = plates;
         this.processingTimeMs = processingTimeMs;
     }
 
-    static DetectResult fromJson(Map<String, Object> data) {
-        return new DetectResult(
+    static PhotoDetection fromJson(Map<String, Object> data) {
+        return new PhotoDetection(
                 Json.required(data, "imageHeight", Json::asLong),
                 Json.required(data, "imageWidth", Json::asLong),
                 Json.required(data, "plates", Json.list(Json.model(DetectedPlate::fromJson))),
@@ -38,7 +38,7 @@ public final class DetectResult {
         return imageWidth;
     }
 
-    /** @return the API's {@code plates} */
+    /** @return Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, []. */
     public List<DetectedPlate> getPlates() {
         return plates;
     }
@@ -50,6 +50,6 @@ public final class DetectResult {
 
     @Override
     public String toString() {
-        return "DetectResult{" + "imageHeight=" + imageHeight + ", imageWidth=" + imageWidth + ", plates=" + plates + ", processingTimeMs=" + processingTimeMs + "}";
+        return "PhotoDetection{" + "imageHeight=" + imageHeight + ", imageWidth=" + imageWidth + ", plates=" + plates + ", processingTimeMs=" + processingTimeMs + "}";
     }
 }

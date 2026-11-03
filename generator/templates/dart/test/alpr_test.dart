@@ -162,9 +162,9 @@ void main() {
     expect(cameras[0].enabled, isTrue);
     expect(cameras[0].readingArea, isNull);
     final area = cameras[1].readingArea!;
-    expect(area.box!.x, 0.1);
+    expect(area.box.x, 0.1);
     expect(area.points, hasLength(3));
-    expect(area.points![1][0], 0.6);
+    expect(area.points[1][0], 0.6);
   });
 
   test('a photo goes as multipart', () async {
@@ -256,7 +256,7 @@ void main() {
         'imageUrl': 'https://alpr.sh/api/v1/detections/a/image/file?s=x',
       }),
     );
-    final image = await alpr.detections.image('a/b');
+    final image = await alpr.recognitions.image('a/b');
     expect(seen.single.url.path, '/api/v1/detections/a%2Fb/image');
     expect(image.expiresIn, 300);
     expect(image.detectionId, 'a/b');
@@ -731,8 +731,8 @@ void main() {
         testBody,
         now,
       );
-      expect(test, isA<WebhookTestWebhookEvent>());
-      test as WebhookTestWebhookEvent;
+      expect(test, isA<TestWebhookEvent>());
+      test as TestWebhookEvent;
       expect(test.event, 'webhook.test');
       expect(test.sentAt, '2026-10-22T12:00:00Z');
 

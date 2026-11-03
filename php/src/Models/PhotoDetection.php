@@ -6,14 +6,16 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** O resultado da leitura de uma foto. Sem placa, plates é []. */
-final class RecognizeResult
+/** PhotoDetection is a resource of Alpr.sh's API. */
+final class PhotoDetection
 {
     public function __construct(
-        public readonly int $creditsRemaining,
         public readonly int $imageHeight,
         public readonly int $imageWidth,
-        /** @var list<RecognizedPlate> */
+        /**
+         * Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, [].
+         * @var list<DetectedPlate>
+         */
         public readonly array $plates,
         public readonly int $processingTimeMs,
     ) {
@@ -25,10 +27,9 @@ final class RecognizeResult
     public static function fromArray(array $data): self
     {
         return new self(
-            creditsRemaining: $data['creditsRemaining'],
             imageHeight: $data['imageHeight'],
             imageWidth: $data['imageWidth'],
-            plates: array_values(array_map(static fn (array $item) => RecognizedPlate::fromArray($item), $data['plates'])),
+            plates: array_values(array_map(static fn (array $item) => DetectedPlate::fromArray($item), $data['plates'])),
             processingTimeMs: $data['processingTimeMs'],
         );
     }

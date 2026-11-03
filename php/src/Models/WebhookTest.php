@@ -6,7 +6,7 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Carga de webhook.test, enviada pelo botão Testar do painel. */
+/** WebhookTest is a resource of Alpr.sh's API. */
 final class WebhookTest
 {
     public function __construct(

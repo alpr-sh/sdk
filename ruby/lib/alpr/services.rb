@@ -18,21 +18,6 @@ module Alpr
     end
   end
 
-  # The API's detections.
-  class DetectionsService
-    def initialize(client)
-      @client = client
-    end
-
-    # Imagem de uma leitura.
-    #
-    # @return [DetectionImage]
-    def image(id, api_key: nil)
-      data = @client.request("GET", "/api/v1/detections/#{Alpr.segment(id)}/image", api_key: api_key)
-      DetectionImage.from_hash(data)
-    end
-  end
-
   # The API's photos.
   class PhotosService
     def initialize(client)
@@ -42,28 +27,28 @@ module Alpr
     # Localizar as placas de uma foto.
     #
     # @param params [PhotosDetectParams, Hash]
-    # @return [DetectResult]
+    # @return [PhotoDetection]
     def detect(params, api_key: nil)
       data = @client.request("POST", "/api/v1/detect", form: PhotosDetectParams.coerce(params).to_form, api_key: api_key)
-      DetectResult.from_hash(data)
+      PhotoDetection.from_hash(data)
     end
 
     # Ler uma placa já recortada.
     #
     # @param params [PhotosOCRParams, Hash]
-    # @return [OcrResult]
+    # @return [PlateReading]
     def ocr(params, api_key: nil)
       data = @client.request("POST", "/api/v1/ocr", form: PhotosOCRParams.coerce(params).to_form, api_key: api_key)
-      OcrResult.from_hash(data)
+      PlateReading.from_hash(data)
     end
 
     # Ler as placas de uma foto.
     #
     # @param params [PhotosRecognizeParams, Hash]
-    # @return [RecognizeResult]
+    # @return [PhotoRecognition]
     def recognize(params, api_key: nil)
       data = @client.request("POST", "/api/v1/recognize", form: PhotosRecognizeParams.coerce(params).to_form, api_key: api_key)
-      RecognizeResult.from_hash(data)
+      PhotoRecognition.from_hash(data)
     end
   end
 
@@ -71,6 +56,14 @@ module Alpr
   class RecognitionsService
     def initialize(client)
       @client = client
+    end
+
+    # Imagem de uma leitura.
+    #
+    # @return [DetectionImageLink]
+    def image(id, api_key: nil)
+      data = @client.request("GET", "/api/v1/detections/#{Alpr.segment(id)}/image", api_key: api_key)
+      DetectionImageLink.from_hash(data)
     end
 
     # Listar as leituras. One page; +list_iter+ walks every page. +before+ is the

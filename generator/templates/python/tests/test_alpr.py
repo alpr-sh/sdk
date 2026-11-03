@@ -11,7 +11,7 @@ from alpr import (
     AlertTriggeredWebhookEvent,
     RecognitionCreatedWebhookEvent,
     UnknownWebhookEvent,
-    WebhookTestWebhookEvent,
+    TestWebhookEvent,
     WebhookVerificationError,
     verify_webhook,
     verify_webhook_signature,
@@ -178,7 +178,7 @@ class ClientTest(Case):
         alpr, fake = self.serve(
             lambda request: ok('{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}')
         )
-        image = alpr.detections.image("a/b")
+        image = alpr.recognitions.image("a/b")
         self.assertEqual(fake.seen[0].url.path, "/api/v1/detections/a%2Fb/image")
         self.assertEqual((image.expires_in, image.detection_id), (300, "a/b"))
         self.assertTrue(image.image_url.startswith("https://alpr.sh/"))
@@ -416,7 +416,7 @@ class WebhookTest(unittest.TestCase):
         assert isinstance(event, AlertTriggeredWebhookEvent)
         self.assertEqual((event.rule_name, event.recognition_id, event.rule_id), ("Veículo bloqueado", "rec_1", "rule_1"))
         event = _verify_webhook_at(NEW_SECRET, webhook_headers("del_0003", SIGNED_AT, TEST_NEW), TEST_BODY.encode(), NOW)
-        assert isinstance(event, WebhookTestWebhookEvent)
+        assert isinstance(event, TestWebhookEvent)
         self.assertEqual((event.event, event.sent_at), ("webhook.test", "2026-10-22T12:00:00Z"))
         event = _verify_webhook_at(NEW_SECRET, webhook_headers("del_0004", SIGNED_AT, UNKNOWN_NEW), UNKNOWN_BODY.encode(), NOW)
         assert isinstance(event, UnknownWebhookEvent)

@@ -13,13 +13,13 @@ namespace Alpr;
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(AlertTriggeredWebhookEvent), TypeInfoPropertyName = "AlertTriggeredWebhookEvent")]
 [JsonSerializable(typeof(Envelope<IReadOnlyList<Camera>>), TypeInfoPropertyName = "CameraListEnvelope")]
-[JsonSerializable(typeof(DetectResult), TypeInfoPropertyName = "DetectResult")]
-[JsonSerializable(typeof(DetectionImage), TypeInfoPropertyName = "DetectionImage")]
-[JsonSerializable(typeof(OcrResult), TypeInfoPropertyName = "OcrResult")]
+[JsonSerializable(typeof(DetectionImageLink), TypeInfoPropertyName = "DetectionImageLink")]
+[JsonSerializable(typeof(PhotoDetection), TypeInfoPropertyName = "PhotoDetection")]
+[JsonSerializable(typeof(PhotoRecognition), TypeInfoPropertyName = "PhotoRecognition")]
+[JsonSerializable(typeof(PlateReading), TypeInfoPropertyName = "PlateReading")]
 [JsonSerializable(typeof(RecognitionCreatedWebhookEvent), TypeInfoPropertyName = "RecognitionCreatedWebhookEvent")]
 [JsonSerializable(typeof(Page<Recognition>), TypeInfoPropertyName = "RecognitionPage")]
-[JsonSerializable(typeof(RecognizeResult), TypeInfoPropertyName = "RecognizeResult")]
-[JsonSerializable(typeof(WebhookTestWebhookEvent), TypeInfoPropertyName = "WebhookTestWebhookEvent")]
+[JsonSerializable(typeof(TestWebhookEvent), TypeInfoPropertyName = "TestWebhookEvent")]
 [JsonSerializable(typeof(JsonElement))]
 internal sealed partial class AlprJson : JsonSerializerContext
 {

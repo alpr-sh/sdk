@@ -6,24 +6,24 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The payload of {@code alert.triggered}, flat: the fields of a {@link AlertTriggered}.
+ * The payload of {@code alert.triggered}, flat: the fields of a {@link WebhookAlertTriggered}.
  */
 public final class AlertTriggeredWebhookEvent extends WebhookEvent {
     /** The event names this class carries. */
     public static final List<String> EVENTS = List.of("alert.triggered");
 
-    private final AlertTriggered payload;
+    private final WebhookAlertTriggered payload;
 
-    private AlertTriggeredWebhookEvent(AlertTriggered payload) {
+    private AlertTriggeredWebhookEvent(WebhookAlertTriggered payload) {
         super(payload.getEvent(), payload.getId());
         this.payload = payload;
     }
 
     static AlertTriggeredWebhookEvent fromJson(Map<String, Object> body) {
-        return new AlertTriggeredWebhookEvent(AlertTriggered.fromJson(body));
+        return new AlertTriggeredWebhookEvent(WebhookAlertTriggered.fromJson(body));
     }
 
-    /** @return the API's {@code camera_id} (null when the body has none) */
+    /** @return Ausente se a leitura não veio de uma câmera. (null when the body has none) */
     public String getCameraId() {
         return payload.getCameraId();
     }
@@ -33,7 +33,7 @@ public final class AlertTriggeredWebhookEvent extends WebhookEvent {
         return payload.getCapturedAt();
     }
 
-    /** @return the API's {@code confidence} */
+    /** @return De 0 a 1. */
     public double getConfidence() {
         return payload.getConfidence();
     }
@@ -43,7 +43,7 @@ public final class AlertTriggeredWebhookEvent extends WebhookEvent {
         return payload.getPlate();
     }
 
-    /** @return the API's {@code recognition_id} */
+    /** @return A leitura que disparou o alerta. */
     public String getRecognitionId() {
         return payload.getRecognitionId();
     }
@@ -56,6 +56,11 @@ public final class AlertTriggeredWebhookEvent extends WebhookEvent {
     /** @return the API's {@code rule_name} */
     public String getRuleName() {
         return payload.getRuleName();
+    }
+
+    /** @return Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:&lt;id&gt;, partner:&lt;id&gt;). Presente só quando algum foi excluído; é informação, não há o que fazer com ela. (null when the body has none) */
+    public List<String> getSkip() {
+        return payload.getSkip();
     }
 
     /** @return the API's {@code tenant_id} */

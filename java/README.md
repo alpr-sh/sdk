@@ -21,17 +21,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import sh.alpr.Alpr;
 import sh.alpr.CamerasService;
-import sh.alpr.DetectionImage;
+import sh.alpr.DetectionImageLink;
 import sh.alpr.PhotosService;
 import sh.alpr.Recognition;
 import sh.alpr.RecognitionsService;
-import sh.alpr.RecognizeResult;
+import sh.alpr.PhotoRecognition;
 
 Alpr alpr = new Alpr(System.getenv("ALPR_API_KEY")); // alpr_live_…
 
 // Ler as placas de uma foto.
 byte[] photo = Files.readAllBytes(Path.of("carro.jpg"));
-RecognizeResult result = alpr.photos().recognize(
+PhotoRecognition result = alpr.photos().recognize(
         PhotosService.RecognizeParams.builder().image(photo).lprConfidence(0.5).build());
 result.getPlates().forEach(plate -> System.out.println(plate.getPlate() + " " + plate.getConf()));
 
@@ -45,7 +45,7 @@ for (Recognition reading : alpr.recognitions().listIter(filters)) {
 alpr.cameras().list().forEach(camera -> System.out.println(camera.getName()));
 
 // O link temporário da imagem de uma leitura.
-DetectionImage image = alpr.detections().image("det_123");
+DetectionImageLink image = alpr.recognitions().image("det_123");
 System.out.println(image.getImageUrl() + " (vale " + image.getExpiresIn() + " s)");
 ```
 
@@ -66,9 +66,8 @@ Toda chamada envia `Authorization: Bearer <chave>`, `Accept: application/json` e
 | Serviço | Métodos |
 |---|---|
 | `alpr.cameras()` | `list` |
-| `alpr.detections()` | `image` |
 | `alpr.photos()` | `detect`, `ocr`, `recognize` |
-| `alpr.recognitions()` | `list`, `listIter` |
+| `alpr.recognitions()` | `image`, `list`, `listIter` |
 
 Os modelos são imutáveis, com getters em camelCase (`plate.getCoordinateLeft()`) e os valores enumerados como constantes (`Recognition.SOURCE_CAMERA`). Um campo opcional ausente na resposta chega como `null`.
 
@@ -112,7 +111,7 @@ Passe o corpo cru (`byte[]` ou `String`), antes de interpretar, e os cabeçalhos
 
 Durante a rotação do segredo o cabeçalho traz mais de uma assinatura, numa só linha separada por vírgulas ou em linhas repetidas. Basta uma conferir, mas mais de 6 entradas, ou uma entrada que não seja `sha256=` e 64 dígitos hexadecimais, recusam a requisição inteira.
 
-O evento é tipado, plano e sem envelope: cada grupo vira `<Payload>WebhookEvent` (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `WebhookTestWebhookEvent`) com os campos do corpo (`getEvent()`, `getId()`, `getTenantId()`, `getPlate()`…). Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent`, com `getEvent()`, `getId()` (vazio se o corpo não tiver `id`) e o corpo inteiro. Um corpo que não é um objeto com `event` lança `IllegalArgumentException`.
+O evento é tipado, plano e sem envelope: cada grupo vira `<Payload>WebhookEvent` (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `TestWebhookEvent`) com os campos do corpo (`getEvent()`, `getId()`, `getTenantId()`, `getPlate()`…). Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent`, com `getEvent()`, `getId()` (vazio se o corpo não tiver `id`) e o corpo inteiro. Um corpo que não é um objeto com `event` lança `IllegalArgumentException`.
 
 O `id` do corpo é o da leitura ou do alerta, não o da entrega. Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`.
 

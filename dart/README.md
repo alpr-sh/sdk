@@ -30,7 +30,7 @@ await for (final reading in alpr.recognitions.listIter(plate: 'BRA')) {
 final cameras = await alpr.cameras.list();
 
 // O link temporário da imagem de uma leitura.
-final image = await alpr.detections.image('det_1');
+final image = await alpr.recognitions.image('det_1');
 print('${image.imageUrl} (vale ${image.expiresIn} s)');
 
 alpr.close();
@@ -47,9 +47,8 @@ A chave da API é do espaço de trabalho (`alpr_live_` e 64 caracteres hexadecim
 | Serviço | Métodos |
 |---|---|
 | `alpr.cameras` | `list` |
-| `alpr.detections` | `image` |
 | `alpr.photos` | `detect`, `ocr`, `recognize` |
-| `alpr.recognitions` | `list`, `listIter` |
+| `alpr.recognitions` | `image`, `list`, `listIter` |
 
 Os modelos são classes imutáveis com campos em camelCase (`plate.coordinateLeft`) e `fromJson`/`toJson` com os nomes da API; um campo que a API pode deixar de enviar ou enviar como `null` é nulo. `cameras.list` devolve a lista de câmeras. `recognitions.list` devolve uma `Page` (`items` e `next`, o cursor da próxima página, nulo na última) e aceita `before:` (o cursor), `plate:`, `camera:` e `source:`. `recognitions.listIter` devolve um `Stream` que começa no cursor dado (nenhum é a leitura mais nova), entrega todas as leituras, segue o `next` até o fim, para se o cursor não anda e termina no primeiro erro. Todas as chamadas aceitam `apiKey:` para usar a chave de outro espaço numa chamada. `Alpr(…, baseUrl:, httpClient:, timeout:)` troca o endereço, o `http.Client` (por exemplo, um `MockClient` nos testes) e o limite de 30 segundos.
 
@@ -103,7 +102,7 @@ O evento é tipado, plano e sem `data`: um tipo para cada carga do webhook, com 
 |---|---|
 | `alert.triggered` | `AlertTriggeredWebhookEvent` |
 | `recognition.created` | `RecognitionCreatedWebhookEvent` |
-| `webhook.test` | `WebhookTestWebhookEvent` |
+| `webhook.test` | `TestWebhookEvent` |
 
 Um evento que esta versão do SDK ainda não conhece chega como `UnknownWebhookEvent`, com `event`, `id` (se o corpo tem um) e o `body` inteiro; não é um erro. Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`: o `id` do corpo é o da leitura ou do alerta, não o da entrega.
 

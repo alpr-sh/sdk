@@ -36,7 +36,7 @@ for camera in client.cameras().list()? {
 }
 
 // O link temporário da imagem de uma leitura.
-let image = client.detections().image("det_123")?;
+let image = client.recognitions().image("det_123")?;
 println!("{} (vale {} s)", image.image_url, image.expires_in);
 ```
 
@@ -55,9 +55,8 @@ let params = PhotosRecognizeParams::new(photo).lpr_confidence(0.5);
 | Serviço | Métodos |
 |---|---|
 | `client.cameras()` | `list` |
-| `client.detections()` | `image` |
 | `client.photos()` | `detect`, `ocr`, `recognize` |
-| `client.recognitions()` | `list`, `list_iter` |
+| `client.recognitions()` | `image`, `list`, `list_iter` |
 
 `list` de uma lista paginada devolve uma `Page` (`items` e `next`, o cursor da próxima página, `None` na última); `list_iter` é um `Iterator` que parte do cursor dado (sem cursor, da mais nova), entrega cada item, segue `next` até acabar, para quando o cursor não anda e termina no primeiro erro. Os campos enumerados são enums (`RecognitionSource::Api`) que guardam em `Unrecognized` um valor que esta versão ainda não conhece.
 

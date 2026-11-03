@@ -2,41 +2,23 @@
 
 package alpr
 
-// Carga de alert.triggered: a regra que disparou e a leitura que a disparou.
-type AlertTriggered struct {
-	CameraID      string  `json:"camera_id,omitempty"`
-	CapturedAt    string  `json:"captured_at"`
-	Confidence    float64 `json:"confidence"`
-	Event         string  `json:"event"`
-	ID            string  `json:"id"`
-	Plate         string  `json:"plate"`
-	RecognitionID string  `json:"recognition_id"`
-	RuleID        string  `json:"rule_id"`
-	RuleName      string  `json:"rule_name"`
-	TenantID      string  `json:"tenant_id"`
-}
-
-// Uma câmera do espaço, sem endereço nem credenciais.
+// Camera is a resource of Alpr.sh's API.
 type Camera struct {
-	CreatedAt   string       `json:"createdAt"`
-	Enabled     bool         `json:"enabled"`
-	ID          string       `json:"id"`
-	Location    string       `json:"location"`
-	Name        string       `json:"name"`
-	Protocol    string       `json:"protocol"`
+	CreatedAt string `json:"createdAt"`
+	Enabled   bool   `json:"enabled"`
+	ID        string `json:"id"`
+	// O endereço da câmera como texto; vazio se não foi informado.
+	Location string `json:"location"`
+	Name     string `json:"name"`
+	// Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
+	Protocol string `json:"protocol"`
+	// Nulo quando a câmera lê a imagem inteira.
 	ReadingArea *ReadingArea `json:"readingArea"`
 }
 
-// Onde estão as placas de uma foto.
-type DetectResult struct {
-	ImageHeight      int64           `json:"imageHeight"`
-	ImageWidth       int64           `json:"imageWidth"`
-	Plates           []DetectedPlate `json:"plates"`
-	ProcessingTimeMs int64           `json:"processingTimeMs"`
-}
-
-// Uma placa localizada na foto, sem o texto.
+// DetectedPlate is a resource of Alpr.sh's API.
 type DetectedPlate struct {
+	// Confiança do detector, de 0 a 100, com uma casa.
 	Conf             float64 `json:"conf"`
 	CoordinateBottom int64   `json:"coordinateBottom"`
 	CoordinateLeft   int64   `json:"coordinateLeft"`
@@ -47,112 +29,168 @@ type DetectedPlate struct {
 	Time             string  `json:"time"`
 }
 
-// O link temporário da imagem de uma leitura.
-type DetectionImage struct {
+// DetectionImageLink is a resource of Alpr.sh's API.
+type DetectionImageLink struct {
 	DetectionID string `json:"detectionId"`
-	// Segundos de validade do link.
-	ExpiresIn int64  `json:"expiresIn"`
-	ImageURL  string `json:"imageUrl"`
+	// Segundos de validade do link (300).
+	ExpiresIn int64 `json:"expiresIn"`
+	// Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio.
+	ImageURL string `json:"imageUrl"`
 }
 
-// A placa lida de uma imagem já recortada.
-type OcrResult struct {
-	Confidence       float64 `json:"confidence"`
-	CreditsRemaining int64   `json:"creditsRemaining"`
-	DetectionID      *string `json:"detectionId"`
-	LatencyMs        int64   `json:"latencyMs"`
-	Plate            string  `json:"plate"`
+// PhotoDetection is a resource of Alpr.sh's API.
+type PhotoDetection struct {
+	ImageHeight int64 `json:"imageHeight"`
+	ImageWidth  int64 `json:"imageWidth"`
+	// Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, [].
+	Plates           []DetectedPlate `json:"plates"`
+	ProcessingTimeMs int64           `json:"processingTimeMs"`
+}
+
+// PhotoRecognition is a resource of Alpr.sh's API.
+type PhotoRecognition struct {
+	// Créditos que sobraram depois desta leitura.
+	CreditsRemaining int64 `json:"creditsRemaining"`
+	ImageHeight      int64 `json:"imageHeight"`
+	ImageWidth       int64 `json:"imageWidth"`
+	// Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, [].
+	Plates           []RecognizedPlate `json:"plates"`
+	ProcessingTimeMs int64             `json:"processingTimeMs"`
 }
 
 // The body of photos:detect.
 type PhotosDetectParams struct {
-	// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+	// A foto, JPEG ou PNG.
 	Image []byte `json:"image"`
-	// Piso do detector, de 0 a 1.
+	// Só NONE é aceito.
+	ImageMode *string `json:"image_mode,omitempty"`
+	// Piso de confiança do detector de placas.
 	LPRConfidence *float64 `json:"lpr_confidence,omitempty"`
-	// Piso da leitura, de 0 a 1.
+	// Piso de confiança da leitura dos caracteres.
 	MinOCRConfidence *float64 `json:"min_ocr_confidence,omitempty"`
 }
 
 // The body of photos:ocr.
 type PhotosOCRParams struct {
-	// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+	// A imagem da placa já recortada, JPEG ou PNG.
 	Image []byte `json:"image"`
 }
 
 // The body of photos:recognize.
 type PhotosRecognizeParams struct {
-	// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+	// A foto, JPEG ou PNG.
 	Image []byte `json:"image"`
-	// Piso do detector, de 0 a 1.
+	// Só NONE é aceito.
+	ImageMode *string `json:"image_mode,omitempty"`
+	// Piso de confiança do detector de placas.
 	LPRConfidence *float64 `json:"lpr_confidence,omitempty"`
-	// Piso da leitura, de 0 a 1.
+	// Piso de confiança da leitura dos caracteres.
 	MinOCRConfidence *float64 `json:"min_ocr_confidence,omitempty"`
 }
 
-// A área de leitura da câmera: placas fora do polígono são ignoradas.
+// PlateReading is a resource of Alpr.sh's API.
+type PlateReading struct {
+	// Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100).
+	Confidence float64 `json:"confidence"`
+	// Créditos que sobraram depois desta leitura.
+	CreditsRemaining int64 `json:"creditsRemaining"`
+	// Hoje sempre nulo: a leitura de uma placa recortada não é guardada.
+	DetectionID *string `json:"detectionId"`
+	LatencyMs   int64   `json:"latencyMs"`
+	// O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro.
+	Plate string `json:"plate"`
+}
+
+// ReadingArea is a resource of Alpr.sh's API.
 type ReadingArea struct {
-	Box    ReadingBox  `json:"box,omitempty"`
-	Points [][]float64 `json:"points,omitempty"`
+	// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+	Box ReadingAreaBox `json:"box"`
+	// Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas.
+	Points [][]float64 `json:"points"`
 }
 
-// A caixa envolvente da área de leitura, em frações da imagem.
-type ReadingBox struct {
-	Height float64 `json:"height,omitempty"`
-	Width  float64 `json:"width,omitempty"`
-	X      float64 `json:"x,omitempty"`
-	Y      float64 `json:"y,omitempty"`
+// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+type ReadingAreaBox struct {
+	Height float64 `json:"height"`
+	Width  float64 `json:"width"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
 }
 
-// Uma leitura de placa, de uma câmera ou da API por foto.
+// Recognition is a resource of Alpr.sh's API.
 type Recognition struct {
-	CameraID   *string `json:"cameraId"`
-	CapturedAt string  `json:"capturedAt"`
-	// Confiança da leitura, de 0 a 100.
-	Conf   float64 `json:"conf"`
-	ID     string  `json:"id"`
-	Plate  string  `json:"plate"`
-	Source string  `json:"source"`
+	// Nulo numa leitura feita pela API por foto.
+	CameraID *string `json:"cameraId"`
+	// Com o deslocamento do fuso do Alpr.sh.
+	CapturedAt string `json:"capturedAt"`
+	// De 0 a 100, com uma casa.
+	Conf  float64 `json:"conf"`
+	ID    string  `json:"id"`
+	Plate string  `json:"plate"`
+	// camera: lida por uma câmera; api: enviada por foto.
+	Source string `json:"source"`
 }
 
-// Carga de recognition.created: os fatos no instante da leitura.
-type RecognitionCreated struct {
-	CameraID   string  `json:"camera_id,omitempty"`
-	CapturedAt string  `json:"captured_at"`
+// RecognizedPlate is a resource of Alpr.sh's API.
+type RecognizedPlate struct {
+	// Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula ("0.99;0.98").
+	CharConfs string `json:"charConfs"`
+	// Confiança da placa, de 0 a 100, com uma casa.
+	Conf float64 `json:"conf"`
+	// Pixels da foto enviada.
+	CoordinateBottom int64 `json:"coordinateBottom"`
+	CoordinateLeft   int64 `json:"coordinateLeft"`
+	CoordinateRight  int64 `json:"coordinateRight"`
+	CoordinateTop    int64 `json:"coordinateTop"`
+	// Igual a time.
+	CreatedAt string `json:"createdAt"`
+	// Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul).
+	Plate string `json:"plate"`
+	// Sempre car; a API não informa país nem formato.
+	PlateType string `json:"plateType"`
+	// Instante da leitura, com o deslocamento do fuso do Alpr.sh.
+	Time string `json:"time"`
+}
+
+// WebhookAlertTriggered is a resource of Alpr.sh's API.
+type WebhookAlertTriggered struct {
+	// Ausente se a leitura não veio de uma câmera.
+	CameraID   string `json:"camera_id,omitempty"`
+	CapturedAt string `json:"captured_at"`
+	// De 0 a 1.
 	Confidence float64 `json:"confidence"`
 	Event      string  `json:"event"`
-	ID         string  `json:"id"`
-	Plate      string  `json:"plate"`
-	Source     string  `json:"source"`
-	TenantID   string  `json:"tenant_id"`
+	// O id do disparo.
+	ID    string `json:"id"`
+	Plate string `json:"plate"`
+	// A leitura que disparou o alerta.
+	RecognitionID string `json:"recognition_id"`
+	RuleID        string `json:"rule_id"`
+	RuleName      string `json:"rule_name"`
+	// Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:<id>, partner:<id>). Presente só quando algum foi excluído; é informação, não há o que fazer com ela.
+	Skip     []string `json:"skip,omitempty"`
+	TenantID string   `json:"tenant_id"`
 }
 
-// O resultado da leitura de uma foto. Sem placa, plates é [].
-type RecognizeResult struct {
-	CreditsRemaining int64             `json:"creditsRemaining"`
-	ImageHeight      int64             `json:"imageHeight"`
-	ImageWidth       int64             `json:"imageWidth"`
-	Plates           []RecognizedPlate `json:"plates"`
-	ProcessingTimeMs int64             `json:"processingTimeMs"`
+// WebhookRecognitionCreated is a resource of Alpr.sh's API.
+type WebhookRecognitionCreated struct {
+	// Ausente numa leitura enviada por foto.
+	CameraID string `json:"camera_id,omitempty"`
+	// UTC, com fração de segundo.
+	CapturedAt string `json:"captured_at"`
+	// De 0 a 1 (na API de chave, conf vai de 0 a 100).
+	Confidence float64 `json:"confidence"`
+	Event      string  `json:"event"`
+	// O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image.
+	ID    string `json:"id"`
+	Plate string `json:"plate"`
+	// camera: lida por uma câmera; api: enviada por foto.
+	Source string `json:"source"`
+	// O espaço de trabalho dono da leitura.
+	TenantID string `json:"tenant_id"`
 }
 
-// Uma placa lida na foto, com a caixa em pixels.
-type RecognizedPlate struct {
-	// Confiança de 0 a 1 de cada caractere, separadas por vírgula.
-	CharConfs string `json:"charConfs"`
-	// Confiança da leitura, de 0 a 100.
-	Conf             float64 `json:"conf"`
-	CoordinateBottom int64   `json:"coordinateBottom"`
-	CoordinateLeft   int64   `json:"coordinateLeft"`
-	CoordinateRight  int64   `json:"coordinateRight"`
-	CoordinateTop    int64   `json:"coordinateTop"`
-	CreatedAt        string  `json:"createdAt"`
-	Plate            string  `json:"plate"`
-	PlateType        string  `json:"plateType"`
-	Time             string  `json:"time"`
-}
-
-// Carga de webhook.test, enviada pelo botão Testar do painel.
+// WebhookTest is a resource of Alpr.sh's API.
 type WebhookTest struct {
 	Event    string `json:"event"`
 	ID       string `json:"id"`
@@ -162,11 +200,20 @@ type WebhookTest struct {
 
 // The values the API answers in an enumerated field.
 const (
-	AlertTriggeredEventAlertTriggered         = "alert.triggered"
-	RecognitionSourceCamera                   = "camera"
-	RecognitionSourceAPI                      = "api"
-	RecognitionCreatedEventRecognitionCreated = "recognition.created"
-	RecognitionCreatedSourceCamera            = "camera"
-	RecognitionCreatedSourceAPI               = "api"
-	WebhookTestEventWebhookTest               = "webhook.test"
+	CameraProtocolRtsp                               = "rtsp"
+	CameraProtocolRtmp                               = "rtmp"
+	CameraProtocolHls                                = "hls"
+	CameraProtocolHttp                               = "http"
+	CameraProtocolHikconnect                         = "hikconnect"
+	CameraProtocolHikcloud                           = "hikcloud"
+	CameraProtocolRtmppush                           = "rtmppush"
+	DetectedPlatePlateTypeCar                        = "car"
+	RecognitionSourceCamera                          = "camera"
+	RecognitionSourceAPI                             = "api"
+	RecognizedPlatePlateTypeCar                      = "car"
+	WebhookAlertTriggeredEventAlertTriggered         = "alert.triggered"
+	WebhookRecognitionCreatedEventRecognitionCreated = "recognition.created"
+	WebhookRecognitionCreatedSourceCamera            = "camera"
+	WebhookRecognitionCreatedSourceAPI               = "api"
+	WebhookTestEventWebhookTest                      = "webhook.test"
 )

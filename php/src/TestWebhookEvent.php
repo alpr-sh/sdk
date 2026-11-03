@@ -12,7 +12,7 @@ namespace Alpr;
  *
  * The fields are the body's, flat: there is no data wrapper.
  */
-final class WebhookTestWebhookEvent extends WebhookEvent
+final class TestWebhookEvent extends WebhookEvent
 {
     /** The event names this class carries. */
     public const EVENTS = ['webhook.test'];

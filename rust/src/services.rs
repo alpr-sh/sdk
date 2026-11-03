@@ -12,11 +12,6 @@ impl Client {
         CamerasService::new(self)
     }
 
-    /// The API's detections.
-    pub fn detections(&self) -> DetectionsService<'_> {
-        DetectionsService::new(self)
-    }
-
     /// The API's photos.
     pub fn photos(&self) -> PhotosService<'_> {
         PhotosService::new(self)
@@ -62,38 +57,6 @@ impl<'a> CamerasService<'a> {
     }
 }
 
-/// The API's detections: `client.detections()`.
-///
-/// [`api_key`](Self::api_key) sets the key of the call made through it.
-#[derive(Debug, Clone)]
-pub struct DetectionsService<'a> {
-    client: &'a Client,
-    options: RequestOptions,
-}
-
-impl<'a> DetectionsService<'a> {
-    pub(crate) fn new(client: &'a Client) -> Self {
-        Self { client, options: RequestOptions::default() }
-    }
-
-    /// Calls with another workspace's key.
-    pub fn api_key(mut self, key: impl Into<String>) -> Self {
-        self.options.api_key = Some(key.into());
-        self
-    }
-
-    /// Calls with these options.
-    pub fn options(mut self, options: RequestOptions) -> Self {
-        self.options = options;
-        self
-    }
-
-    /// Imagem de uma leitura.
-    pub fn image(&self, id: &str) -> Result<DetectionImage, Error> {
-        self.client.request("GET", &format!("/api/v1/detections/{}/image", crate::client::escape(id)), &[], None, &self.options)
-    }
-}
-
 impl PhotosDetectParams {
     /// The body as the `multipart/form-data` it is sent as: the photo is a
     /// file part, every other field a text part, and a field left out is not
@@ -101,6 +64,9 @@ impl PhotosDetectParams {
     fn form(&self) -> Form<'_> {
         let mut form = Form::new();
         form.file("image", &self.image);
+        if let Some(value) = &self.image_mode {
+            form.text("image_mode", value.to_string());
+        }
         if let Some(value) = &self.lpr_confidence {
             form.text("lpr_confidence", value.to_string());
         }
@@ -129,6 +95,9 @@ impl PhotosRecognizeParams {
     fn form(&self) -> Form<'_> {
         let mut form = Form::new();
         form.file("image", &self.image);
+        if let Some(value) = &self.image_mode {
+            form.text("image_mode", value.to_string());
+        }
         if let Some(value) = &self.lpr_confidence {
             form.text("lpr_confidence", value.to_string());
         }
@@ -166,17 +135,17 @@ impl<'a> PhotosService<'a> {
     }
 
     /// Localizar as placas de uma foto.
-    pub fn detect(&self, params: &PhotosDetectParams) -> Result<DetectResult, Error> {
+    pub fn detect(&self, params: &PhotosDetectParams) -> Result<PhotoDetection, Error> {
         self.client.request("POST", "/api/v1/detect", &[], Some(params.form()), &self.options)
     }
 
     /// Ler uma placa já recortada.
-    pub fn ocr(&self, params: &PhotosOCRParams) -> Result<OcrResult, Error> {
+    pub fn ocr(&self, params: &PhotosOCRParams) -> Result<PlateReading, Error> {
         self.client.request("POST", "/api/v1/ocr", &[], Some(params.form()), &self.options)
     }
 
     /// Ler as placas de uma foto.
-    pub fn recognize(&self, params: &PhotosRecognizeParams) -> Result<RecognizeResult, Error> {
+    pub fn recognize(&self, params: &PhotosRecognizeParams) -> Result<PhotoRecognition, Error> {
         self.client.request("POST", "/api/v1/recognize", &[], Some(params.form()), &self.options)
     }
 }
@@ -187,11 +156,11 @@ impl<'a> PhotosService<'a> {
 pub struct RecognitionsListParams {
     /// The cursor the previous page answered as `next`; none asks for the newest page.
     pub before: Option<String>,
-    /// Prefixo da placa; traço e caixa não importam.
+    /// Prefixo da placa; traço, espaço e caixa não importam.
     pub plate: Option<String>,
     /// ID da câmera.
     pub camera: Option<String>,
-    /// Origem da leitura: camera ou api.
+    /// Origem da leitura; outro valor é ignorado.
     pub source: Option<String>,
 }
 
@@ -207,7 +176,7 @@ impl RecognitionsListParams {
         self
     }
 
-    /// Prefixo da placa; traço e caixa não importam.
+    /// Prefixo da placa; traço, espaço e caixa não importam.
     pub fn plate(mut self, plate: impl Into<String>) -> Self {
         self.plate = Some(plate.into());
         self
@@ -219,7 +188,7 @@ impl RecognitionsListParams {
         self
     }
 
-    /// Origem da leitura: camera ou api.
+    /// Origem da leitura; outro valor é ignorado.
     pub fn source(mut self, source: impl Into<String>) -> Self {
         self.source = Some(source.into());
         self
@@ -267,6 +236,11 @@ impl<'a> RecognitionsService<'a> {
     pub fn options(mut self, options: RequestOptions) -> Self {
         self.options = options;
         self
+    }
+
+    /// Imagem de uma leitura.
+    pub fn image(&self, id: &str) -> Result<DetectionImageLink, Error> {
+        self.client.request("GET", &format!("/api/v1/detections/{}/image", crate::client::escape(id)), &[], None, &self.options)
     }
 
     /// Listar as leituras. One page; [`list_iter`](Self::list_iter) walks every page.

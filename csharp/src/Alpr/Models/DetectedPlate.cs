@@ -6,10 +6,13 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Uma placa localizada na foto, sem o texto.</summary>
+/// <summary>DetectedPlate is a resource of Alpr.sh's API.</summary>
 public sealed record DetectedPlate
 {
-    /// <summary>The API's <c>conf</c>.</summary>
+    /// <summary>A value of <see cref="PlateType"/>.</summary>
+    public const string PlateTypeCar = "car";
+
+    /// <summary>Confiança do detector, de 0 a 100, com uma casa.</summary>
     [JsonPropertyName("conf")]
     public required double Conf { get; init; }
 

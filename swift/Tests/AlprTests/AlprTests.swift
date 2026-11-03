@@ -129,9 +129,9 @@ final class AlprTests: XCTestCase {
         XCTAssertTrue(cameras[0].enabled)
         XCTAssertNil(cameras[0].readingArea)
         let area = try XCTUnwrap(cameras[1].readingArea)
-        XCTAssertEqual(area.box?.x, 0.1)
-        XCTAssertEqual(area.points?.count, 3)
-        XCTAssertEqual(area.points?[1][0], 0.6)
+        XCTAssertEqual(area.box.x, 0.1)
+        XCTAssertEqual(area.points.count, 3)
+        XCTAssertEqual(area.points[1][0], 0.6)
     }
 
     func testAPhotoGoesAsMultipart() async throws {
@@ -193,7 +193,7 @@ final class AlprTests: XCTestCase {
         let (alpr, recorder) = client { _ in
             (200, [:], #"{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}"#)
         }
-        let image = try await alpr.detections.image("a/b")
+        let image = try await alpr.recognitions.image("a/b")
         let seen = try XCTUnwrap(recorder.seen.first)
         XCTAssertEqual(URLComponents(url: try XCTUnwrap(seen.url), resolvingAgainstBaseURL: false)?.percentEncodedPath, "/api/v1/detections/a%2Fb/image")
         XCTAssertEqual(image.expiresIn, 300)
@@ -301,7 +301,7 @@ final class AlprTests: XCTestCase {
             XCTAssertEqual(limited.retryAfter, 7)
         }
         do {
-            _ = try await alpr.detections.image("x")
+            _ = try await alpr.recognitions.image("x")
             XCTFail("a 502 was not refused")
         } catch let broken as AlprError {
             XCTAssertEqual(broken.status, 502)
@@ -510,7 +510,7 @@ final class AlprTests: XCTestCase {
 
             let testEvent = try verifyWebhookAt(
                 secret: Self.newSecret, headers: lines("del_0003", Self.signedAt, Self.testNew), body: Data(Self.testBody.utf8), now: now)
-            guard case let .webhookTest(test) = testEvent else { return XCTFail("not a test event") }
+            guard case let .test(test) = testEvent else { return XCTFail("not a test event") }
             XCTAssertEqual(testEvent.eventName, "webhook.test")
             XCTAssertEqual(test.sentAt, "2026-10-22T12:00:00Z")
 

@@ -6,14 +6,18 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** A placa lida de uma imagem já recortada. */
-final class OcrResult
+/** PlateReading is a resource of Alpr.sh's API. */
+final class PlateReading
 {
     public function __construct(
+        /** Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100). */
         public readonly float $confidence,
+        /** Créditos que sobraram depois desta leitura. */
         public readonly int $creditsRemaining,
+        /** Hoje sempre nulo: a leitura de uma placa recortada não é guardada. */
         public readonly ?string $detectionId,
         public readonly int $latencyMs,
+        /** O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro. */
         public readonly string $plate,
     ) {
     }

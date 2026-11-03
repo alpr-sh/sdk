@@ -17,7 +17,6 @@ namespace Alpr;
 final class Alpr implements Requester
 {
     public readonly Services\CamerasService $cameras;
-    public readonly Services\DetectionsService $detections;
     public readonly Services\PhotosService $photos;
     public readonly Services\RecognitionsService $recognitions;
 
@@ -44,7 +43,6 @@ final class Alpr implements Requester
         self::checkBaseUrl($this->baseUrl);
         $this->transport = $transport ?? self::curlTransport(...);
         $this->cameras = new Services\CamerasService($this);
-        $this->detections = new Services\DetectionsService($this);
         $this->photos = new Services\PhotosService($this);
         $this->recognitions = new Services\RecognitionsService($this);
     }

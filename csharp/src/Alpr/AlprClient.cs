@@ -61,16 +61,12 @@ public sealed class AlprClient
         http = options.HttpClient
             ?? (options.Handler is null ? SharedHttp : new HttpClient(options.Handler, disposeHandler: false) { Timeout = System.Threading.Timeout.InfiniteTimeSpan });
         Cameras = new CamerasService(this);
-        Detections = new DetectionsService(this);
         Photos = new PhotosService(this);
         Recognitions = new RecognitionsService(this);
     }
 
     /// <summary>The API's cameras.</summary>
     public CamerasService Cameras { get; }
-
-    /// <summary>The API's detections.</summary>
-    public DetectionsService Detections { get; }
 
     /// <summary>The API's photos.</summary>
     public PhotosService Photos { get; }

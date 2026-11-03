@@ -16,6 +16,28 @@ public final class RecognitionsService {
     }
 
     /**
+     * Imagem de uma leitura.
+     * @param id the id
+     * @param options another workspace's key for this call, or null
+     * @return the detectionimagelink
+     * @throws AlprException when the API refuses the call
+     */
+    public DetectionImageLink image(String id, RequestOptions options) {
+        Object data = client.request("GET", "/api/v1/detections/" + Alpr.segment(id) + "/image", null, null, options);
+        return DetectionImageLink.fromJson(Json.asObject(data));
+    }
+
+    /**
+     * Imagem de uma leitura.
+     * @param id the id
+     * @return the detectionimagelink
+     * @throws AlprException when the API refuses the call
+     */
+    public DetectionImageLink image(String id) {
+        return image(id, null);
+    }
+
+    /**
      * Listar as leituras. One page; {@link #listIter} walks every page.
      * @param params the cursor to start from and the filters, or null
      * @param options options for this call, or null
@@ -99,7 +121,7 @@ public final class RecognitionsService {
             return before;
         }
 
-        /** @return Prefixo da placa; traço e caixa não importam. (null when not filtered) */
+        /** @return Prefixo da placa; traço, espaço e caixa não importam. (null when not filtered) */
         public String getPlate() {
             return plate;
         }
@@ -109,7 +131,7 @@ public final class RecognitionsService {
             return camera;
         }
 
-        /** @return Origem da leitura: camera ou api. (null when not filtered) */
+        /** @return Origem da leitura; outro valor é ignorado. (null when not filtered) */
         public String getSource() {
             return source;
         }
@@ -152,7 +174,7 @@ public final class RecognitionsService {
             }
 
             /**
-             * @param plate Prefixo da placa; traço e caixa não importam.
+             * @param plate Prefixo da placa; traço, espaço e caixa não importam.
              * @return this builder
              */
             public Builder plate(String plate) {
@@ -170,7 +192,7 @@ public final class RecognitionsService {
             }
 
             /**
-             * @param source Origem da leitura: camera ou api.
+             * @param source Origem da leitura; outro valor é ignorado.
              * @return this builder
              */
             public Builder source(String source) {

@@ -31,7 +31,7 @@ for camera in alpr.cameras.list():
     print(camera.id, camera.name, camera.enabled)
 
 # O link temporário da imagem de uma leitura.
-image = alpr.detections.image("det_123")
+image = alpr.recognitions.image("det_123")
 print(image.image_url, image.expires_in)
 ```
 
@@ -50,9 +50,8 @@ Passe os **bytes** da foto (`bytes`). O SDK envia `multipart/form-data` no campo
 | Serviço | Métodos |
 |---|---|
 | `alpr.cameras` | `list` |
-| `alpr.detections` | `image` |
 | `alpr.photos` | `detect`, `ocr`, `recognize` |
-| `alpr.recognitions` | `list`, `list_iter` |
+| `alpr.recognitions` | `image`, `list`, `list_iter` |
 
 ## Erros
 
@@ -115,6 +114,6 @@ Passe o corpo cru, exatamente como chegou, e verifique antes de interpretar. Os 
 
 Durante a rotação do segredo o cabeçalho de assinatura traz mais de uma, numa linha separada por vírgulas ou em linhas repetidas (até 6); basta uma conferir, mas uma assinatura malformada recusa a requisição inteira. `verify_webhook_signature` só confere a assinatura. Uma assinatura que não confere levanta `WebhookVerificationError`; um segredo vazio é um erro de configuração (`ValueError`), não de assinatura.
 
-O evento é tipado: um tipo por carga (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `WebhookTestWebhookEvent`), com os campos da carga na raiz (`event`, `id`, `tenant_id`, `plate`…), sem `data` nem `type`. Um nome de evento que esta versão do SDK não conhece chega como `UnknownWebhookEvent` (`event`, `id` e o `body` inteiro), e não é um erro. Um corpo que não é um objeto com `event` levanta `ValueError`.
+O evento é tipado: um tipo por carga (`RecognitionCreatedWebhookEvent`, `AlertTriggeredWebhookEvent`, `TestWebhookEvent`), com os campos da carga na raiz (`event`, `id`, `tenant_id`, `plate`…), sem `data` nem `type`. Um nome de evento que esta versão do SDK não conhece chega como `UnknownWebhookEvent` (`event`, `id` e o `body` inteiro), e não é um erro. Um corpo que não é um objeto com `event` levanta `ValueError`.
 
 Versão do SDK: 0.1.0 · contrato da API: 1.0.0

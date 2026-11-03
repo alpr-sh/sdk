@@ -28,7 +28,7 @@ client
 {:ok, cameras} = Alpr.Cameras.list(client)
 
 # O link temporário da imagem de uma leitura.
-{:ok, link} = Alpr.Detections.image(client, "det_123")
+{:ok, link} = Alpr.Recognitions.image(client, "det_123")
 IO.puts("#{link.image_url} (vale #{link.expires_in} s)")
 ```
 
@@ -77,7 +77,7 @@ Uma recusa da API é um `{:error, %Alpr.Error{}}`, com `status`, `code`, `messag
 case event do
   %Alpr.RecognitionCreatedWebhookEvent{plate: plate, camera_id: camera} -> IO.puts("#{plate} em #{camera}")
   %Alpr.AlertTriggeredWebhookEvent{rule_name: rule} -> IO.puts("alerta: #{rule}")
-  %Alpr.WebhookTestWebhookEvent{} -> :ok
+  %Alpr.TestWebhookEvent{} -> :ok
   %Alpr.UnknownWebhookEvent{event: name} -> IO.puts("evento novo: #{name}")
 end
 ```
@@ -96,7 +96,7 @@ Durante a rotação do segredo o cabeçalho traz uma assinatura por segredo, num
 
 Uma assinatura que não confere devolve `{:error, %Alpr.WebhookVerificationError{}}`; um corpo assinado que não é um evento (não é um objeto JSON, ou não tem `event`) devolve `{:error, %Alpr.WebhookParseError{}}`; um segredo vazio é erro de configuração e levanta `ArgumentError`. `Alpr.verify_webhook_signature/4` só confere a assinatura, sem ler o corpo.
 
-O evento é tipado, com os campos do corpo no próprio struct, sem `data` nem `type`: `event` diz qual evento é (`recognition.created` chega como `RecognitionCreatedWebhookEvent`, `alert.triggered` como `AlertTriggeredWebhookEvent`, `webhook.test` como `WebhookTestWebhookEvent`). Um evento que esta versão do SDK ainda não conhece não é um erro: chega como `UnknownWebhookEvent`, com `event`, `id` (vazio se o corpo não traz um `id` de texto), `body` (o corpo decodificado) e `raw` (o corpo como foi enviado).
+O evento é tipado, com os campos do corpo no próprio struct, sem `data` nem `type`: `event` diz qual evento é (`recognition.created` chega como `RecognitionCreatedWebhookEvent`, `alert.triggered` como `AlertTriggeredWebhookEvent`, `webhook.test` como `TestWebhookEvent`). Um evento que esta versão do SDK ainda não conhece não é um erro: chega como `UnknownWebhookEvent`, com `event`, `id` (vazio se o corpo não traz um `id` de texto), `body` (o corpo decodificado) e `raw` (o corpo como foi enviado).
 
 **Deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`.** O `id` do corpo é o da leitura ou do alerta, não o da entrega.
 

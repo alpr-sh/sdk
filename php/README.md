@@ -26,7 +26,7 @@ foreach ($alpr->cameras->list() as $camera) {
 }
 
 // O link temporário da imagem de uma leitura.
-$image = $alpr->detections->image('det_123');
+$image = $alpr->recognitions->image('det_123');
 echo $image->imageUrl, ' (vale ', $image->expiresIn, ' s)', PHP_EOL;
 ```
 
@@ -53,9 +53,8 @@ $alpr->photos->recognize([
 | Serviço | Métodos |
 |---|---|
 | `$alpr->cameras` | `list` |
-| `$alpr->detections` | `image` |
 | `$alpr->photos` | `detect`, `ocr`, `recognize` |
-| `$alpr->recognitions` | `list`, `listIter` |
+| `$alpr->recognitions` | `image`, `list`, `listIter` |
 
 Os modelos são classes com propriedades `readonly` em camelCase (`$image->imageUrl`, `$plate->coordinateLeft`); um campo opcional ausente é `null`. Os corpos das fotos são arrays com os nomes da API (`lpr_confidence`), descritos para o PHPStan.
 
@@ -98,7 +97,7 @@ Cada entrega traz três cabeçalhos (o nome não diferencia maiúsculas): `X-Alp
 - **Tolerância**: o timestamp só vale a até 300 s (`Alpr\Webhook::TOLERANCE_SECONDS`) do relógio, para mais ou para menos, e só com dígitos.
 - **Rotação do segredo**: durante a troca o cabeçalho traz mais de uma assinatura, numa linha separada por vírgulas ou em linhas repetidas (em `getallheaders()`, ou uma lista). Basta uma conferir; mais de seis, ou qualquer uma fora do formato, recusa a entrega.
 - **Erros**: `Alpr\WebhookVerificationException` é a assinatura que não confere; um segredo vazio é `InvalidArgumentException` (configuração); um corpo que não é um evento é `UnexpectedValueException`.
-- **Eventos tipados**: um tipo para cada carga, com os campos do corpo achatados (`$event->plate`, `$event->tenantId`, sem `data`). `AlertTriggeredWebhookEvent` (`alert.triggered`), `RecognitionCreatedWebhookEvent` (`recognition.created`), `WebhookTestWebhookEvent` (`webhook.test`). Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent`, com `event`, `id` (se o corpo tiver) e o corpo inteiro em `body` e `raw`.
+- **Eventos tipados**: um tipo para cada carga, com os campos do corpo achatados (`$event->plate`, `$event->tenantId`, sem `data`). `AlertTriggeredWebhookEvent` (`alert.triggered`), `RecognitionCreatedWebhookEvent` (`recognition.created`), `TestWebhookEvent` (`webhook.test`). Um evento de nome desconhecido não é erro: chega como `UnknownWebhookEvent`, com `event`, `id` (se o corpo tiver) e o corpo inteiro em `body` e `raw`.
 - **Duplicatas**: deduplique as entregas pelo cabeçalho `X-Alprsh-Delivery-Id`. O `id` do corpo é o da leitura ou do alerta, não o da entrega.
 
 `Alpr\Webhook::verifySignature` só confere a assinatura, sem interpretar o corpo.

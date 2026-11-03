@@ -6,13 +6,13 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Carga de alert.triggered: a regra que disparou e a leitura que a disparou.</summary>
-public record AlertTriggered
+/// <summary>WebhookAlertTriggered is a resource of Alpr.sh's API.</summary>
+public record WebhookAlertTriggered
 {
     /// <summary>A value of <see cref="Event"/>.</summary>
     public const string EventAlertTriggered = "alert.triggered";
 
-    /// <summary>The API's <c>camera_id</c>. Null when the API sends none.</summary>
+    /// <summary>Ausente se a leitura não veio de uma câmera. Null when the API sends none.</summary>
     [JsonPropertyName("camera_id")]
     public string? CameraId { get; init; }
 
@@ -20,7 +20,7 @@ public record AlertTriggered
     [JsonPropertyName("captured_at")]
     public required string CapturedAt { get; init; }
 
-    /// <summary>The API's <c>confidence</c>.</summary>
+    /// <summary>De 0 a 1.</summary>
     [JsonPropertyName("confidence")]
     public required double Confidence { get; init; }
 
@@ -28,7 +28,7 @@ public record AlertTriggered
     [JsonPropertyName("event")]
     public required string Event { get; init; }
 
-    /// <summary>The API's <c>id</c>.</summary>
+    /// <summary>O id do disparo.</summary>
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
@@ -36,7 +36,7 @@ public record AlertTriggered
     [JsonPropertyName("plate")]
     public required string Plate { get; init; }
 
-    /// <summary>The API's <c>recognition_id</c>.</summary>
+    /// <summary>A leitura que disparou o alerta.</summary>
     [JsonPropertyName("recognition_id")]
     public required string RecognitionId { get; init; }
 
@@ -47,6 +47,10 @@ public record AlertTriggered
     /// <summary>The API's <c>rule_name</c>.</summary>
     [JsonPropertyName("rule_name")]
     public required string RuleName { get; init; }
+
+    /// <summary>Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:&lt;id&gt;, partner:&lt;id&gt;). Presente só quando algum foi excluído; é informação, não há o que fazer com ela. Null when the API sends none.</summary>
+    [JsonPropertyName("skip")]
+    public IReadOnlyList<string>? Skip { get; init; }
 
     /// <summary>The API's <c>tenant_id</c>.</summary>
     [JsonPropertyName("tenant_id")]

@@ -6,9 +6,30 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Uma câmera do espaço, sem endereço nem credenciais.</summary>
+/// <summary>Camera is a resource of Alpr.sh's API.</summary>
 public sealed record Camera
 {
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolRtsp = "rtsp";
+
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolRtmp = "rtmp";
+
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolHls = "hls";
+
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolHttp = "http";
+
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolHikconnect = "hikconnect";
+
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolHikcloud = "hikcloud";
+
+    /// <summary>A value of <see cref="Protocol"/>.</summary>
+    public const string ProtocolRtmppush = "rtmppush";
+
     /// <summary>The API's <c>createdAt</c>.</summary>
     [JsonPropertyName("createdAt")]
     public required string CreatedAt { get; init; }
@@ -21,7 +42,7 @@ public sealed record Camera
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
-    /// <summary>The API's <c>location</c>.</summary>
+    /// <summary>O endereço da câmera como texto; vazio se não foi informado.</summary>
     [JsonPropertyName("location")]
     public required string Location { get; init; }
 
@@ -29,11 +50,11 @@ public sealed record Camera
     [JsonPropertyName("name")]
     public required string Name { get; init; }
 
-    /// <summary>The API's <c>protocol</c>.</summary>
+    /// <summary>Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.</summary>
     [JsonPropertyName("protocol")]
     public required string Protocol { get; init; }
 
-    /// <summary>The API's <c>readingArea</c>. Null when the API sends none.</summary>
+    /// <summary>Nulo quando a câmera lê a imagem inteira. Null when the API sends none.</summary>
     [JsonPropertyName("readingArea")]
     public ReadingArea? ReadingArea { get; init; }
 }

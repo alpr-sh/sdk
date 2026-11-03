@@ -5,8 +5,8 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** O resultado da leitura de uma foto. Sem placa, plates é []. */
-public final class RecognizeResult {
+/** PhotoRecognition is a resource of Alpr.sh's API. */
+public final class PhotoRecognition {
 
     private final long creditsRemaining;
     private final long imageHeight;
@@ -14,7 +14,7 @@ public final class RecognizeResult {
     private final List<RecognizedPlate> plates;
     private final long processingTimeMs;
 
-    RecognizeResult(long creditsRemaining, long imageHeight, long imageWidth, List<RecognizedPlate> plates, long processingTimeMs) {
+    PhotoRecognition(long creditsRemaining, long imageHeight, long imageWidth, List<RecognizedPlate> plates, long processingTimeMs) {
         this.creditsRemaining = creditsRemaining;
         this.imageHeight = imageHeight;
         this.imageWidth = imageWidth;
@@ -22,8 +22,8 @@ public final class RecognizeResult {
         this.processingTimeMs = processingTimeMs;
     }
 
-    static RecognizeResult fromJson(Map<String, Object> data) {
-        return new RecognizeResult(
+    static PhotoRecognition fromJson(Map<String, Object> data) {
+        return new PhotoRecognition(
                 Json.required(data, "creditsRemaining", Json::asLong),
                 Json.required(data, "imageHeight", Json::asLong),
                 Json.required(data, "imageWidth", Json::asLong),
@@ -31,7 +31,7 @@ public final class RecognizeResult {
                 Json.required(data, "processingTimeMs", Json::asLong));
     }
 
-    /** @return the API's {@code creditsRemaining} */
+    /** @return Créditos que sobraram depois desta leitura. */
     public long getCreditsRemaining() {
         return creditsRemaining;
     }
@@ -46,7 +46,7 @@ public final class RecognizeResult {
         return imageWidth;
     }
 
-    /** @return the API's {@code plates} */
+    /** @return Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, []. */
     public List<RecognizedPlate> getPlates() {
         return plates;
     }
@@ -58,6 +58,6 @@ public final class RecognizeResult {
 
     @Override
     public String toString() {
-        return "RecognizeResult{" + "creditsRemaining=" + creditsRemaining + ", imageHeight=" + imageHeight + ", imageWidth=" + imageWidth + ", plates=" + plates + ", processingTimeMs=" + processingTimeMs + "}";
+        return "PhotoRecognition{" + "creditsRemaining=" + creditsRemaining + ", imageHeight=" + imageHeight + ", imageWidth=" + imageWidth + ", plates=" + plates + ", processingTimeMs=" + processingTimeMs + "}";
     }
 }

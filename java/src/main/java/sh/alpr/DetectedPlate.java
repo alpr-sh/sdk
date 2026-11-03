@@ -5,8 +5,10 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Uma placa localizada na foto, sem o texto. */
+/** DetectedPlate is a resource of Alpr.sh's API. */
 public final class DetectedPlate {
+    /** A value of {@link #getPlateType()}. */
+    public static final String PLATETYPE_CAR = "car";
 
     private final double conf;
     private final long coordinateBottom;
@@ -40,7 +42,7 @@ public final class DetectedPlate {
                 Json.required(data, "time", Json::asString));
     }
 
-    /** @return the API's {@code conf} */
+    /** @return Confiança do detector, de 0 a 100, com uma casa. */
     public double getConf() {
         return conf;
     }

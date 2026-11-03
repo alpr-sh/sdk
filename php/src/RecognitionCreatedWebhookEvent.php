@@ -21,15 +21,23 @@ final class RecognitionCreatedWebhookEvent extends WebhookEvent
     private const REQUIRED = ['captured_at', 'confidence', 'event', 'id', 'plate', 'source', 'tenant_id'];
 
     public function __construct(
+        /** Ausente numa leitura enviada por foto. */
         public readonly ?string $cameraId,
+        /** UTC, com fração de segundo. */
         public readonly string $capturedAt,
+        /** De 0 a 1 (na API de chave, conf vai de 0 a 100). */
         public readonly float $confidence,
         /** @var 'recognition.created' */
         public readonly string $event,
+        /** O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image. */
         public readonly string $id,
         public readonly string $plate,
-        /** @var 'camera'|'api' */
+        /**
+         * camera: lida por uma câmera; api: enviada por foto.
+         * @var 'camera'|'api'
+         */
         public readonly string $source,
+        /** O espaço de trabalho dono da leitura. */
         public readonly string $tenantId,
     ) {
     }

@@ -6,13 +6,17 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** A área de leitura da câmera: placas fora do polígono são ignoradas. */
+/** ReadingArea is a resource of Alpr.sh's API. */
 final class ReadingArea
 {
     public function __construct(
-        public readonly ?ReadingBox $box,
-        /** @var list<list<float>>|null */
-        public readonly ?array $points,
+        /** A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê. */
+        public readonly ReadingAreaBox $box,
+        /**
+         * Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas.
+         * @var list<list<float>>
+         */
+        public readonly array $points,
     ) {
     }
 
@@ -22,8 +26,8 @@ final class ReadingArea
     public static function fromArray(array $data): self
     {
         return new self(
-            box: isset($data['box']) ? ReadingBox::fromArray($data['box']) : null,
-            points: $data['points'] ?? null,
+            box: ReadingAreaBox::fromArray($data['box']),
+            points: $data['points'],
         );
     }
 }

@@ -5,8 +5,8 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>The payload of <c>alert.triggered</c>: the fields of <see cref="AlertTriggered"/>, flat.</summary>
-public sealed record AlertTriggeredWebhookEvent : AlertTriggered, IWebhookEvent
+/// <summary>The payload of <c>alert.triggered</c>: the fields of <see cref="WebhookAlertTriggered"/>, flat.</summary>
+public sealed record AlertTriggeredWebhookEvent : WebhookAlertTriggered, IWebhookEvent
 {
     /// <summary>The event names this record carries.</summary>
     public static IReadOnlySet<string> Types { get; } = new HashSet<string>
@@ -19,8 +19,8 @@ public sealed record AlertTriggeredWebhookEvent : AlertTriggered, IWebhookEvent
     public string EventName => Event;
 }
 
-/// <summary>The payload of <c>recognition.created</c>: the fields of <see cref="RecognitionCreated"/>, flat.</summary>
-public sealed record RecognitionCreatedWebhookEvent : RecognitionCreated, IWebhookEvent
+/// <summary>The payload of <c>recognition.created</c>: the fields of <see cref="WebhookRecognitionCreated"/>, flat.</summary>
+public sealed record RecognitionCreatedWebhookEvent : WebhookRecognitionCreated, IWebhookEvent
 {
     /// <summary>The event names this record carries.</summary>
     public static IReadOnlySet<string> Types { get; } = new HashSet<string>
@@ -34,7 +34,7 @@ public sealed record RecognitionCreatedWebhookEvent : RecognitionCreated, IWebho
 }
 
 /// <summary>The payload of <c>webhook.test</c>: the fields of <see cref="WebhookTest"/>, flat.</summary>
-public sealed record WebhookTestWebhookEvent : WebhookTest, IWebhookEvent
+public sealed record TestWebhookEvent : WebhookTest, IWebhookEvent
 {
     /// <summary>The event names this record carries.</summary>
     public static IReadOnlySet<string> Types { get; } = new HashSet<string>

@@ -31,7 +31,7 @@ type WebhookEvent interface {
 // AlertTriggeredWebhookEvent is the payload of
 //   - alert.triggered
 type AlertTriggeredWebhookEvent struct {
-	AlertTriggered
+	WebhookAlertTriggered
 }
 
 // EventName is the event's name.
@@ -40,20 +40,20 @@ func (e *AlertTriggeredWebhookEvent) EventName() string { return e.Event }
 // RecognitionCreatedWebhookEvent is the payload of
 //   - recognition.created
 type RecognitionCreatedWebhookEvent struct {
-	RecognitionCreated
+	WebhookRecognitionCreated
 }
 
 // EventName is the event's name.
 func (e *RecognitionCreatedWebhookEvent) EventName() string { return e.Event }
 
-// WebhookTestWebhookEvent is the payload of
+// TestWebhookEvent is the payload of
 //   - webhook.test
-type WebhookTestWebhookEvent struct {
+type TestWebhookEvent struct {
 	WebhookTest
 }
 
 // EventName is the event's name.
-func (e *WebhookTestWebhookEvent) EventName() string { return e.Event }
+func (e *TestWebhookEvent) EventName() string { return e.Event }
 
 // UnknownWebhookEvent is an event of a name this SDK does not know yet; its
 // body is kept as it was sent.
@@ -160,7 +160,7 @@ func parseWebhookEvent(body []byte) (WebhookEvent, error) {
 	case "recognition.created":
 		event = &RecognitionCreatedWebhookEvent{}
 	case "webhook.test":
-		event = &WebhookTestWebhookEvent{}
+		event = &TestWebhookEvent{}
 	default:
 		return &UnknownWebhookEvent{Event: head.Event, ID: head.ID, Body: append(json.RawMessage(nil), body...)}, nil
 	}

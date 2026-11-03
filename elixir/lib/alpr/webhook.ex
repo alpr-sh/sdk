@@ -3,7 +3,7 @@
 defmodule Alpr.AlertTriggeredWebhookEvent do
   @moduledoc """
   The payload of the events `alert.triggered`: the
-  fields of `Alpr.AlertTriggered`, flat, as the body carries them.
+  fields of `Alpr.WebhookAlertTriggered`, flat, as the body carries them.
   """
 
   @types ~w(alert.triggered)
@@ -18,6 +18,7 @@ defmodule Alpr.AlertTriggeredWebhookEvent do
     :recognition_id,
     :rule_id,
     :rule_name,
+    :skip,
     :tenant_id
   ]
 
@@ -31,6 +32,7 @@ defmodule Alpr.AlertTriggeredWebhookEvent do
           recognition_id: String.t(),
           rule_id: String.t(),
           rule_name: String.t(),
+          skip: [String.t()] | nil,
           tenant_id: String.t()
         }
 
@@ -41,14 +43,14 @@ defmodule Alpr.AlertTriggeredWebhookEvent do
   @doc "Builds the event from the webhook's decoded body."
   @spec from_map(map()) :: t()
   def from_map(%{} = data) do
-    struct!(__MODULE__, data |> Alpr.AlertTriggered.from_map() |> Map.from_struct())
+    struct!(__MODULE__, data |> Alpr.WebhookAlertTriggered.from_map() |> Map.from_struct())
   end
 end
 
 defmodule Alpr.RecognitionCreatedWebhookEvent do
   @moduledoc """
   The payload of the events `recognition.created`: the
-  fields of `Alpr.RecognitionCreated`, flat, as the body carries them.
+  fields of `Alpr.WebhookRecognitionCreated`, flat, as the body carries them.
   """
 
   @types ~w(recognition.created)
@@ -73,11 +75,11 @@ defmodule Alpr.RecognitionCreatedWebhookEvent do
   @doc "Builds the event from the webhook's decoded body."
   @spec from_map(map()) :: t()
   def from_map(%{} = data) do
-    struct!(__MODULE__, data |> Alpr.RecognitionCreated.from_map() |> Map.from_struct())
+    struct!(__MODULE__, data |> Alpr.WebhookRecognitionCreated.from_map() |> Map.from_struct())
   end
 end
 
-defmodule Alpr.WebhookTestWebhookEvent do
+defmodule Alpr.TestWebhookEvent do
   @moduledoc """
   The payload of the events `webhook.test`: the
   fields of `Alpr.WebhookTest`, flat, as the body carries them.
@@ -139,7 +141,7 @@ defmodule Alpr.WebhookEvent do
   @type t ::
           Alpr.AlertTriggeredWebhookEvent.t()
           | Alpr.RecognitionCreatedWebhookEvent.t()
-          | Alpr.WebhookTestWebhookEvent.t()
+          | Alpr.TestWebhookEvent.t()
           | Alpr.UnknownWebhookEvent.t()
 
   @doc "Builds the event a webhook's decoded body names by its `event`; `raw` is the body as it was sent."
@@ -152,8 +154,8 @@ defmodule Alpr.WebhookEvent do
       event in Alpr.RecognitionCreatedWebhookEvent.types() ->
         Alpr.RecognitionCreatedWebhookEvent.from_map(body)
 
-      event in Alpr.WebhookTestWebhookEvent.types() ->
-        Alpr.WebhookTestWebhookEvent.from_map(body)
+      event in Alpr.TestWebhookEvent.types() ->
+        Alpr.TestWebhookEvent.from_map(body)
 
       true ->
         id = if is_binary(body["id"]), do: body["id"], else: ""

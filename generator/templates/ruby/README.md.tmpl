@@ -28,7 +28,7 @@ end
 alpr.cameras.list.each { |camera| puts camera.name }
 
 # O link temporário da imagem de uma leitura.
-image = alpr.detections.image("det_123")
+image = alpr.recognitions.image("det_123")
 puts image.image_url, image.expires_in
 ```
 
@@ -105,7 +105,7 @@ end
 case event
 when Alpr::RecognitionCreatedWebhookEvent then puts event.plate, event.captured_at
 when Alpr::AlertTriggeredWebhookEvent then puts event.rule_name, event.recognition_id
-when Alpr::WebhookTestWebhookEvent then puts event.sent_at
+when Alpr::TestWebhookEvent then puts event.sent_at
 when Alpr::UnknownWebhookEvent then puts event.event_name # um evento que esta versão ainda não conhece: event.body é o JSON
 end
 ```

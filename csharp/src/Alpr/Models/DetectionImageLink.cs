@@ -6,18 +6,18 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>O link temporário da imagem de uma leitura.</summary>
-public sealed record DetectionImage
+/// <summary>DetectionImageLink is a resource of Alpr.sh's API.</summary>
+public sealed record DetectionImageLink
 {
     /// <summary>The API's <c>detectionId</c>.</summary>
     [JsonPropertyName("detectionId")]
     public required string DetectionId { get; init; }
 
-    /// <summary>Segundos de validade do link.</summary>
+    /// <summary>Segundos de validade do link (300).</summary>
     [JsonPropertyName("expiresIn")]
     public required long ExpiresIn { get; init; }
 
-    /// <summary>The API's <c>imageUrl</c>.</summary>
+    /// <summary>Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio.</summary>
     [JsonPropertyName("imageUrl")]
     public required string ImageUrl { get; init; }
 }

@@ -60,4 +60,4 @@ pub use webhooks::{
 // The event of each kind of data a webhook carries.
 pub use webhooks::AlertTriggeredWebhookEvent;
 pub use webhooks::RecognitionCreatedWebhookEvent;
-pub use webhooks::WebhookTestWebhookEvent;
+pub use webhooks::TestWebhookEvent;

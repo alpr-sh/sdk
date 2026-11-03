@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Carga de webhook.test, enviada pelo botão Testar do painel.</summary>
+/// <summary>WebhookTest is a resource of Alpr.sh's API.</summary>
 public record WebhookTest
 {
     /// <summary>A value of <see cref="Event"/>.</summary>

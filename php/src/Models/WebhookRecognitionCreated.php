@@ -6,20 +6,27 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Carga de alert.triggered: a regra que disparou e a leitura que a disparou. */
-final class AlertTriggered
+/** WebhookRecognitionCreated is a resource of Alpr.sh's API. */
+final class WebhookRecognitionCreated
 {
     public function __construct(
+        /** Ausente numa leitura enviada por foto. */
         public readonly ?string $cameraId,
+        /** UTC, com fração de segundo. */
         public readonly string $capturedAt,
+        /** De 0 a 1 (na API de chave, conf vai de 0 a 100). */
         public readonly float $confidence,
-        /** @var 'alert.triggered' */
+        /** @var 'recognition.created' */
         public readonly string $event,
+        /** O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image. */
         public readonly string $id,
         public readonly string $plate,
-        public readonly string $recognitionId,
-        public readonly string $ruleId,
-        public readonly string $ruleName,
+        /**
+         * camera: lida por uma câmera; api: enviada por foto.
+         * @var 'camera'|'api'
+         */
+        public readonly string $source,
+        /** O espaço de trabalho dono da leitura. */
         public readonly string $tenantId,
     ) {
     }
@@ -36,9 +43,7 @@ final class AlertTriggered
             event: $data['event'],
             id: $data['id'],
             plate: $data['plate'],
-            recognitionId: $data['recognition_id'],
-            ruleId: $data['rule_id'],
-            ruleName: $data['rule_name'],
+            source: $data['source'],
             tenantId: $data['tenant_id'],
         );
     }

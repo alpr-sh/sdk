@@ -36,7 +36,7 @@ for camera in client.cameras().list()? {
 }
 
 // O link temporário da imagem de uma leitura.
-let image = client.detections().image("det_123")?;
+let image = client.recognitions().image("det_123")?;
 println!("{} (vale {} s)", image.image_url, image.expires_in);
 ```
 

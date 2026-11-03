@@ -126,7 +126,7 @@ func TestADetectionImageIsALink(t *testing.T) {
 		}
 		fmt.Fprint(w, `{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}`)
 	})
-	image, err := client.Detections.Image(context.Background(), "a/b")
+	image, err := client.Recognitions.Image(context.Background(), "a/b")
 	if err != nil || image.ExpiresIn != 300 || image.DetectionID != "a/b" || !strings.HasPrefix(image.ImageURL, "https://alpr.sh/") {
 		t.Fatalf("image %+v, %v", image, err)
 	}
@@ -365,7 +365,7 @@ func TestAWebhookAnswersItsTypedEvent(t *testing.T) {
 		t.Fatalf("event %#v, %v", event, err)
 	}
 	event, err = verifyWebhookAt(newSecret, webhookHeader("del_0003", signedAt, testNew), []byte(testBody), now)
-	test, ok := event.(*WebhookTestWebhookEvent)
+	test, ok := event.(*TestWebhookEvent)
 	if err != nil || !ok || test.EventName() != "webhook.test" || test.SentAt != "2026-10-22T12:00:00Z" {
 		t.Fatalf("event %#v, %v", event, err)
 	}

@@ -5,8 +5,22 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Uma câmera do espaço, sem endereço nem credenciais. */
+/** Camera is a resource of Alpr.sh's API. */
 public final class Camera {
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_RTSP = "rtsp";
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_RTMP = "rtmp";
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_HLS = "hls";
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_HTTP = "http";
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_HIKCONNECT = "hikconnect";
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_HIKCLOUD = "hikcloud";
+    /** A value of {@link #getProtocol()}. */
+    public static final String PROTOCOL_RTMPPUSH = "rtmppush";
 
     private final String createdAt;
     private final boolean enabled;
@@ -52,7 +66,7 @@ public final class Camera {
         return id;
     }
 
-    /** @return the API's {@code location} */
+    /** @return O endereço da câmera como texto; vazio se não foi informado. */
     public String getLocation() {
         return location;
     }
@@ -62,12 +76,12 @@ public final class Camera {
         return name;
     }
 
-    /** @return the API's {@code protocol} */
+    /** @return Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha. */
     public String getProtocol() {
         return protocol;
     }
 
-    /** @return the API's {@code readingArea} (null when the API sends none) */
+    /** @return Nulo quando a câmera lê a imagem inteira. (null when the API sends none) */
     public ReadingArea getReadingArea() {
         return readingArea;
     }

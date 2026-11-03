@@ -36,7 +36,7 @@ for try await reading in alpr.recognitions.listIter(RecognitionsListParams(plate
 let cameras = try await alpr.cameras.list()
 
 // O link temporário da imagem de uma leitura.
-let image = try await alpr.detections.image("det_123")
+let image = try await alpr.recognitions.image("det_123")
 print(image.imageURL, image.expiresIn)
 ```
 
@@ -53,9 +53,8 @@ A foto é um `Data` com os bytes do arquivo. O SDK a envia como `multipart/form-
 | Serviço | Métodos |
 |---|---|
 | `alpr.cameras` | `list` |
-| `alpr.detections` | `image` |
 | `alpr.photos` | `detect`, `ocr`, `recognize` |
-| `alpr.recognitions` | `list`, `listIter` |
+| `alpr.recognitions` | `image`, `list`, `listIter` |
 
 ## Erros
 

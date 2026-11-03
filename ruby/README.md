@@ -28,7 +28,7 @@ end
 alpr.cameras.list.each { |camera| puts camera.name }
 
 # O link temporário da imagem de uma leitura.
-image = alpr.detections.image("det_123")
+image = alpr.recognitions.image("det_123")
 puts image.image_url, image.expires_in
 ```
 
@@ -52,9 +52,8 @@ page = alpr.recognitions.list(camera: "cam_1", before: page.next_cursor) if page
 | Serviço | Métodos |
 |---|---|
 | `alpr.cameras` | `list` |
-| `alpr.detections` | `image` |
 | `alpr.photos` | `detect`, `ocr`, `recognize` |
-| `alpr.recognitions` | `list`, `list_iter` |
+| `alpr.recognitions` | `image`, `list`, `list_iter` |
 
 Os modelos são objetos imutáveis com leitores em snake_case (`result.credits_remaining`, `plate.coordinate_left`). Um campo opcional que a API não enviou, ou que veio `null`, é `nil`. Todo método aceita `api_key:` para usar outra chave numa chamada. `Alpr::Client.new` aceita `base_url:`, `timeout:` (30 segundos) e `transport:`.
 
@@ -106,7 +105,7 @@ end
 case event
 when Alpr::RecognitionCreatedWebhookEvent then puts event.plate, event.captured_at
 when Alpr::AlertTriggeredWebhookEvent then puts event.rule_name, event.recognition_id
-when Alpr::WebhookTestWebhookEvent then puts event.sent_at
+when Alpr::TestWebhookEvent then puts event.sent_at
 when Alpr::UnknownWebhookEvent then puts event.event_name # um evento que esta versão ainda não conhece: event.body é o JSON
 end
 ```

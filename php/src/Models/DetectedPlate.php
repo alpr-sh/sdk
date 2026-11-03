@@ -6,16 +6,18 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Uma placa localizada na foto, sem o texto. */
+/** DetectedPlate is a resource of Alpr.sh's API. */
 final class DetectedPlate
 {
     public function __construct(
+        /** Confiança do detector, de 0 a 100, com uma casa. */
         public readonly float $conf,
         public readonly int $coordinateBottom,
         public readonly int $coordinateLeft,
         public readonly int $coordinateRight,
         public readonly int $coordinateTop,
         public readonly string $createdAt,
+        /** @var 'car' */
         public readonly string $plateType,
         public readonly string $time,
     ) {

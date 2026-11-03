@@ -6,13 +6,14 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** O link temporário da imagem de uma leitura. */
-final class DetectionImage
+/** DetectionImageLink is a resource of Alpr.sh's API. */
+final class DetectionImageLink
 {
     public function __construct(
         public readonly string $detectionId,
-        /** Segundos de validade do link. */
+        /** Segundos de validade do link (300). */
         public readonly int $expiresIn,
+        /** Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio. */
         public readonly string $imageUrl,
     ) {
     }

@@ -4,14 +4,14 @@
 from ._client import Alpr, Transport, urllib_transport
 from ._errors import AlprError
 from ._pagination import Page
-from ._services import CamerasService, DetectionsService, PhotosService, RecognitionsService
+from ._services import CamerasService, PhotosService, RecognitionsService
 from ._version import API_VERSION, DEFAULT_BASE_URL, VERSION
-from .models import AlertTriggered, Camera, DetectResult, DetectedPlate, DetectionImage, OcrResult, PhotosDetectParams, PhotosOCRParams, PhotosRecognizeParams, ReadingArea, ReadingBox, Recognition, RecognitionCreated, RecognizeResult, RecognizedPlate, WebhookTest
+from .models import Camera, DetectedPlate, DetectionImageLink, PhotoDetection, PhotoRecognition, PhotosDetectParams, PhotosOCRParams, PhotosRecognizeParams, PlateReading, ReadingArea, ReadingAreaBox, Recognition, RecognizedPlate, WebhookAlertTriggered, WebhookRecognitionCreated, WebhookTest
 from .webhooks import (
     WEBHOOK_TOLERANCE_SECONDS,
     AlertTriggeredWebhookEvent,
     RecognitionCreatedWebhookEvent,
-    WebhookTestWebhookEvent,
+    TestWebhookEvent,
     HeadersLike,
     UnknownWebhookEvent,
     WebhookEvent,
@@ -38,25 +38,24 @@ __all__ = [
     "verify_webhook_signature",
     "AlertTriggeredWebhookEvent",
     "RecognitionCreatedWebhookEvent",
-    "WebhookTestWebhookEvent",
+    "TestWebhookEvent",
     "CamerasService",
-    "DetectionsService",
     "PhotosService",
     "RecognitionsService",
-    "AlertTriggered",
     "Camera",
-    "DetectResult",
     "DetectedPlate",
-    "DetectionImage",
-    "OcrResult",
+    "DetectionImageLink",
+    "PhotoDetection",
+    "PhotoRecognition",
     "PhotosDetectParams",
     "PhotosOCRParams",
     "PhotosRecognizeParams",
+    "PlateReading",
     "ReadingArea",
-    "ReadingBox",
+    "ReadingAreaBox",
     "Recognition",
-    "RecognitionCreated",
-    "RecognizeResult",
     "RecognizedPlate",
+    "WebhookAlertTriggered",
+    "WebhookRecognitionCreated",
     "WebhookTest",
 ]

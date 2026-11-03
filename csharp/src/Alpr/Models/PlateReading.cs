@@ -6,18 +6,18 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>A placa lida de uma imagem já recortada.</summary>
-public sealed record OcrResult
+/// <summary>PlateReading is a resource of Alpr.sh's API.</summary>
+public sealed record PlateReading
 {
-    /// <summary>The API's <c>confidence</c>.</summary>
+    /// <summary>Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100).</summary>
     [JsonPropertyName("confidence")]
     public required double Confidence { get; init; }
 
-    /// <summary>The API's <c>creditsRemaining</c>.</summary>
+    /// <summary>Créditos que sobraram depois desta leitura.</summary>
     [JsonPropertyName("creditsRemaining")]
     public required long CreditsRemaining { get; init; }
 
-    /// <summary>The API's <c>detectionId</c>. Null when the API sends none.</summary>
+    /// <summary>Hoje sempre nulo: a leitura de uma placa recortada não é guardada. Null when the API sends none.</summary>
     [JsonPropertyName("detectionId")]
     public string? DetectionId { get; init; }
 
@@ -25,7 +25,7 @@ public sealed record OcrResult
     [JsonPropertyName("latencyMs")]
     public required long LatencyMs { get; init; }
 
-    /// <summary>The API's <c>plate</c>.</summary>
+    /// <summary>O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro.</summary>
     [JsonPropertyName("plate")]
     public required string Plate { get; init; }
 }

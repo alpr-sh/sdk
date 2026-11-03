@@ -35,7 +35,7 @@ module Alpr
 
   # The payload of
   # * alert.triggered
-  class AlertTriggeredWebhookEvent < AlertTriggered
+  class AlertTriggeredWebhookEvent < WebhookAlertTriggered
     include WebhookEvent
 
     TYPES = %w[alert.triggered].freeze
@@ -43,7 +43,7 @@ module Alpr
 
   # The payload of
   # * recognition.created
-  class RecognitionCreatedWebhookEvent < RecognitionCreated
+  class RecognitionCreatedWebhookEvent < WebhookRecognitionCreated
     include WebhookEvent
 
     TYPES = %w[recognition.created].freeze
@@ -51,7 +51,7 @@ module Alpr
 
   # The payload of
   # * webhook.test
-  class WebhookTestWebhookEvent < WebhookTest
+  class TestWebhookEvent < WebhookTest
     include WebhookEvent
 
     TYPES = %w[webhook.test].freeze
@@ -90,7 +90,7 @@ module Alpr
   # +headers+ is a hash of the request's headers, in any case (a value may be a
   # list, one a header line), or a Rack env. +now+ is for tests.
   #
-  # @return [AlertTriggeredWebhookEvent, RecognitionCreatedWebhookEvent, WebhookTestWebhookEvent, UnknownWebhookEvent]
+  # @return [AlertTriggeredWebhookEvent, RecognitionCreatedWebhookEvent, TestWebhookEvent, UnknownWebhookEvent]
   # @raise [WebhookVerificationError] the signature does not verify
   # @raise [WebhookParseError] the body is not an event
   # @raise [ArgumentError] the secret is empty
@@ -146,7 +146,7 @@ module Alpr
       case name
       when *AlertTriggeredWebhookEvent::TYPES then AlertTriggeredWebhookEvent.from_hash(body)
       when *RecognitionCreatedWebhookEvent::TYPES then RecognitionCreatedWebhookEvent.from_hash(body)
-      when *WebhookTestWebhookEvent::TYPES then WebhookTestWebhookEvent.from_hash(body)
+      when *TestWebhookEvent::TYPES then TestWebhookEvent.from_hash(body)
       else UnknownWebhookEvent.new(event: name, id: body["id"].is_a?(String) ? body["id"] : "", body: body)
       end
     rescue KeyError, TypeError, ArgumentError => e

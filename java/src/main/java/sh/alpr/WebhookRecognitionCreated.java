@@ -5,8 +5,8 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Carga de recognition.created: os fatos no instante da leitura. */
-public final class RecognitionCreated {
+/** WebhookRecognitionCreated is a resource of Alpr.sh's API. */
+public final class WebhookRecognitionCreated {
     /** A value of {@link #getEvent()}. */
     public static final String EVENT_RECOGNITION_CREATED = "recognition.created";
     /** A value of {@link #getSource()}. */
@@ -23,7 +23,7 @@ public final class RecognitionCreated {
     private final String source;
     private final String tenantId;
 
-    RecognitionCreated(String cameraId, String capturedAt, double confidence, String event, String id, String plate, String source, String tenantId) {
+    WebhookRecognitionCreated(String cameraId, String capturedAt, double confidence, String event, String id, String plate, String source, String tenantId) {
         this.cameraId = cameraId;
         this.capturedAt = capturedAt;
         this.confidence = confidence;
@@ -34,8 +34,8 @@ public final class RecognitionCreated {
         this.tenantId = tenantId;
     }
 
-    static RecognitionCreated fromJson(Map<String, Object> data) {
-        return new RecognitionCreated(
+    static WebhookRecognitionCreated fromJson(Map<String, Object> data) {
+        return new WebhookRecognitionCreated(
                 Json.optional(data, "camera_id", Json::asString),
                 Json.required(data, "captured_at", Json::asString),
                 Json.required(data, "confidence", Json::asDouble),
@@ -46,17 +46,17 @@ public final class RecognitionCreated {
                 Json.required(data, "tenant_id", Json::asString));
     }
 
-    /** @return the API's {@code camera_id} (null when the API sends none) */
+    /** @return Ausente numa leitura enviada por foto. (null when the API sends none) */
     public String getCameraId() {
         return cameraId;
     }
 
-    /** @return the API's {@code captured_at} */
+    /** @return UTC, com fração de segundo. */
     public String getCapturedAt() {
         return capturedAt;
     }
 
-    /** @return the API's {@code confidence} */
+    /** @return De 0 a 1 (na API de chave, conf vai de 0 a 100). */
     public double getConfidence() {
         return confidence;
     }
@@ -66,7 +66,7 @@ public final class RecognitionCreated {
         return event;
     }
 
-    /** @return the API's {@code id} */
+    /** @return O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image. */
     public String getId() {
         return id;
     }
@@ -76,18 +76,18 @@ public final class RecognitionCreated {
         return plate;
     }
 
-    /** @return the API's {@code source} */
+    /** @return camera: lida por uma câmera; api: enviada por foto. */
     public String getSource() {
         return source;
     }
 
-    /** @return the API's {@code tenant_id} */
+    /** @return O espaço de trabalho dono da leitura. */
     public String getTenantId() {
         return tenantId;
     }
 
     @Override
     public String toString() {
-        return "RecognitionCreated{" + "cameraId=" + cameraId + ", capturedAt=" + capturedAt + ", confidence=" + confidence + ", event=" + event + ", id=" + id + ", plate=" + plate + ", source=" + source + ", tenantId=" + tenantId + "}";
+        return "WebhookRecognitionCreated{" + "cameraId=" + cameraId + ", capturedAt=" + capturedAt + ", confidence=" + confidence + ", event=" + event + ", id=" + id + ", plate=" + plate + ", source=" + source + ", tenantId=" + tenantId + "}";
     }
 }

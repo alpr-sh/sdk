@@ -14,38 +14,26 @@ public struct CamerasService: Sendable {
     }
 }
 
-/// The API's detections: `alpr.detections`.
-public struct DetectionsService: Sendable {
-    let requester: Requester
-
-    /// Imagem de uma leitura.
-    public func image(_ id: String, apiKey: String? = nil) async throws -> DetectionImage {
-        try await requester.request(
-            "GET", "/api/v1/detections/\(escape(id))/image", apiKey: apiKey
-        )
-    }
-}
-
 /// The API's photos: `alpr.photos`.
 public struct PhotosService: Sendable {
     let requester: Requester
 
     /// Localizar as placas de uma foto.
-    public func detect(_ params: PhotosDetectParams, apiKey: String? = nil) async throws -> DetectResult {
+    public func detect(_ params: PhotosDetectParams, apiKey: String? = nil) async throws -> PhotoDetection {
         try await requester.request(
             "POST", "/api/v1/detect", form: params.form(), apiKey: apiKey
         )
     }
 
     /// Ler uma placa já recortada.
-    public func ocr(_ params: PhotosOCRParams, apiKey: String? = nil) async throws -> OcrResult {
+    public func ocr(_ params: PhotosOCRParams, apiKey: String? = nil) async throws -> PlateReading {
         try await requester.request(
             "POST", "/api/v1/ocr", form: params.form(), apiKey: apiKey
         )
     }
 
     /// Ler as placas de uma foto.
-    public func recognize(_ params: PhotosRecognizeParams, apiKey: String? = nil) async throws -> RecognizeResult {
+    public func recognize(_ params: PhotosRecognizeParams, apiKey: String? = nil) async throws -> PhotoRecognition {
         try await requester.request(
             "POST", "/api/v1/recognize", form: params.form(), apiKey: apiKey
         )
@@ -56,6 +44,9 @@ extension PhotosDetectParams {
     func form() -> MultipartForm {
         var form = MultipartForm()
         form.file("image", image)
+        if let value = imageMode {
+            form.text("image_mode", value.rawValue)
+        }
         if let value = lprConfidence {
             form.text("lpr_confidence", formatNumber(value))
         }
@@ -78,6 +69,9 @@ extension PhotosRecognizeParams {
     func form() -> MultipartForm {
         var form = MultipartForm()
         form.file("image", image)
+        if let value = imageMode {
+            form.text("image_mode", value.rawValue)
+        }
         if let value = lprConfidence {
             form.text("lpr_confidence", formatNumber(value))
         }
@@ -91,6 +85,13 @@ extension PhotosRecognizeParams {
 /// The API's recognitions: `alpr.recognitions`.
 public struct RecognitionsService: Sendable {
     let requester: Requester
+
+    /// Imagem de uma leitura.
+    public func image(_ id: String, apiKey: String? = nil) async throws -> DetectionImageLink {
+        try await requester.request(
+            "GET", "/api/v1/detections/\(escape(id))/image", apiKey: apiKey
+        )
+    }
 
     /// Listar as leituras. One page; `listIter` walks every page.
     public func list(_ params: RecognitionsListParams = RecognitionsListParams(), apiKey: String? = nil) async throws -> Page<Recognition> {
@@ -116,11 +117,11 @@ public struct RecognitionsService: Sendable {
 public struct RecognitionsListParams: Sendable, Hashable {
     /// The cursor the previous page answered as `next`; nil asks for the newest page.
     public var before: String?
-    /// Prefixo da placa; traço e caixa não importam.
+    /// Prefixo da placa; traço, espaço e caixa não importam.
     public var plate: String?
     /// ID da câmera.
     public var camera: String?
-    /// Origem da leitura: camera ou api.
+    /// Origem da leitura; outro valor é ignorado.
     public var source: String?
 
     public init(before: String? = nil, plate: String? = nil, camera: String? = nil, source: String? = nil) {

@@ -27,26 +27,6 @@ class CamerasService {
   }
 }
 
-/// The API's detections.
-class DetectionsService {
-  const DetectionsService(this._client);
-
-  final Requester _client;
-
-  /// Imagem de uma leitura.
-  Future<DetectionImage> image(
-    String id, {
-    String? apiKey,
-  }) async {
-    final data = await _client.request(
-      'GET',
-      '/api/v1/detections/${Uri.encodeComponent(id)}/image',
-      apiKey: apiKey,
-    );
-    return DetectionImage.fromJson(readObject(data));
-  }
-}
-
 /// The API's photos.
 class PhotosService {
   const PhotosService(this._client);
@@ -54,7 +34,7 @@ class PhotosService {
   final Requester _client;
 
   /// Localizar as placas de uma foto.
-  Future<DetectResult> detect(
+  Future<PhotoDetection> detect(
     PhotosDetectParams params, {
     String? apiKey,
   }) async {
@@ -64,11 +44,11 @@ class PhotosService {
       form: params.toForm(),
       apiKey: apiKey,
     );
-    return DetectResult.fromJson(readObject(data));
+    return PhotoDetection.fromJson(readObject(data));
   }
 
   /// Ler uma placa já recortada.
-  Future<OcrResult> ocr(
+  Future<PlateReading> ocr(
     PhotosOCRParams params, {
     String? apiKey,
   }) async {
@@ -78,11 +58,11 @@ class PhotosService {
       form: params.toForm(),
       apiKey: apiKey,
     );
-    return OcrResult.fromJson(readObject(data));
+    return PlateReading.fromJson(readObject(data));
   }
 
   /// Ler as placas de uma foto.
-  Future<RecognizeResult> recognize(
+  Future<PhotoRecognition> recognize(
     PhotosRecognizeParams params, {
     String? apiKey,
   }) async {
@@ -92,7 +72,7 @@ class PhotosService {
       form: params.toForm(),
       apiKey: apiKey,
     );
-    return RecognizeResult.fromJson(readObject(data));
+    return PhotoRecognition.fromJson(readObject(data));
   }
 }
 
@@ -101,6 +81,19 @@ class RecognitionsService {
   const RecognitionsService(this._client);
 
   final Requester _client;
+
+  /// Imagem de uma leitura.
+  Future<DetectionImageLink> image(
+    String id, {
+    String? apiKey,
+  }) async {
+    final data = await _client.request(
+      'GET',
+      '/api/v1/detections/${Uri.encodeComponent(id)}/image',
+      apiKey: apiKey,
+    );
+    return DetectionImageLink.fromJson(readObject(data));
+  }
 
   /// Listar as leituras.
   ///

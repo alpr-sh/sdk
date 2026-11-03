@@ -6,17 +6,22 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Uma leitura de placa, de uma câmera ou da API por foto. */
+/** Recognition is a resource of Alpr.sh's API. */
 final class Recognition
 {
     public function __construct(
+        /** Nulo numa leitura feita pela API por foto. */
         public readonly ?string $cameraId,
+        /** Com o deslocamento do fuso do Alpr.sh. */
         public readonly string $capturedAt,
-        /** Confiança da leitura, de 0 a 100. */
+        /** De 0 a 100, com uma casa. */
         public readonly float $conf,
         public readonly string $id,
         public readonly string $plate,
-        /** @var 'camera'|'api' */
+        /**
+         * camera: lida por uma câmera; api: enviada por foto.
+         * @var 'camera'|'api'
+         */
         public readonly string $source,
     ) {
     }

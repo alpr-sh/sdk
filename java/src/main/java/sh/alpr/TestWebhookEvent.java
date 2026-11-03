@@ -8,19 +8,19 @@ import java.util.Map;
 /**
  * The payload of {@code webhook.test}, flat: the fields of a {@link WebhookTest}.
  */
-public final class WebhookTestWebhookEvent extends WebhookEvent {
+public final class TestWebhookEvent extends WebhookEvent {
     /** The event names this class carries. */
     public static final List<String> EVENTS = List.of("webhook.test");
 
     private final WebhookTest payload;
 
-    private WebhookTestWebhookEvent(WebhookTest payload) {
+    private TestWebhookEvent(WebhookTest payload) {
         super(payload.getEvent(), payload.getId());
         this.payload = payload;
     }
 
-    static WebhookTestWebhookEvent fromJson(Map<String, Object> body) {
-        return new WebhookTestWebhookEvent(WebhookTest.fromJson(body));
+    static TestWebhookEvent fromJson(Map<String, Object> body) {
+        return new TestWebhookEvent(WebhookTest.fromJson(body));
     }
 
     /** @return the API's {@code sent_at} */

@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace Alpr;
 
-/// <summary>Uma leitura de placa, de uma câmera ou da API por foto.</summary>
+/// <summary>Recognition is a resource of Alpr.sh's API.</summary>
 public sealed record Recognition
 {
     /// <summary>A value of <see cref="Source"/>.</summary>
@@ -15,15 +15,15 @@ public sealed record Recognition
     /// <summary>A value of <see cref="Source"/>.</summary>
     public const string SourceApi = "api";
 
-    /// <summary>The API's <c>cameraId</c>. Null when the API sends none.</summary>
+    /// <summary>Nulo numa leitura feita pela API por foto. Null when the API sends none.</summary>
     [JsonPropertyName("cameraId")]
     public string? CameraId { get; init; }
 
-    /// <summary>The API's <c>capturedAt</c>.</summary>
+    /// <summary>Com o deslocamento do fuso do Alpr.sh.</summary>
     [JsonPropertyName("capturedAt")]
     public required string CapturedAt { get; init; }
 
-    /// <summary>Confiança da leitura, de 0 a 100.</summary>
+    /// <summary>De 0 a 100, com uma casa.</summary>
     [JsonPropertyName("conf")]
     public required double Conf { get; init; }
 
@@ -35,7 +35,7 @@ public sealed record Recognition
     [JsonPropertyName("plate")]
     public required string Plate { get; init; }
 
-    /// <summary>The API's <c>source</c>.</summary>
+    /// <summary>camera: lida por uma câmera; api: enviada por foto.</summary>
     [JsonPropertyName("source")]
     public required string Source { get; init; }
 }

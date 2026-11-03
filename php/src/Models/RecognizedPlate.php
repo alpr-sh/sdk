@@ -6,21 +6,29 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Uma placa lida na foto, com a caixa em pixels. */
+/** RecognizedPlate is a resource of Alpr.sh's API. */
 final class RecognizedPlate
 {
     public function __construct(
-        /** Confiança de 0 a 1 de cada caractere, separadas por vírgula. */
+        /** Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula ("0.99;0.98"). */
         public readonly string $charConfs,
-        /** Confiança da leitura, de 0 a 100. */
+        /** Confiança da placa, de 0 a 100, com uma casa. */
         public readonly float $conf,
+        /** Pixels da foto enviada. */
         public readonly int $coordinateBottom,
         public readonly int $coordinateLeft,
         public readonly int $coordinateRight,
         public readonly int $coordinateTop,
+        /** Igual a time. */
         public readonly string $createdAt,
+        /** Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul). */
         public readonly string $plate,
+        /**
+         * Sempre car; a API não informa país nem formato.
+         * @var 'car'
+         */
         public readonly string $plateType,
+        /** Instante da leitura, com o deslocamento do fuso do Alpr.sh. */
         public readonly string $time,
     ) {
     }

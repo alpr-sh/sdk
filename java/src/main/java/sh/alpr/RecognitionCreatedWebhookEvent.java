@@ -6,34 +6,34 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The payload of {@code recognition.created}, flat: the fields of a {@link RecognitionCreated}.
+ * The payload of {@code recognition.created}, flat: the fields of a {@link WebhookRecognitionCreated}.
  */
 public final class RecognitionCreatedWebhookEvent extends WebhookEvent {
     /** The event names this class carries. */
     public static final List<String> EVENTS = List.of("recognition.created");
 
-    private final RecognitionCreated payload;
+    private final WebhookRecognitionCreated payload;
 
-    private RecognitionCreatedWebhookEvent(RecognitionCreated payload) {
+    private RecognitionCreatedWebhookEvent(WebhookRecognitionCreated payload) {
         super(payload.getEvent(), payload.getId());
         this.payload = payload;
     }
 
     static RecognitionCreatedWebhookEvent fromJson(Map<String, Object> body) {
-        return new RecognitionCreatedWebhookEvent(RecognitionCreated.fromJson(body));
+        return new RecognitionCreatedWebhookEvent(WebhookRecognitionCreated.fromJson(body));
     }
 
-    /** @return the API's {@code camera_id} (null when the body has none) */
+    /** @return Ausente numa leitura enviada por foto. (null when the body has none) */
     public String getCameraId() {
         return payload.getCameraId();
     }
 
-    /** @return the API's {@code captured_at} */
+    /** @return UTC, com fração de segundo. */
     public String getCapturedAt() {
         return payload.getCapturedAt();
     }
 
-    /** @return the API's {@code confidence} */
+    /** @return De 0 a 1 (na API de chave, conf vai de 0 a 100). */
     public double getConfidence() {
         return payload.getConfidence();
     }
@@ -43,12 +43,12 @@ public final class RecognitionCreatedWebhookEvent extends WebhookEvent {
         return payload.getPlate();
     }
 
-    /** @return the API's {@code source} */
+    /** @return camera: lida por uma câmera; api: enviada por foto. */
     public String getSource() {
         return payload.getSource();
     }
 
-    /** @return the API's {@code tenant_id} */
+    /** @return O espaço de trabalho dono da leitura. */
     public String getTenantId() {
         return payload.getTenantId();
     }

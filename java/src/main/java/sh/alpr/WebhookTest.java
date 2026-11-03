@@ -5,7 +5,7 @@ package sh.alpr;
 import java.util.List;
 import java.util.Map;
 
-/** Carga de webhook.test, enviada pelo botão Testar do painel. */
+/** WebhookTest is a resource of Alpr.sh's API. */
 public final class WebhookTest {
     /** A value of {@link #getEvent()}. */
     public static final String EVENT_WEBHOOK_TEST = "webhook.test";

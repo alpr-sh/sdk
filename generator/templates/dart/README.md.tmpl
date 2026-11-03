@@ -30,7 +30,7 @@ await for (final reading in alpr.recognitions.listIter(plate: 'BRA')) {
 final cameras = await alpr.cameras.list();
 
 // O link temporário da imagem de uma leitura.
-final image = await alpr.detections.image('det_1');
+final image = await alpr.recognitions.image('det_1');
 print('${image.imageUrl} (vale ${image.expiresIn} s)');
 
 alpr.close();

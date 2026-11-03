@@ -9,24 +9,7 @@ use std::fmt;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Carga de alert.triggered: a regra que disparou e a leitura que a disparou.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct AlertTriggered {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub camera_id: Option<String>,
-    pub captured_at: String,
-    pub confidence: f64,
-    pub event: AlertTriggeredEvent,
-    pub id: String,
-    pub plate: String,
-    pub recognition_id: String,
-    pub rule_id: String,
-    pub rule_name: String,
-    pub tenant_id: String,
-}
-
-/// Uma câmera do espaço, sem endereço nem credenciais.
+/// Camera is a resource of Alpr.sh's API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct Camera {
@@ -34,151 +17,149 @@ pub struct Camera {
     pub created_at: String,
     pub enabled: bool,
     pub id: String,
+    /// O endereço da câmera como texto; vazio se não foi informado.
     pub location: String,
     pub name: String,
-    pub protocol: String,
+    /// Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
+    pub protocol: CameraProtocol,
+    /// Nulo quando a câmera lê a imagem inteira.
     #[serde(rename = "readingArea")]
     pub reading_area: Option<ReadingArea>,
 }
 
-/// Onde estão as placas de uma foto.
+/// DetectedPlate is a resource of Alpr.sh's API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct DetectResult {
+pub struct DetectedPlate {
+    /// Confiança do detector, de 0 a 100, com uma casa.
+    pub conf: f64,
+    #[serde(rename = "coordinateBottom")]
+    pub coordinate_bottom: i64,
+    #[serde(rename = "coordinateLeft")]
+    pub coordinate_left: i64,
+    #[serde(rename = "coordinateRight")]
+    pub coordinate_right: i64,
+    #[serde(rename = "coordinateTop")]
+    pub coordinate_top: i64,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "plateType")]
+    pub plate_type: DetectedPlatePlatetype,
+    pub time: String,
+}
+
+/// DetectionImageLink is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct DetectionImageLink {
+    #[serde(rename = "detectionId")]
+    pub detection_id: String,
+    /// Segundos de validade do link (300).
+    #[serde(rename = "expiresIn")]
+    pub expires_in: i64,
+    /// Endereço absoluto de GET /api/v1/detections/{id}/image/file, assinado; abra-o como veio.
+    #[serde(rename = "imageUrl")]
+    pub image_url: String,
+}
+
+/// PhotoDetection is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct PhotoDetection {
     #[serde(rename = "imageHeight")]
     pub image_height: i64,
     #[serde(rename = "imageWidth")]
     pub image_width: i64,
+    /// Onde há placa, sem o texto; o detector não filtra pelo formato brasileiro. Sem placa, [].
     pub plates: Vec<DetectedPlate>,
     #[serde(rename = "processingTimeMs")]
     pub processing_time_ms: i64,
 }
 
-/// Uma placa localizada na foto, sem o texto.
+/// PhotoRecognition is a resource of Alpr.sh's API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct DetectedPlate {
-    pub conf: f64,
-    #[serde(rename = "coordinateBottom")]
-    pub coordinate_bottom: i64,
-    #[serde(rename = "coordinateLeft")]
-    pub coordinate_left: i64,
-    #[serde(rename = "coordinateRight")]
-    pub coordinate_right: i64,
-    #[serde(rename = "coordinateTop")]
-    pub coordinate_top: i64,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-    #[serde(rename = "plateType")]
-    pub plate_type: String,
-    pub time: String,
-}
-
-/// O link temporário da imagem de uma leitura.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct DetectionImage {
-    #[serde(rename = "detectionId")]
-    pub detection_id: String,
-    /// Segundos de validade do link.
-    #[serde(rename = "expiresIn")]
-    pub expires_in: i64,
-    #[serde(rename = "imageUrl")]
-    pub image_url: String,
-}
-
-/// A placa lida de uma imagem já recortada.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct OcrResult {
-    pub confidence: f64,
-    #[serde(rename = "creditsRemaining")]
-    pub credits_remaining: i64,
-    #[serde(rename = "detectionId")]
-    pub detection_id: Option<String>,
-    #[serde(rename = "latencyMs")]
-    pub latency_ms: i64,
-    pub plate: String,
-}
-
-/// A área de leitura da câmera: placas fora do polígono são ignoradas.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct ReadingArea {
-    #[serde(rename = "box", default, skip_serializing_if = "Option::is_none")]
-    pub box_: Option<ReadingBox>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub points: Option<Vec<Vec<f64>>>,
-}
-
-/// A caixa envolvente da área de leitura, em frações da imagem.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct ReadingBox {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub height: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub width: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub x: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub y: Option<f64>,
-}
-
-/// Uma leitura de placa, de uma câmera ou da API por foto.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct Recognition {
-    #[serde(rename = "cameraId")]
-    pub camera_id: Option<String>,
-    #[serde(rename = "capturedAt")]
-    pub captured_at: String,
-    /// Confiança da leitura, de 0 a 100.
-    pub conf: f64,
-    pub id: String,
-    pub plate: String,
-    pub source: RecognitionSource,
-}
-
-/// Carga de recognition.created: os fatos no instante da leitura.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct RecognitionCreated {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub camera_id: Option<String>,
-    pub captured_at: String,
-    pub confidence: f64,
-    pub event: RecognitionCreatedEvent,
-    pub id: String,
-    pub plate: String,
-    pub source: RecognitionCreatedSource,
-    pub tenant_id: String,
-}
-
-/// O resultado da leitura de uma foto. Sem placa, plates é [].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct RecognizeResult {
+pub struct PhotoRecognition {
+    /// Créditos que sobraram depois desta leitura.
     #[serde(rename = "creditsRemaining")]
     pub credits_remaining: i64,
     #[serde(rename = "imageHeight")]
     pub image_height: i64,
     #[serde(rename = "imageWidth")]
     pub image_width: i64,
+    /// Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, [].
     pub plates: Vec<RecognizedPlate>,
     #[serde(rename = "processingTimeMs")]
     pub processing_time_ms: i64,
 }
 
-/// Uma placa lida na foto, com a caixa em pixels.
+/// PlateReading is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct PlateReading {
+    /// Confiança da leitura, de 0 a 1 com quatro casas (nas outras rotas conf vai de 0 a 100).
+    pub confidence: f64,
+    /// Créditos que sobraram depois desta leitura.
+    #[serde(rename = "creditsRemaining")]
+    pub credits_remaining: i64,
+    /// Hoje sempre nulo: a leitura de uma placa recortada não é guardada.
+    #[serde(rename = "detectionId")]
+    pub detection_id: Option<String>,
+    #[serde(rename = "latencyMs")]
+    pub latency_ms: i64,
+    /// O texto lido, sem hífen, maiúsculo; não é validado pelo formato brasileiro.
+    pub plate: String,
+}
+
+/// ReadingArea is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ReadingArea {
+    /// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+    #[serde(rename = "box")]
+    pub box_: ReadingAreaBox,
+    /// Os cantos do polígono, de 3 a 16 pares [x, y] em frações da imagem; um retângulo traz os quatro cantos. Placas fora dele são ignoradas.
+    pub points: Vec<Vec<f64>>,
+}
+
+/// A caixa envolvente, em frações da imagem (0 a 1); é o que o motor lê.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ReadingAreaBox {
+    pub height: f64,
+    pub width: f64,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Recognition is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct Recognition {
+    /// Nulo numa leitura feita pela API por foto.
+    #[serde(rename = "cameraId")]
+    pub camera_id: Option<String>,
+    /// Com o deslocamento do fuso do Alpr.sh.
+    #[serde(rename = "capturedAt")]
+    pub captured_at: String,
+    /// De 0 a 100, com uma casa.
+    pub conf: f64,
+    pub id: String,
+    pub plate: String,
+    /// camera: lida por uma câmera; api: enviada por foto.
+    pub source: RecognitionSource,
+}
+
+/// RecognizedPlate is a resource of Alpr.sh's API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct RecognizedPlate {
-    /// Confiança de 0 a 1 de cada caractere, separadas por vírgula.
+    /// Confiança de cada caractere, de 0 a 1 com duas casas, separadas por ponto e vírgula ("0.99;0.98").
     #[serde(rename = "charConfs")]
     pub char_confs: String,
-    /// Confiança da leitura, de 0 a 100.
+    /// Confiança da placa, de 0 a 100, com uma casa.
     pub conf: f64,
+    /// Pixels da foto enviada.
     #[serde(rename = "coordinateBottom")]
     pub coordinate_bottom: i64,
     #[serde(rename = "coordinateLeft")]
@@ -187,15 +168,64 @@ pub struct RecognizedPlate {
     pub coordinate_right: i64,
     #[serde(rename = "coordinateTop")]
     pub coordinate_top: i64,
+    /// Igual a time.
     #[serde(rename = "createdAt")]
     pub created_at: String,
+    /// Sete caracteres, maiúsculos: ABC1234 ou ABC1D23 (Mercosul).
     pub plate: String,
+    /// Sempre car; a API não informa país nem formato.
     #[serde(rename = "plateType")]
-    pub plate_type: String,
+    pub plate_type: RecognizedPlatePlatetype,
+    /// Instante da leitura, com o deslocamento do fuso do Alpr.sh.
     pub time: String,
 }
 
-/// Carga de webhook.test, enviada pelo botão Testar do painel.
+/// WebhookAlertTriggered is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct WebhookAlertTriggered {
+    /// Ausente se a leitura não veio de uma câmera.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_id: Option<String>,
+    pub captured_at: String,
+    /// De 0 a 1.
+    pub confidence: f64,
+    pub event: WebhookAlertTriggeredEvent,
+    /// O id do disparo.
+    pub id: String,
+    pub plate: String,
+    /// A leitura que disparou o alerta.
+    pub recognition_id: String,
+    pub rule_id: String,
+    pub rule_name: String,
+    /// Os destinos que as listas de permitidos e de bloqueados excluíram deste disparo (internal, channel:<id>, partner:<id>). Presente só quando algum foi excluído; é informação, não há o que fazer com ela.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip: Option<Vec<String>>,
+    pub tenant_id: String,
+}
+
+/// WebhookRecognitionCreated is a resource of Alpr.sh's API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct WebhookRecognitionCreated {
+    /// Ausente numa leitura enviada por foto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_id: Option<String>,
+    /// UTC, com fração de segundo.
+    pub captured_at: String,
+    /// De 0 a 1 (na API de chave, conf vai de 0 a 100).
+    pub confidence: f64,
+    pub event: WebhookRecognitionCreatedEvent,
+    /// O id da leitura; é o mesmo id de GET /api/v1/recognitions e de GET /api/v1/detections/{id}/image.
+    pub id: String,
+    pub plate: String,
+    /// camera: lida por uma câmera; api: enviada por foto.
+    pub source: WebhookRecognitionCreatedSource,
+    /// O espaço de trabalho dono da leitura.
+    pub tenant_id: String,
+}
+
+/// WebhookTest is a resource of Alpr.sh's API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct WebhookTest {
@@ -213,11 +243,13 @@ pub struct WebhookTest {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct PhotosDetectParams {
-    /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    /// A foto, JPEG ou PNG.
     pub image: Vec<u8>,
-    /// Piso do detector, de 0 a 1.
+    /// Só NONE é aceito.
+    pub image_mode: Option<PhotosDetectParamsImageMode>,
+    /// Piso de confiança do detector de placas.
     pub lpr_confidence: Option<f64>,
-    /// Piso da leitura, de 0 a 1.
+    /// Piso de confiança da leitura dos caracteres.
     pub min_ocr_confidence: Option<f64>,
 }
 
@@ -226,18 +258,25 @@ impl PhotosDetectParams {
     pub fn new(image: impl Into<Vec<u8>>) -> Self {
         Self {
             image: image.into(),
+            image_mode: None,
             lpr_confidence: None,
             min_ocr_confidence: None,
         }
     }
 
-    /// Piso do detector, de 0 a 1.
+    /// Só NONE é aceito.
+    pub fn image_mode(mut self, image_mode: impl Into<PhotosDetectParamsImageMode>) -> Self {
+        self.image_mode = Some(image_mode.into());
+        self
+    }
+
+    /// Piso de confiança do detector de placas.
     pub fn lpr_confidence(mut self, lpr_confidence: f64) -> Self {
         self.lpr_confidence = Some(lpr_confidence);
         self
     }
 
-    /// Piso da leitura, de 0 a 1.
+    /// Piso de confiança da leitura dos caracteres.
     pub fn min_ocr_confidence(mut self, min_ocr_confidence: f64) -> Self {
         self.min_ocr_confidence = Some(min_ocr_confidence);
         self
@@ -252,7 +291,7 @@ impl PhotosDetectParams {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct PhotosOCRParams {
-    /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    /// A imagem da placa já recortada, JPEG ou PNG.
     pub image: Vec<u8>,
 }
 
@@ -273,11 +312,13 @@ impl PhotosOCRParams {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct PhotosRecognizeParams {
-    /// A foto, JPEG ou PNG, até 10 MB e 8000 px.
+    /// A foto, JPEG ou PNG.
     pub image: Vec<u8>,
-    /// Piso do detector, de 0 a 1.
+    /// Só NONE é aceito.
+    pub image_mode: Option<PhotosRecognizeParamsImageMode>,
+    /// Piso de confiança do detector de placas.
     pub lpr_confidence: Option<f64>,
-    /// Piso da leitura, de 0 a 1.
+    /// Piso de confiança da leitura dos caracteres.
     pub min_ocr_confidence: Option<f64>,
 }
 
@@ -286,81 +327,280 @@ impl PhotosRecognizeParams {
     pub fn new(image: impl Into<Vec<u8>>) -> Self {
         Self {
             image: image.into(),
+            image_mode: None,
             lpr_confidence: None,
             min_ocr_confidence: None,
         }
     }
 
-    /// Piso do detector, de 0 a 1.
+    /// Só NONE é aceito.
+    pub fn image_mode(mut self, image_mode: impl Into<PhotosRecognizeParamsImageMode>) -> Self {
+        self.image_mode = Some(image_mode.into());
+        self
+    }
+
+    /// Piso de confiança do detector de placas.
     pub fn lpr_confidence(mut self, lpr_confidence: f64) -> Self {
         self.lpr_confidence = Some(lpr_confidence);
         self
     }
 
-    /// Piso da leitura, de 0 a 1.
+    /// Piso de confiança da leitura dos caracteres.
     pub fn min_ocr_confidence(mut self, min_ocr_confidence: f64) -> Self {
         self.min_ocr_confidence = Some(min_ocr_confidence);
         self
     }
 }
 
-/// The values of `AlertTriggered.event`.
+/// The values of `Camera.protocol`. Como a câmera é lida. Nunca traz o endereço do stream, usuário nem senha.
 ///
 /// A value this SDK does not know yet is kept, as it came, in
-/// [`AlertTriggeredEvent::Unrecognized`].
+/// [`CameraProtocol::Unrecognized`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum AlertTriggeredEvent {
-    /// `alert.triggered`
-    AlertTriggered,
+pub enum CameraProtocol {
+    /// `rtsp`
+    Rtsp,
+    /// `rtmp`
+    Rtmp,
+    /// `hls`
+    Hls,
+    /// `http`
+    Http,
+    /// `hikconnect`
+    Hikconnect,
+    /// `hikcloud`
+    Hikcloud,
+    /// `rtmppush`
+    Rtmppush,
     /// A value this SDK does not know yet.
     Unrecognized(String),
 }
 
-impl AlertTriggeredEvent {
+impl CameraProtocol {
     /// The value as the API writes it.
     pub fn as_str(&self) -> &str {
         match self {
-            AlertTriggeredEvent::AlertTriggered => "alert.triggered",
-            AlertTriggeredEvent::Unrecognized(value) => value,
+            CameraProtocol::Rtsp => "rtsp",
+            CameraProtocol::Rtmp => "rtmp",
+            CameraProtocol::Hls => "hls",
+            CameraProtocol::Http => "http",
+            CameraProtocol::Hikconnect => "hikconnect",
+            CameraProtocol::Hikcloud => "hikcloud",
+            CameraProtocol::Rtmppush => "rtmppush",
+            CameraProtocol::Unrecognized(value) => value,
         }
     }
 }
 
-impl From<&str> for AlertTriggeredEvent {
+impl From<&str> for CameraProtocol {
     fn from(value: &str) -> Self {
         match value {
-            "alert.triggered" => AlertTriggeredEvent::AlertTriggered,
-            other => AlertTriggeredEvent::Unrecognized(other.to_owned()),
+            "rtsp" => CameraProtocol::Rtsp,
+            "rtmp" => CameraProtocol::Rtmp,
+            "hls" => CameraProtocol::Hls,
+            "http" => CameraProtocol::Http,
+            "hikconnect" => CameraProtocol::Hikconnect,
+            "hikcloud" => CameraProtocol::Hikcloud,
+            "rtmppush" => CameraProtocol::Rtmppush,
+            other => CameraProtocol::Unrecognized(other.to_owned()),
         }
     }
 }
 
-impl From<String> for AlertTriggeredEvent {
+impl From<String> for CameraProtocol {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
     }
 }
 
-impl fmt::Display for AlertTriggeredEvent {
+impl fmt::Display for CameraProtocol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl Serialize for AlertTriggeredEvent {
+impl Serialize for CameraProtocol {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.as_str())
     }
 }
 
-impl<'de> Deserialize<'de> for AlertTriggeredEvent {
+impl<'de> Deserialize<'de> for CameraProtocol {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         String::deserialize(deserializer).map(Self::from)
     }
 }
 
-/// The values of `Recognition.source`.
+/// The values of `DetectedPlate.plateType`.
+///
+/// A value this SDK does not know yet is kept, as it came, in
+/// [`DetectedPlatePlatetype::Unrecognized`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DetectedPlatePlatetype {
+    /// `car`
+    Car,
+    /// A value this SDK does not know yet.
+    Unrecognized(String),
+}
+
+impl DetectedPlatePlatetype {
+    /// The value as the API writes it.
+    pub fn as_str(&self) -> &str {
+        match self {
+            DetectedPlatePlatetype::Car => "car",
+            DetectedPlatePlatetype::Unrecognized(value) => value,
+        }
+    }
+}
+
+impl From<&str> for DetectedPlatePlatetype {
+    fn from(value: &str) -> Self {
+        match value {
+            "car" => DetectedPlatePlatetype::Car,
+            other => DetectedPlatePlatetype::Unrecognized(other.to_owned()),
+        }
+    }
+}
+
+impl From<String> for DetectedPlatePlatetype {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
+impl fmt::Display for DetectedPlatePlatetype {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for DetectedPlatePlatetype {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for DetectedPlatePlatetype {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}
+
+/// The values of `PhotosDetectParams.image_mode`. Só NONE é aceito.
+///
+/// A value this SDK does not know yet is kept, as it came, in
+/// [`PhotosDetectParamsImageMode::Unrecognized`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PhotosDetectParamsImageMode {
+    /// `NONE`
+    None,
+    /// A value this SDK does not know yet.
+    Unrecognized(String),
+}
+
+impl PhotosDetectParamsImageMode {
+    /// The value as the API writes it.
+    pub fn as_str(&self) -> &str {
+        match self {
+            PhotosDetectParamsImageMode::None => "NONE",
+            PhotosDetectParamsImageMode::Unrecognized(value) => value,
+        }
+    }
+}
+
+impl From<&str> for PhotosDetectParamsImageMode {
+    fn from(value: &str) -> Self {
+        match value {
+            "NONE" => PhotosDetectParamsImageMode::None,
+            other => PhotosDetectParamsImageMode::Unrecognized(other.to_owned()),
+        }
+    }
+}
+
+impl From<String> for PhotosDetectParamsImageMode {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
+impl fmt::Display for PhotosDetectParamsImageMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for PhotosDetectParamsImageMode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for PhotosDetectParamsImageMode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}
+
+/// The values of `PhotosRecognizeParams.image_mode`. Só NONE é aceito.
+///
+/// A value this SDK does not know yet is kept, as it came, in
+/// [`PhotosRecognizeParamsImageMode::Unrecognized`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PhotosRecognizeParamsImageMode {
+    /// `NONE`
+    None,
+    /// A value this SDK does not know yet.
+    Unrecognized(String),
+}
+
+impl PhotosRecognizeParamsImageMode {
+    /// The value as the API writes it.
+    pub fn as_str(&self) -> &str {
+        match self {
+            PhotosRecognizeParamsImageMode::None => "NONE",
+            PhotosRecognizeParamsImageMode::Unrecognized(value) => value,
+        }
+    }
+}
+
+impl From<&str> for PhotosRecognizeParamsImageMode {
+    fn from(value: &str) -> Self {
+        match value {
+            "NONE" => PhotosRecognizeParamsImageMode::None,
+            other => PhotosRecognizeParamsImageMode::Unrecognized(other.to_owned()),
+        }
+    }
+}
+
+impl From<String> for PhotosRecognizeParamsImageMode {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
+impl fmt::Display for PhotosRecognizeParamsImageMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for PhotosRecognizeParamsImageMode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for PhotosRecognizeParamsImageMode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}
+
+/// The values of `Recognition.source`. camera: lida por uma câmera; api: enviada por foto.
 ///
 /// A value this SDK does not know yet is kept, as it came, in
 /// [`RecognitionSource::Unrecognized`].
@@ -420,69 +660,181 @@ impl<'de> Deserialize<'de> for RecognitionSource {
     }
 }
 
-/// The values of `RecognitionCreated.event`.
+/// The values of `RecognizedPlate.plateType`. Sempre car; a API não informa país nem formato.
 ///
 /// A value this SDK does not know yet is kept, as it came, in
-/// [`RecognitionCreatedEvent::Unrecognized`].
+/// [`RecognizedPlatePlatetype::Unrecognized`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum RecognitionCreatedEvent {
+pub enum RecognizedPlatePlatetype {
+    /// `car`
+    Car,
+    /// A value this SDK does not know yet.
+    Unrecognized(String),
+}
+
+impl RecognizedPlatePlatetype {
+    /// The value as the API writes it.
+    pub fn as_str(&self) -> &str {
+        match self {
+            RecognizedPlatePlatetype::Car => "car",
+            RecognizedPlatePlatetype::Unrecognized(value) => value,
+        }
+    }
+}
+
+impl From<&str> for RecognizedPlatePlatetype {
+    fn from(value: &str) -> Self {
+        match value {
+            "car" => RecognizedPlatePlatetype::Car,
+            other => RecognizedPlatePlatetype::Unrecognized(other.to_owned()),
+        }
+    }
+}
+
+impl From<String> for RecognizedPlatePlatetype {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
+impl fmt::Display for RecognizedPlatePlatetype {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for RecognizedPlatePlatetype {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for RecognizedPlatePlatetype {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}
+
+/// The values of `WebhookAlertTriggered.event`.
+///
+/// A value this SDK does not know yet is kept, as it came, in
+/// [`WebhookAlertTriggeredEvent::Unrecognized`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum WebhookAlertTriggeredEvent {
+    /// `alert.triggered`
+    AlertTriggered,
+    /// A value this SDK does not know yet.
+    Unrecognized(String),
+}
+
+impl WebhookAlertTriggeredEvent {
+    /// The value as the API writes it.
+    pub fn as_str(&self) -> &str {
+        match self {
+            WebhookAlertTriggeredEvent::AlertTriggered => "alert.triggered",
+            WebhookAlertTriggeredEvent::Unrecognized(value) => value,
+        }
+    }
+}
+
+impl From<&str> for WebhookAlertTriggeredEvent {
+    fn from(value: &str) -> Self {
+        match value {
+            "alert.triggered" => WebhookAlertTriggeredEvent::AlertTriggered,
+            other => WebhookAlertTriggeredEvent::Unrecognized(other.to_owned()),
+        }
+    }
+}
+
+impl From<String> for WebhookAlertTriggeredEvent {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
+impl fmt::Display for WebhookAlertTriggeredEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for WebhookAlertTriggeredEvent {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for WebhookAlertTriggeredEvent {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}
+
+/// The values of `WebhookRecognitionCreated.event`.
+///
+/// A value this SDK does not know yet is kept, as it came, in
+/// [`WebhookRecognitionCreatedEvent::Unrecognized`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum WebhookRecognitionCreatedEvent {
     /// `recognition.created`
     RecognitionCreated,
     /// A value this SDK does not know yet.
     Unrecognized(String),
 }
 
-impl RecognitionCreatedEvent {
+impl WebhookRecognitionCreatedEvent {
     /// The value as the API writes it.
     pub fn as_str(&self) -> &str {
         match self {
-            RecognitionCreatedEvent::RecognitionCreated => "recognition.created",
-            RecognitionCreatedEvent::Unrecognized(value) => value,
+            WebhookRecognitionCreatedEvent::RecognitionCreated => "recognition.created",
+            WebhookRecognitionCreatedEvent::Unrecognized(value) => value,
         }
     }
 }
 
-impl From<&str> for RecognitionCreatedEvent {
+impl From<&str> for WebhookRecognitionCreatedEvent {
     fn from(value: &str) -> Self {
         match value {
-            "recognition.created" => RecognitionCreatedEvent::RecognitionCreated,
-            other => RecognitionCreatedEvent::Unrecognized(other.to_owned()),
+            "recognition.created" => WebhookRecognitionCreatedEvent::RecognitionCreated,
+            other => WebhookRecognitionCreatedEvent::Unrecognized(other.to_owned()),
         }
     }
 }
 
-impl From<String> for RecognitionCreatedEvent {
+impl From<String> for WebhookRecognitionCreatedEvent {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
     }
 }
 
-impl fmt::Display for RecognitionCreatedEvent {
+impl fmt::Display for WebhookRecognitionCreatedEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl Serialize for RecognitionCreatedEvent {
+impl Serialize for WebhookRecognitionCreatedEvent {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.as_str())
     }
 }
 
-impl<'de> Deserialize<'de> for RecognitionCreatedEvent {
+impl<'de> Deserialize<'de> for WebhookRecognitionCreatedEvent {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         String::deserialize(deserializer).map(Self::from)
     }
 }
 
-/// The values of `RecognitionCreated.source`.
+/// The values of `WebhookRecognitionCreated.source`. camera: lida por uma câmera; api: enviada por foto.
 ///
 /// A value this SDK does not know yet is kept, as it came, in
-/// [`RecognitionCreatedSource::Unrecognized`].
+/// [`WebhookRecognitionCreatedSource::Unrecognized`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
-pub enum RecognitionCreatedSource {
+pub enum WebhookRecognitionCreatedSource {
     /// `camera`
     Camera,
     /// `api`
@@ -491,46 +843,46 @@ pub enum RecognitionCreatedSource {
     Unrecognized(String),
 }
 
-impl RecognitionCreatedSource {
+impl WebhookRecognitionCreatedSource {
     /// The value as the API writes it.
     pub fn as_str(&self) -> &str {
         match self {
-            RecognitionCreatedSource::Camera => "camera",
-            RecognitionCreatedSource::Api => "api",
-            RecognitionCreatedSource::Unrecognized(value) => value,
+            WebhookRecognitionCreatedSource::Camera => "camera",
+            WebhookRecognitionCreatedSource::Api => "api",
+            WebhookRecognitionCreatedSource::Unrecognized(value) => value,
         }
     }
 }
 
-impl From<&str> for RecognitionCreatedSource {
+impl From<&str> for WebhookRecognitionCreatedSource {
     fn from(value: &str) -> Self {
         match value {
-            "camera" => RecognitionCreatedSource::Camera,
-            "api" => RecognitionCreatedSource::Api,
-            other => RecognitionCreatedSource::Unrecognized(other.to_owned()),
+            "camera" => WebhookRecognitionCreatedSource::Camera,
+            "api" => WebhookRecognitionCreatedSource::Api,
+            other => WebhookRecognitionCreatedSource::Unrecognized(other.to_owned()),
         }
     }
 }
 
-impl From<String> for RecognitionCreatedSource {
+impl From<String> for WebhookRecognitionCreatedSource {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
     }
 }
 
-impl fmt::Display for RecognitionCreatedSource {
+impl fmt::Display for WebhookRecognitionCreatedSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl Serialize for RecognitionCreatedSource {
+impl Serialize for WebhookRecognitionCreatedSource {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.as_str())
     }
 }
 
-impl<'de> Deserialize<'de> for RecognitionCreatedSource {
+impl<'de> Deserialize<'de> for WebhookRecognitionCreatedSource {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         String::deserialize(deserializer).map(Self::from)
     }

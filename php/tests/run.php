@@ -11,7 +11,7 @@ use Alpr\Form;
 use Alpr\RecognitionCreatedWebhookEvent;
 use Alpr\UnknownWebhookEvent;
 use Alpr\Webhook;
-use Alpr\WebhookTestWebhookEvent;
+use Alpr\TestWebhookEvent;
 use Alpr\WebhookVerificationException;
 
 spl_autoload_register(static function (string $class): void {
@@ -170,7 +170,7 @@ $tests['a plate image is read by OCR, with a null detection id'] = static functi
 
 $tests['a detection image is a link, and its id is escaped in the path'] = static function (): void {
     [$alpr, $seen] = client(static fn (): array => json('{"detectionId":"a/b","expiresIn":300,"imageUrl":"https://alpr.sh/api/v1/detections/a/image/file?s=x"}'));
-    $image = $alpr->detections->image('a/b');
+    $image = $alpr->recognitions->image('a/b');
     check($seen[0]['url'] === 'https://alpr.test/api/v1/detections/a%2Fb/image', 'path ' . $seen[0]['url']);
     check($image->expiresIn === 300 && $image->detectionId === 'a/b' && str_starts_with($image->imageUrl, 'https://alpr.sh/'), 'image');
 };
@@ -417,7 +417,7 @@ $tests['a webhook answers its typed event'] = static function (): void {
     $alert = Webhook::verify(NEW_SECRET, webhookHeaders('del_0002', SIGNED_AT, ALERT_NEW), ALERT_BODY, NOW);
     check($alert instanceof AlertTriggeredWebhookEvent && $alert->ruleName === 'Veículo bloqueado' && $alert->recognitionId === 'rec_1' && $alert->ruleId === 'rule_1', 'alert event');
     $test = Webhook::verify(NEW_SECRET, webhookHeaders('del_0003', SIGNED_AT, TEST_NEW), TEST_BODY, NOW);
-    check($test instanceof WebhookTestWebhookEvent && $test->eventName() === 'webhook.test' && $test->sentAt === '2026-10-22T12:00:00Z', 'test event');
+    check($test instanceof TestWebhookEvent && $test->eventName() === 'webhook.test' && $test->sentAt === '2026-10-22T12:00:00Z', 'test event');
     $unknown = Webhook::verify(NEW_SECRET, webhookHeaders('del_0004', SIGNED_AT, UNKNOWN_NEW), UNKNOWN_BODY, NOW);
     check($unknown instanceof UnknownWebhookEvent && $unknown->eventName() === 'payout.sent' && $unknown->id === 'po_1'
         && $unknown->raw === UNKNOWN_BODY && $unknown->body === ['event' => 'payout.sent', 'id' => 'po_1', 'tenant_id' => 'ws_1'], 'unknown event');

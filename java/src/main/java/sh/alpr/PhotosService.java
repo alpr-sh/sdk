@@ -19,33 +19,37 @@ public final class PhotosService {
      * Localizar as placas de uma foto.
      * @param params the request
      * @param options another workspace's key for this call, or null
-     * @return the detectresult
+     * @return the photodetection
      * @throws AlprException when the API refuses the call
      */
-    public DetectResult detect(DetectParams params, RequestOptions options) {
+    public PhotoDetection detect(DetectParams params, RequestOptions options) {
         Object data = client.request("POST", "/api/v1/detect", null, Objects.requireNonNull(params, "params").toForm(), options);
-        return DetectResult.fromJson(Json.asObject(data));
+        return PhotoDetection.fromJson(Json.asObject(data));
     }
 
     /**
      * Localizar as placas de uma foto.
      * @param params the request
-     * @return the detectresult
+     * @return the photodetection
      * @throws AlprException when the API refuses the call
      */
-    public DetectResult detect(DetectParams params) {
+    public PhotoDetection detect(DetectParams params) {
         return detect(params, null);
     }
 
     /** The body of photos:detect. */
     public static final class DetectParams {
+        /** A value of {@link #getImageMode()}. */
+        public static final String IMAGE_MODE_NONE = "NONE";
 
         private final byte[] image;
+        private final String imageMode;
         private final Double lprConfidence;
         private final Double minOcrConfidence;
 
         private DetectParams(Builder builder) {
             this.image = builder.image;
+            this.imageMode = builder.imageMode;
             this.lprConfidence = builder.lprConfidence;
             this.minOcrConfidence = builder.minOcrConfidence;
         }
@@ -55,17 +59,22 @@ public final class PhotosService {
             return new Builder();
         }
 
-        /** @return A foto, JPEG ou PNG, até 10 MB e 8000 px. */
+        /** @return A foto, JPEG ou PNG. */
         public byte[] getImage() {
             return image;
         }
 
-        /** @return Piso do detector, de 0 a 1. (null when left out) */
+        /** @return Só NONE é aceito. (null when left out) */
+        public String getImageMode() {
+            return imageMode;
+        }
+
+        /** @return Piso de confiança do detector de placas. (null when left out) */
         public Double getLprConfidence() {
             return lprConfidence;
         }
 
-        /** @return Piso da leitura, de 0 a 1. (null when left out) */
+        /** @return Piso de confiança da leitura dos caracteres. (null when left out) */
         public Double getMinOcrConfidence() {
             return minOcrConfidence;
         }
@@ -73,6 +82,9 @@ public final class PhotosService {
         Multipart toForm() {
             Multipart form = new Multipart();
             form.file("image", image);
+            if (imageMode != null) {
+                form.text("image_mode", imageMode);
+            }
             if (lprConfidence != null) {
                 form.text("lpr_confidence", Multipart.number(lprConfidence));
             }
@@ -85,6 +97,7 @@ public final class PhotosService {
         /** Builds {@link DetectParams}; the fields left unset are left out of the request. */
         public static final class Builder {
             private byte[] image;
+            private String imageMode;
             private Double lprConfidence;
             private Double minOcrConfidence;
 
@@ -92,7 +105,7 @@ public final class PhotosService {
             }
 
             /**
-             * @param image A foto, JPEG ou PNG, até 10 MB e 8000 px. (required)
+             * @param image A foto, JPEG ou PNG. (required)
              * @return this builder
              */
             public Builder image(byte[] image) {
@@ -101,7 +114,16 @@ public final class PhotosService {
             }
 
             /**
-             * @param lprConfidence Piso do detector, de 0 a 1.
+             * @param imageMode Só NONE é aceito.
+             * @return this builder
+             */
+            public Builder imageMode(String imageMode) {
+                this.imageMode = imageMode;
+                return this;
+            }
+
+            /**
+             * @param lprConfidence Piso de confiança do detector de placas.
              * @return this builder
              */
             public Builder lprConfidence(Double lprConfidence) {
@@ -110,7 +132,7 @@ public final class PhotosService {
             }
 
             /**
-             * @param minOcrConfidence Piso da leitura, de 0 a 1.
+             * @param minOcrConfidence Piso de confiança da leitura dos caracteres.
              * @return this builder
              */
             public Builder minOcrConfidence(Double minOcrConfidence) {
@@ -135,21 +157,21 @@ public final class PhotosService {
      * Ler uma placa já recortada.
      * @param params the request
      * @param options another workspace's key for this call, or null
-     * @return the ocrresult
+     * @return the platereading
      * @throws AlprException when the API refuses the call
      */
-    public OcrResult ocr(OcrParams params, RequestOptions options) {
+    public PlateReading ocr(OcrParams params, RequestOptions options) {
         Object data = client.request("POST", "/api/v1/ocr", null, Objects.requireNonNull(params, "params").toForm(), options);
-        return OcrResult.fromJson(Json.asObject(data));
+        return PlateReading.fromJson(Json.asObject(data));
     }
 
     /**
      * Ler uma placa já recortada.
      * @param params the request
-     * @return the ocrresult
+     * @return the platereading
      * @throws AlprException when the API refuses the call
      */
-    public OcrResult ocr(OcrParams params) {
+    public PlateReading ocr(OcrParams params) {
         return ocr(params, null);
     }
 
@@ -167,7 +189,7 @@ public final class PhotosService {
             return new Builder();
         }
 
-        /** @return A foto, JPEG ou PNG, até 10 MB e 8000 px. */
+        /** @return A imagem da placa já recortada, JPEG ou PNG. */
         public byte[] getImage() {
             return image;
         }
@@ -186,7 +208,7 @@ public final class PhotosService {
             }
 
             /**
-             * @param image A foto, JPEG ou PNG, até 10 MB e 8000 px. (required)
+             * @param image A imagem da placa já recortada, JPEG ou PNG. (required)
              * @return this builder
              */
             public Builder image(byte[] image) {
@@ -211,33 +233,37 @@ public final class PhotosService {
      * Ler as placas de uma foto.
      * @param params the request
      * @param options another workspace's key for this call, or null
-     * @return the recognizeresult
+     * @return the photorecognition
      * @throws AlprException when the API refuses the call
      */
-    public RecognizeResult recognize(RecognizeParams params, RequestOptions options) {
+    public PhotoRecognition recognize(RecognizeParams params, RequestOptions options) {
         Object data = client.request("POST", "/api/v1/recognize", null, Objects.requireNonNull(params, "params").toForm(), options);
-        return RecognizeResult.fromJson(Json.asObject(data));
+        return PhotoRecognition.fromJson(Json.asObject(data));
     }
 
     /**
      * Ler as placas de uma foto.
      * @param params the request
-     * @return the recognizeresult
+     * @return the photorecognition
      * @throws AlprException when the API refuses the call
      */
-    public RecognizeResult recognize(RecognizeParams params) {
+    public PhotoRecognition recognize(RecognizeParams params) {
         return recognize(params, null);
     }
 
     /** The body of photos:recognize. */
     public static final class RecognizeParams {
+        /** A value of {@link #getImageMode()}. */
+        public static final String IMAGE_MODE_NONE = "NONE";
 
         private final byte[] image;
+        private final String imageMode;
         private final Double lprConfidence;
         private final Double minOcrConfidence;
 
         private RecognizeParams(Builder builder) {
             this.image = builder.image;
+            this.imageMode = builder.imageMode;
             this.lprConfidence = builder.lprConfidence;
             this.minOcrConfidence = builder.minOcrConfidence;
         }
@@ -247,17 +273,22 @@ public final class PhotosService {
             return new Builder();
         }
 
-        /** @return A foto, JPEG ou PNG, até 10 MB e 8000 px. */
+        /** @return A foto, JPEG ou PNG. */
         public byte[] getImage() {
             return image;
         }
 
-        /** @return Piso do detector, de 0 a 1. (null when left out) */
+        /** @return Só NONE é aceito. (null when left out) */
+        public String getImageMode() {
+            return imageMode;
+        }
+
+        /** @return Piso de confiança do detector de placas. (null when left out) */
         public Double getLprConfidence() {
             return lprConfidence;
         }
 
-        /** @return Piso da leitura, de 0 a 1. (null when left out) */
+        /** @return Piso de confiança da leitura dos caracteres. (null when left out) */
         public Double getMinOcrConfidence() {
             return minOcrConfidence;
         }
@@ -265,6 +296,9 @@ public final class PhotosService {
         Multipart toForm() {
             Multipart form = new Multipart();
             form.file("image", image);
+            if (imageMode != null) {
+                form.text("image_mode", imageMode);
+            }
             if (lprConfidence != null) {
                 form.text("lpr_confidence", Multipart.number(lprConfidence));
             }
@@ -277,6 +311,7 @@ public final class PhotosService {
         /** Builds {@link RecognizeParams}; the fields left unset are left out of the request. */
         public static final class Builder {
             private byte[] image;
+            private String imageMode;
             private Double lprConfidence;
             private Double minOcrConfidence;
 
@@ -284,7 +319,7 @@ public final class PhotosService {
             }
 
             /**
-             * @param image A foto, JPEG ou PNG, até 10 MB e 8000 px. (required)
+             * @param image A foto, JPEG ou PNG. (required)
              * @return this builder
              */
             public Builder image(byte[] image) {
@@ -293,7 +328,16 @@ public final class PhotosService {
             }
 
             /**
-             * @param lprConfidence Piso do detector, de 0 a 1.
+             * @param imageMode Só NONE é aceito.
+             * @return this builder
+             */
+            public Builder imageMode(String imageMode) {
+                this.imageMode = imageMode;
+                return this;
+            }
+
+            /**
+             * @param lprConfidence Piso de confiança do detector de placas.
              * @return this builder
              */
             public Builder lprConfidence(Double lprConfidence) {
@@ -302,7 +346,7 @@ public final class PhotosService {
             }
 
             /**
-             * @param minOcrConfidence Piso da leitura, de 0 a 1.
+             * @param minOcrConfidence Piso de confiança da leitura dos caracteres.
              * @return this builder
              */
             public Builder minOcrConfidence(Double minOcrConfidence) {

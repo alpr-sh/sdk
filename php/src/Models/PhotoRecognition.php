@@ -6,13 +6,18 @@ declare(strict_types=1);
 
 namespace Alpr\Models;
 
-/** Onde estão as placas de uma foto. */
-final class DetectResult
+/** PhotoRecognition is a resource of Alpr.sh's API. */
+final class PhotoRecognition
 {
     public function __construct(
+        /** Créditos que sobraram depois desta leitura. */
+        public readonly int $creditsRemaining,
         public readonly int $imageHeight,
         public readonly int $imageWidth,
-        /** @var list<DetectedPlate> */
+        /**
+         * Só as placas válidas no Brasil (ABC1234 ou ABC1D23); sem placa, [].
+         * @var list<RecognizedPlate>
+         */
         public readonly array $plates,
         public readonly int $processingTimeMs,
     ) {
@@ -24,9 +29,10 @@ final class DetectResult
     public static function fromArray(array $data): self
     {
         return new self(
+            creditsRemaining: $data['creditsRemaining'],
             imageHeight: $data['imageHeight'],
             imageWidth: $data['imageWidth'],
-            plates: array_values(array_map(static fn (array $item) => DetectedPlate::fromArray($item), $data['plates'])),
+            plates: array_values(array_map(static fn (array $item) => RecognizedPlate::fromArray($item), $data['plates'])),
             processingTimeMs: $data['processingTimeMs'],
         );
     }
