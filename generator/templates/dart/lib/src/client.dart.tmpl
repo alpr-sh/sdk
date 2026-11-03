@@ -2,33 +2,33 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
 import 'core.dart';
 import 'errors.dart';
 import 'services.dart';
+import 'upload.dart';
 import 'version.dart';
 
 /// A browser sets the User-Agent itself and refuses one from a script.
 const _web = bool.fromEnvironment('dart.library.js_interop');
 
-/// Alpr.sh's API with one organization's API key.
+/// Alpr.sh's API with one workspace's API key.
 ///
-/// The key says the organization and the environment: `prk_test_…` is the
-/// test environment, `prk_live_…` the live one.
+/// The key (`alpr_live_…`) says the workspace and the scopes the calls may
+/// use.
 ///
 /// ```dart
 /// final alpr = Alpr(apiKey);
-/// final product = await alpr.products.create(
-///   const ProductsCreateParams(name: 'Curso'),
+/// final result = await alpr.photos.recognize(
+///   PhotosRecognizeParams(image: photo),
 /// );
-/// await for (final product in alpr.products.listIter()) { … }
+/// await for (final reading in alpr.recognitions.listIter()) { … }
 /// alpr.close();
 /// ```
 class Alpr implements Requester {
-  /// A client for the organization [apiKey] belongs to.
+  /// A client for the workspace [apiKey] belongs to.
   ///
   /// [baseUrl] points it at another address, such as a local server; it
   /// must be https, or http only for localhost, 127.0.0.0/8 and ::1, and any
@@ -62,17 +62,17 @@ class Alpr implements Requester {
     }
   }
 
-  /// Calls the API and answers what it wrapped in `data`.
+  /// Calls the API and answers the JSON it returned, or null for a 204.
   ///
-  /// A refusal throws [AlprException]; a call that takes longer than the
-  /// timeout, a [TimeoutException].
+  /// A refusal, and any redirect (the key never follows one), throws
+  /// [AlprException]; a call that takes longer than the timeout, a
+  /// [TimeoutException].
   @override
-  Future<Map<String, Object?>> request(
+  Future<Object?> request(
     String method,
     String path, {
     Map<String, Object?> query = const {},
-    Map<String, Object?>? body,
-    String? idempotencyKey,
+    MultipartForm? form,
     String? apiKey,
   }) async {
     final parameters = {
@@ -89,17 +89,10 @@ class Alpr implements Requester {
     if (!_web) {
       request.headers['User-Agent'] = 'alpr-dart/$sdkVersion';
     }
-    if (body != null) {
-      request.headers['Content-Type'] = 'application/json';
-      request.bodyBytes = utf8.encode(jsonEncode(body));
-    }
-    // A POST is sent with a key of its own, one a call, unless the caller
-    // gave one.
-    final key = idempotencyKey != null && idempotencyKey.isNotEmpty
-        ? idempotencyKey
-        : (method == 'POST' ? _uuid() : null);
-    if (key != null) {
-      request.headers['Idempotency-Key'] = key;
+    if (form != null) {
+      final body = form.encode();
+      request.headers['Content-Type'] = body.contentType;
+      request.bodyBytes = body.bytes;
     }
     final response = await _send(request).timeout(_timeout);
     if (response.statusCode >= 300) {
@@ -109,14 +102,10 @@ class Alpr implements Requester {
         response.bodyBytes,
       );
     }
-    if (response.statusCode == 204) {
-      return const {};
+    if (response.statusCode == 204 || response.bodyBytes.isEmpty) {
+      return null;
     }
-    final envelope = jsonDecode(utf8.decode(response.bodyBytes));
-    if (envelope case {'data': final Map<String, Object?> data}) {
-      return data;
-    }
-    throw const FormatException('alpr: the answer has no data object');
+    return jsonDecode(utf8.decode(response.bodyBytes));
   }
 
   /// [baseUrl] if it is https, or http to localhost, 127.0.0.0/8 or ::1.
@@ -140,19 +129,6 @@ class Alpr implements Requester {
       'baseUrl',
       'alpr: the base URL must be https (http is accepted only for localhost, 127.0.0.0/8 and ::1), so the API key is never sent in clear text',
     );
-  }
-
-  /// A random UUID (version 4).
-  static String _uuid() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    String hex(int from, int to) => bytes
-        .sublist(from, to)
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join();
-    return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
   }
 
   Future<http.Response> _send(http.Request request) async =>

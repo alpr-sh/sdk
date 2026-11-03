@@ -1,41 +1,44 @@
 import 'json.dart';
-import 'models.dart';
 
-/// One page of a list, and where the list ends.
+/// One page of a list: its items, and the cursor of the next page.
 final class Page<T> {
-  const Page({required this.items, required this.pagination});
+  const Page({required this.items, this.next});
 
   /// A page out of the API's JSON, each item read by [item].
   factory Page.fromJson(
     Map<String, Object?> json,
     T Function(Map<String, Object?> json) item,
-  ) => Page(
-    items: json['items'] == null
-        ? const []
-        : readList(json['items'], (value) => item(readObject(value))),
-    pagination: Pagination.fromJson(readObject(json['pagination'])),
-  );
+  ) {
+    return Page(
+      items: readList(json['data'], (value) => item(readObject(value))),
+      next: json['next'] as String?,
+    );
+  }
 
   /// The items of this page.
   final List<T> items;
 
-  /// How many items and pages the list has.
-  final Pagination pagination;
+  /// The cursor to ask the next page with; null on the last page.
+  final String? next;
 }
 
-/// Walks pages from [first] until the last one, as Polar's SDKs do, giving
-/// every item. An error ends the walk.
+/// Walks pages from the cursor [first] (the newest page when null) until the
+/// last one, giving every item. An error ends the walk.
 Stream<T> iterate<T>(
-  Future<Page<T>> Function(int page) fetch, [
-  int first = 1,
+  Future<Page<T>> Function(String? cursor) fetch, [
+  String? first,
 ]) async* {
-  for (var page = first < 1 ? 1 : first; ; page++) {
-    final result = await fetch(page);
+  var cursor = first;
+  while (true) {
+    final result = await fetch(cursor);
     for (final item in result.items) {
       yield item;
     }
-    if (page >= result.pagination.maxPage) {
+    final next = result.next;
+    // A cursor that does not move would ask for the same page forever.
+    if (next == null || next.isEmpty || next == cursor) {
       return;
     }
+    cursor = next;
   }
 }
