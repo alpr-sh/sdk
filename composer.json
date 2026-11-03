@@ -1,0 +1,17 @@
+{
+    "name": "alpr-sh/sdk",
+    "description": "Alpr.sh's SDK for PHP: license-plate recognition from photos, readings, cameras and webhooks.",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://alpr.sh",
+    "require": {
+        "php": ">=8.1",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Alpr\\": "php/src/"
+        }
+    }
+}

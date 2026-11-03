@@ -1,0 +1,270 @@
+name: release
+
+# A tag vX.Y.Z publishes that version of every SDK to its registry. The jobs
+# are independent: one registry failing does not stop the others, and the tag
+# can be run again, because every job first asks its registry whether the
+# version is already there and does nothing if it is.
+#
+# Trusted publishing (OIDC, no stored token): npm, PyPI, RubyGems, crates.io,
+# Hex, pub.dev and NuGet. Secrets only for Maven Central (portal token and GPG
+# key) and NuGet's account name. Go is published by the go/vX.Y.Z tag itself,
+# and PHP and Swift by the v tag through the root composer.json and
+# Package.swift. RELEASING.md lists what each registry needs set up once.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  # A tag on any commit would publish everywhere, so every publish job waits for
+  # this one: the tagged commit must already be on main.
+  guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main; fast-forward main to it before tagging."
+            exit 1
+          fi
+
+  npm:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - working-directory: typescript
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          test "v$version" = "$GITHUB_REF_NAME"
+          if [ "$(npm view "@alpr-sh/sdk@$version" version 2>/dev/null)" = "$version" ]; then
+            echo "::notice::npm already has @alpr-sh/sdk@$version; nothing to publish."
+            exit 0
+          fi
+          # Trusted publishing needs npm 11.5.1 or later; the version is exact so
+          # the job never runs whatever the registry's latest happens to be.
+          npm install -g npm@12.2.1
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+          npm publish --access public --provenance
+
+  pypi:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - working-directory: python
+        run: |
+          test "v$(cat ../VERSION)" = "$GITHUB_REF_NAME"
+          # The build tools come from a hash-locked file
+          # (.github/release/python-build.txt), not from whatever is newest,
+          # and the build runs without fetching its backend again.
+          pip install --require-hashes --no-deps -r ../.github/release/python-build.txt
+          python -m build --no-isolation
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: python/dist
+          skip-existing: true
+
+  rubygems:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        run: |
+          version=$(cat VERSION)
+          test "v$version" = "$GITHUB_REF_NAME"
+          .github/scripts/published.sh RubyGems "https://rubygems.org/api/v2/rubygems/alpr-sdk/versions/$version.json"
+      - if: steps.check.outputs.published != 'true'
+        uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1.336.0
+        with:
+          ruby-version: '4.0'
+      # Exchanges the job's OIDC token for a short-lived API key (GEM_HOST_API_KEY).
+      - if: steps.check.outputs.published != 'true'
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+      - if: steps.check.outputs.published != 'true'
+        working-directory: ruby
+        run: |
+          gem build alpr-sdk.gemspec
+          gem push alpr-sdk-*.gem
+
+  crates:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        run: |
+          version=$(cat VERSION)
+          test "v$version" = "$GITHUB_REF_NAME"
+          .github/scripts/published.sh crates.io "https://crates.io/api/v1/crates/alpr-sdk/$version"
+      # Exchanges the job's OIDC token for a temporary crates.io token.
+      - if: steps.check.outputs.published != 'true'
+        id: auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+      - if: steps.check.outputs.published != 'true'
+        working-directory: rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish
+
+  hex:
+    runs-on: ubuntu-latest
+    needs: guard
+    # Hex requires the environment of a public repository's workload identity.
+    environment: hex
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        run: |
+          version=$(cat VERSION)
+          test "v$version" = "$GITHUB_REF_NAME"
+          .github/scripts/published.sh Hex "https://hex.pm/api/packages/alpr_sdk/releases/$version"
+      - if: steps.check.outputs.published != 'true'
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: '1.18'
+          otp-version: '27'
+      - if: steps.check.outputs.published != 'true'
+        working-directory: elixir
+        env:
+          HEX_API_KEY_SECRET: ${{ secrets.HEX_API_KEY }}
+        run: |
+          # Hex is pinned: the job holds the OIDC token that publishes.
+          mix local.hex 2.6.0 --force
+          if [ -n "$HEX_API_KEY_SECRET" ]; then
+            # Fallback while no workload identity is configured on hex.pm.
+            export HEX_API_KEY="$HEX_API_KEY_SECRET"
+          else
+            # Workload identity: GitHub's OIDC token (audience hexpm) for a
+            # 15-minute Hex token that can publish this one package.
+            oidc=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=hexpm" | jq -r .value)
+            token=$(curl -fsS -X POST https://hex.pm/api/oauth/token \
+              --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
+              --data-urlencode "assertion=$oidc" \
+              --data-urlencode "scope=package:hexpm/alpr_sdk" | jq -r .access_token)
+            echo "::add-mask::$token"
+            export HEX_API_KEY="Bearer $token"
+          fi
+          mix hex.publish package --yes
+
+  pubdev:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        run: |
+          version=$(cat VERSION)
+          test "v$version" = "$GITHUB_REF_NAME"
+          .github/scripts/published.sh pub.dev "https://pub.dev/api/packages/alpr_sdk/versions/$version"
+      # Sets up Dart and provisions the OIDC token pub.dev accepts.
+      - if: steps.check.outputs.published != 'true'
+        uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - if: steps.check.outputs.published != 'true'
+        working-directory: dart
+        run: |
+          dart pub get
+          dart pub publish --force
+
+  nuget:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        run: |
+          version=$(cat VERSION)
+          test "v$version" = "$GITHUB_REF_NAME"
+          .github/scripts/published.sh NuGet "https://api.nuget.org/v3-flatcontainer/alprsh.sdk/$version/alprsh.sdk.nuspec"
+      - if: steps.check.outputs.published != 'true'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+      - if: steps.check.outputs.published != 'true'
+        working-directory: csharp
+        run: dotnet pack src/Alpr/Alpr.csproj --configuration Release --output "$RUNNER_TEMP/nupkg"
+      # Exchanges the job's OIDC token for a one-hour API key.
+      - if: steps.check.outputs.published != 'true'
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      - if: steps.check.outputs.published != 'true'
+        run: dotnet nuget push "$RUNNER_TEMP/nupkg/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  maven:
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: release
+    # The portal waits for the deployment to be validated and published.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        run: |
+          version=$(cat VERSION)
+          test "v$version" = "$GITHUB_REF_NAME"
+          .github/scripts/published.sh "Maven Central" "https://repo1.maven.org/maven2/sh/alpr/sdk/$version/sdk-$version.pom"
+      - if: steps.check.outputs.published != 'true'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          server-id: central
+          server-username-env-var: MAVEN_CENTRAL_USERNAME
+          server-password-env-var: MAVEN_CENTRAL_TOKEN
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase-env-var: MAVEN_GPG_PASSPHRASE
+      - if: steps.check.outputs.published != 'true'
+        working-directory: java
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: mvn -B -Prelease deploy
