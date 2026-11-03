@@ -8,16 +8,16 @@ defmodule Alpr.{{.Name}} do
 
 {{exTypedoc .}}  @type t :: %__MODULE__{
 {{- range $j, $f := .Fields}}{{if $j}},{{end}}
-          {{.Wire}}: {{exType .Type}}{{if or .Nullable (not .Required)}} | nil{{end}}
+          {{exField .Wire}}: {{exType .Type}}{{if or .Nullable (not .Required)}} | nil{{end}}
 {{- end}}
         }
 
-  @doc "Builds a {{.Name}} from the API's JSON."
+  @doc "Builds {{article .Name}} from the API's JSON; a field the answer leaves out is nil."
   @spec from_map(map()) :: t()
   def from_map(%{} = data) do
     %__MODULE__{
 {{- range $j, $f := .Fields}}{{if $j}},{{end}}
-      {{.Wire}}: {{exRead .}}
+{{exFieldRead .}}
 {{- end}}
     }
   end

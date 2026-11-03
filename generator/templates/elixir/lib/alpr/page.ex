@@ -1,46 +1,60 @@
 defmodule Alpr.Page do
-  @moduledoc "One page of a list, and where the list ends."
+  @moduledoc "One page of a list: its items, and the cursor of the next page."
 
-  @enforce_keys [:items, :pagination]
-  defstruct [:items, :pagination]
+  @enforce_keys [:items]
+  defstruct [:items, :next]
 
-  @type t(item) :: %__MODULE__{items: [item], pagination: Alpr.Pagination.t()}
+  @typedoc "`next` is the cursor to ask the next page with; nil on the last page."
+  @type t(item) :: %__MODULE__{items: [item], next: String.t() | nil}
   @type t :: t(term())
 
-  @doc "Builds a page from the API's map, each item through `item`."
+  @doc "Builds a page from the API's `{\"data\": [...], \"next\": cursor}`, each item through `item`."
   @spec from_map(map(), (map() -> item)) :: t(item) when item: term()
   def from_map(%{} = data, item) do
-    %__MODULE__{
-      items: Enum.map(data["items"] || [], item),
-      pagination: Alpr.Pagination.from_map(Map.fetch!(data, "pagination"))
-    }
+    next =
+      case data["next"] do
+        next when is_binary(next) and next != "" -> next
+        _ -> nil
+      end
+
+    %__MODULE__{items: Enum.map(data["data"] || [], item), next: next}
   end
 
   @doc """
-  Walks pages from `first` (1 when nil) until the last one, as Polar's SDKs
-  do, emitting every item; `fetch` answers the page it is given. A refusal
-  raises `Alpr.Error` while the stream runs.
+  Walks pages from the cursor `first` (the newest page when nil) until the
+  last one, emitting every item; `fetch` answers the page of the cursor it is
+  given. It stops when the cursor does not move, which would ask for the same
+  page forever, and at the first refusal, which is raised as `Alpr.Error`
+  while the stream runs.
   """
-  @spec stream(pos_integer() | nil, (pos_integer() -> {:ok, t(item)} | {:error, Alpr.Error.t()})) ::
-          Enumerable.t(item)
+  @spec stream(
+          String.t() | nil,
+          (String.t() | nil -> {:ok, t(item)} | {:error, Alpr.Error.t()})
+        ) :: Enumerable.t(item)
         when item: term()
   def stream(first, fetch) do
     Stream.resource(
-      fn -> max(first || 1, 1) end,
+      fn -> {:fetch, first} end,
       fn
         :done ->
           {:halt, :done}
 
-        page ->
-          case fetch.(page) do
-            {:ok, %__MODULE__{items: items, pagination: pagination}} ->
-              {items, if(page >= pagination.max_page, do: :done, else: page + 1)}
+        {:fetch, cursor} ->
+          case fetch.(cursor) do
+            {:ok, %__MODULE__{items: items, next: next}} when next in [nil, ""] ->
+              {items, :done}
+
+            {:ok, %__MODULE__{items: items, next: ^cursor}} ->
+              {items, :done}
+
+            {:ok, %__MODULE__{items: items, next: next}} ->
+              {items, {:fetch, next}}
 
             {:error, error} ->
               raise error
           end
       end,
-      fn _page -> :ok end
+      fn _state -> :ok end
     )
   end
 end

@@ -5,11 +5,11 @@ defmodule Alpr do
   Alpr.sh's SDK for Elixir, generated from Alpr.sh's API contract.
 
       client = Alpr.new(System.fetch_env!("ALPR_API_KEY"))
-      {:ok, product} = Alpr.Products.create(client, %{name: "Curso"}, idempotency_key: "produto-curso")
+      {:ok, result} = Alpr.Photos.recognize(client, %{image: File.read!("carro.jpg")})
 
       client
-      |> Alpr.Products.list_stream()
-      |> Enum.each(&IO.puts(&1.name))
+      |> Alpr.Recognitions.list_stream(plate: "BRA")
+      |> Enum.each(&IO.puts(&1.plate))
 
   Every call answers `{:ok, value}` or `{:error, %Alpr.Error{}}`; the
   `*_stream` functions walk every page lazily and raise `Alpr.Error` on a
@@ -25,19 +25,19 @@ defmodule Alpr do
   def api_version, do: {{quote .APIVersion}}
 
   @doc """
-  Alpr.sh's API. The environment, test or live, is the API key's: `prk_test_…`
-  or `prk_live_…`.
+  Alpr.sh's API. The workspace is the API key's: `alpr_live_…`.
   """
   @spec default_base_url() :: String.t()
   def default_base_url, do: {{quote .BaseURL}}
 
-  @doc "A client for the organization `api_key` belongs to; see `Alpr.Client.new/2`."
+  @doc "A client for the workspace `api_key` belongs to; see `Alpr.Client.new/2`."
   @spec new(String.t(), keyword()) :: Alpr.Client.t()
   defdelegate new(api_key, opts \\ []), to: Alpr.Client
 
   @doc "Checks a webhook Alpr.sh sent; see `Alpr.Webhook.verify/4`."
   @spec verify_webhook(String.t(), Enumerable.t(), binary(), keyword()) ::
-          {:ok, Alpr.WebhookEvent.t()} | {:error, Alpr.WebhookVerificationError.t()}
+          {:ok, Alpr.WebhookEvent.t()}
+          | {:error, Alpr.WebhookVerificationError.t() | Alpr.WebhookParseError.t()}
   defdelegate verify_webhook(secret, headers, body, opts \\ []), to: Alpr.Webhook, as: :verify
 
   @doc "Checks a webhook's signature; see `Alpr.Webhook.verify_signature/4`."

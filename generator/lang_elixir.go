@@ -15,11 +15,15 @@ var exReserved = map[string]bool{
 func init() {
 	register(Language{Name: "elixir", Funcs: template.FuncMap{
 		// quote writes a string literal, escaped the way elixir reads it.
-		"quote":   elixirQuote,
-		"exName":  exName,
+		"quote":  elixirQuote,
+		"exName": exName,
+		// exField is a wire name as the struct key that holds it: detectionId
+		// is detection_id.
+		"exField": exField,
 		"exType":  exType,
-		"exRead":  exRead,
-		"exWrite": exWrite,
+		// exFieldRead is a struct key and the expression that reads it, laid out
+		// at the indent of a struct's fields.
+		"exFieldRead": exFieldRead,
 		// exDoc writes a description as an Elixir string, quotes escaped.
 		"exDoc": func(text string) string {
 			text = strings.TrimSpace(text)
@@ -28,18 +32,13 @@ func init() {
 			text = strings.ReplaceAll(text, "#{", `\#{`)
 			return strings.ReplaceAll(text, "\n", " ")
 		},
-		"exStruct": exStruct,
-		// exBuild builds expr into t, or takes it as it is.
-		"exBuild": func(t *TypeRef, expr string) string {
-			if convert := exConvert(t, expr, 0); convert != "" {
-				return convert
-			}
-			return expr
-		},
-		"exTypedoc":  exTypedoc,
-		"exSpec":     exSpec,
-		"exRequest":  exRequest,
-		"exMapWrite": exMapWrite,
+		"exStruct":  exStruct,
+		"exTypedoc": exTypedoc,
+		"exSpec":    exSpec,
+		"exRequest": exRequest,
+		// exAtom writes a name as an atom, and exKey as a keyword's key.
+		"exAtom": exAtom,
+		"exFind": exFind,
 	}})
 }
 
@@ -58,14 +57,45 @@ func exLine(indent int, head string, items []string, tail string) string {
 	return pad + head + "\n" + pad + "  " + strings.Join(items, ",\n"+pad+"  ") + "\n" + pad + tail
 }
 
+// exField is the struct key of a wire name.
+func exField(wire string) string {
+	return exName(strings.ToLower(strings.Join(words(wire), "_")))
+}
+
+// exAtom is a name as an atom: :before, or :"a b" when it is not a plain name.
+func exAtom(name string) string {
+	if identifier.MatchString(name) {
+		return ":" + name
+	}
+	return ":" + elixirQuote(name)
+}
+
+// exKey is a name as the key of a keyword list: before:, or "a b":.
+func exKey(name string) string {
+	if identifier.MatchString(name) {
+		return name + ":"
+	}
+	return elixirQuote(name) + ":"
+}
+
+// exFind is the model called name, or nil.
+func exFind(models []*Model, name string) *Model {
+	for _, model := range models {
+		if model.Name == name {
+			return model
+		}
+	}
+	return nil
+}
+
 // exStruct is a model's defstruct and, for a body, the keys it cannot be
 // built without.
 func exStruct(m *Model) string {
 	var fields, required []string
 	for _, f := range m.Fields {
-		fields = append(fields, ":"+f.Wire)
+		fields = append(fields, ":"+exField(f.Wire))
 		if f.Required && m.Input {
-			required = append(required, ":"+f.Wire)
+			required = append(required, ":"+exField(f.Wire))
 		}
 	}
 	out := ""
@@ -95,7 +125,7 @@ func exTypedoc(m *Model) string {
 		if len(says) == 0 && description == "" {
 			continue
 		}
-		line := "  * `" + f.Wire + "`"
+		line := "  * `" + exField(f.Wire) + "`"
 		if len(says) > 0 {
 			line += " (" + strings.Join(says, "; ") + ")"
 		}
@@ -131,6 +161,9 @@ func exSpec(m *Method, kind string) string {
 			args = append(args, "Alpr."+m.Body.Name+".t() | keyword() | map()")
 		}
 		answer = "{:ok, Alpr." + m.Response + ".t()} | {:error, Alpr.Error.t()}"
+		if m.List {
+			answer = "{:ok, [Alpr." + m.Item + ".t()]} | {:error, Alpr.Error.t()}"
+		}
 		if m.NoContent {
 			answer = ":ok | {:error, Alpr.Error.t()}"
 		}
@@ -151,39 +184,30 @@ func exSpec(m *Method, kind string) string {
 // apart with a blank line.
 func exRequest(m *Method) string {
 	var items []string
+	forced := false
 	if m.Paginated {
-		query := []string{"page: opts[:page]", "limit: opts[:limit]"}
+		query := []string{exKey(m.Cursor) + " opts[" + exAtom(m.Cursor) + "]"}
 		for _, param := range m.Query {
-			query = append(query, param.Name+": opts[:"+param.Name+"]")
+			query = append(query, exKey(param.Name)+" opts["+exAtom(param.Name)+"]")
 		}
-		items = append(items, "query: ["+strings.Join(query, ", ")+"]")
+		line := exLine(6, "query: [", query, "]")
+		forced = strings.Contains(line, "\n")
+		items = append(items, strings.TrimLeft(line, " "))
 	}
-	if m.Body != nil {
-		items = append(items, "body: Alpr."+m.Body.Name+".to_map(params)")
-	}
-	if m.Write {
-		items = append(items, "idempotency_key: opts[:idempotency_key]")
+	if m.Body != nil && m.Multipart {
+		items = append(items, "multipart: Alpr."+m.Body.Name+".to_form(params)")
 	}
 	items = append(items, "api_key: opts[:api_key]")
-	request := exLine(4, "request = [", items, "]")
+	var request string
+	if forced {
+		request = "    request = [\n      " + strings.Join(items, ",\n      ") + "\n    ]"
+	} else {
+		request = exLine(4, "request = [", items, "]")
+	}
 	if strings.Contains(request, "\n") {
 		return "\n\n" + request
 	}
 	return "\n" + request
-}
-
-// exMapWrite is the map of a body's required fields, as to_map starts it.
-func exMapWrite(m *Model) string {
-	var items []string
-	for _, f := range m.Fields {
-		if f.Required {
-			items = append(items, elixirQuote(f.Wire)+" => "+exWrite(f))
-		}
-	}
-	if len(items) == 0 {
-		return "    %{}"
-	}
-	return exLine(4, "%{", items, "}")
 }
 
 // exName is a wire name as an Elixir variable.
@@ -207,6 +231,8 @@ func exType(t *TypeRef) string {
 		return "number()"
 	case "boolean":
 		return "boolean()"
+	case "binary":
+		return "binary()"
 	case "model":
 		return "Alpr." + t.Model + ".t()"
 	case "array":
@@ -221,20 +247,28 @@ func exType(t *TypeRef) string {
 
 // exRead is the expression that reads a field out of the API's map into its
 // type: a nested model is built, anything else is taken as it is. A field the
-// API always sends is fetched, so a missing one fails loudly.
-func exRead(f *Field) string {
-	if f.Required && !f.Nullable {
-		value := `Map.fetch!(data, "` + f.Wire + `")`
-		if convert := exConvert(f.Type, value, 0); convert != "" {
-			return convert
-		}
-		return value
-	}
+// answer leaves out, or sends as null, is nil.
+func exRead(f *Field) (string, string) {
 	value := `data["` + f.Wire + `"]`
 	if convert := exConvert(f.Type, "value", 0); convert != "" {
-		return "with(value when not is_nil(value) <- " + value + ", do: " + convert + ")"
+		return "value when not is_nil(value) <- " + value, "do: " + convert
 	}
-	return value
+	return value, ""
+}
+
+// exFieldRead is a struct key and its expression, at the indent of a struct's
+// fields (6) and as mix format lays it out when the line is too long.
+func exFieldRead(f *Field) string {
+	key := exField(f.Wire) + ":"
+	match, do := exRead(f)
+	if do == "" {
+		return "      " + key + " " + match
+	}
+	single := "      " + key + " with(" + match + ", " + do + ")"
+	if utf8.RuneCountInString(single)+1 <= exWidth {
+		return single
+	}
+	return "      " + key + "\n        with(\n          " + match + ",\n          " + do + "\n        )"
 }
 
 // exConvert builds expr into t, or is empty when nothing is to be built.
@@ -256,18 +290,6 @@ func exConvert(t *TypeRef, expr string, depth int) string {
 		}
 	}
 	return ""
-}
-
-// exWrite is the expression that writes a param's value as JSON reads it: a
-// nested struct or list of them goes through Alpr.Encode, a scalar as it
-// is.
-func exWrite(f *Field) string {
-	value := "params." + f.Wire
-	switch f.Type.Kind {
-	case "model", "array", "map":
-		return "Alpr.Encode.value(" + value + ")"
-	}
-	return value
 }
 
 // exHeredoc is text on one line inside a """ heredoc, where a backslash starts

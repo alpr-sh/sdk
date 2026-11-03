@@ -6,14 +6,14 @@ defmodule Alpr.{{.Name}} do
   {{exDoc .Description}}
 
   Build it with `new/1` from a keyword list or a map; an optional field left
-  out is left out of the JSON.
+  out is not sent.
   """
 
 {{exStruct .}}
 
 {{exTypedoc .}}  @type t :: %__MODULE__{
 {{- range $j, $f := .Fields}}{{if $j}},{{end}}
-          {{.Wire}}: {{exType .Type}}{{if or .Nullable (not .Required)}} | nil{{end}}
+          {{exField .Wire}}: {{exType .Type}}{{if or .Nullable (not .Required)}} | nil{{end}}
 {{- end}}
         }
 
@@ -22,15 +22,16 @@ defmodule Alpr.{{.Name}} do
   def new(%__MODULE__{} = params), do: params
   def new(fields), do: struct!(__MODULE__, fields)
 
-  @doc "The body as the API reads it, from the params or what `new/1` builds them from."
-  @spec to_map(t() | keyword() | map()) :: %{optional(String.t()) => term()}
-  def to_map(params) do
+  @doc "The parts of the multipart body, from the params or what `new/1` builds them from."
+  @spec to_form(t() | keyword() | map()) :: [Alpr.Multipart.part()]
+  def to_form(params) do
     params = new(params)
 
-{{exMapWrite .}}
-{{- range .Fields}}{{if not .Required}}
-    |> Alpr.Encode.put_optional({{quote .Wire}}, {{exWrite .}})
-{{- end}}{{end}}
+    Alpr.Multipart.compact([
+{{- range $j, $f := .Fields}}{{if $j}},{{end}}
+      {{if eq .Type.Kind "binary"}}{:file{{else}}{:text{{end}}, {{quote .Wire}}, params.{{exField .Wire}}}
+{{- end}}
+    ])
   end
 end
 {{- end}}

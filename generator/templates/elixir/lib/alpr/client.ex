@@ -1,12 +1,11 @@
 defmodule Alpr.Client do
   @moduledoc """
-  Alpr.sh's API with one organization's API key.
+  Alpr.sh's API with one workspace's API key.
 
-  The key says the organization and the environment: `prk_test_…` is the test
-  environment, `prk_live_…` the live one.
+  The key (`alpr_live_…`) says the workspace and the scopes its calls may use.
 
       client = Alpr.Client.new(System.fetch_env!("ALPR_API_KEY"))
-      {:ok, product} = Alpr.Products.get(client, "prod_1")
+      {:ok, cameras} = Alpr.Cameras.list(client)
   """
 
   @derive {Inspect, except: [:api_key]}
@@ -34,7 +33,7 @@ defmodule Alpr.Client do
         }
 
   @doc """
-  A client for the organization `api_key` belongs to.
+  A client for the workspace `api_key` belongs to.
 
   Options: `:base_url` (another address, such as a local server: https, or
   http only for localhost, 127.0.0.0/8 and ::1, or `ArgumentError`), `:timeout`
@@ -56,25 +55,30 @@ defmodule Alpr.Client do
   end
 
   @doc """
-  Calls the API and answers what it wrapped in `data`.
+  Calls the API and answers the JSON it decoded.
 
-  Options: `:query`, `:body`, `:idempotency_key` and `:api_key`, another
-  organization's key for this call. A POST without an `:idempotency_key` is
-  sent with a random one of its own, one a call.
+  Options: `:query` (a keyword list; a nil or empty value is left out),
+  `:multipart` (the parts of `Alpr.Multipart`) and `:api_key`, another
+  workspace's key for this call. A redirect is never followed, so the key
+  cannot travel: the 3xx is the answer, and an `Alpr.Error`.
   """
   @spec request(t(), String.t(), String.t(), keyword()) ::
           {:ok, term()} | {:error, Alpr.Error.t()}
   def request(%__MODULE__{} = client, method, path, opts \\ []) do
+    {body, content_type} =
+      case opts[:multipart] do
+        nil -> {nil, nil}
+        parts -> Alpr.Multipart.encode(parts)
+      end
+
     headers =
       [
         {"Authorization", "Bearer " <> key(opts[:api_key], client.api_key)},
         {"Accept", "application/json"},
         {"User-Agent", "alpr-elixir/" <> Alpr.version()}
       ]
-      |> put_header("Content-Type", opts[:body] && "application/json")
-      |> put_header("Idempotency-Key", idempotency_key(method, opts[:idempotency_key]))
+      |> put_header("Content-Type", content_type)
 
-    body = if opts[:body], do: JSON.encode!(opts[:body])
     url = client.base_url <> path <> query(opts[:query])
 
     case client.transport.(method, url, headers, body, client.timeout) do
@@ -84,17 +88,17 @@ defmodule Alpr.Client do
       {:ok, {status, response_headers, raw}} when status >= 300 ->
         {:error, Alpr.Error.from_response(status, response_headers, raw)}
 
-      {:ok, {_status, _headers, raw}} ->
+      {:ok, {status, _response_headers, raw}} ->
         case JSON.decode(raw) do
-          {:ok, %{"data" => data}} ->
+          {:ok, data} ->
             {:ok, data}
 
-          _ ->
+          {:error, _reason} ->
             {:error,
              %Alpr.Error{
-               status: nil,
+               status: status,
                code: "invalid_response",
-               message: "the answer is not wrapped in data"
+               message: "the answer is not JSON"
              }}
         end
 
@@ -133,20 +137,6 @@ defmodule Alpr.Client do
       raise ArgumentError,
             "alpr: the base URL must be https (http is accepted only for localhost, 127.0.0.0/8 and ::1), so the API key is never sent in clear text"
     end
-  end
-
-  # A POST is sent with a key of its own, one a call, unless the caller gave one.
-  defp idempotency_key("POST", given) when given in [nil, ""], do: uuid()
-  defp idempotency_key(_method, given), do: given
-
-  # A random UUID (version 4).
-  defp uuid do
-    <<a::32, b::16, _::4, c::12, _::2, d::14, e::48>> = :crypto.strong_rand_bytes(16)
-
-    [{a, 8}, {b, 4}, {Bitwise.bor(0x4000, c), 4}, {Bitwise.bor(0x8000, d), 4}, {e, 12}]
-    |> Enum.map_join("-", fn {number, width} ->
-      number |> Integer.to_string(16) |> String.downcase() |> String.pad_leading(width, "0")
-    end)
   end
 
   defp put_header(headers, _name, value) when value in [nil, false, ""], do: headers
